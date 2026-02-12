@@ -4,11 +4,9 @@ export interface ChecklistItem {
     done: boolean;
 }
 
-export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
-
 export interface Dependency {
-    id: string; // Event ID target
-    type: DependencyType;
+    id: string; // Event ID
+    type: 'FS' | 'SS' | 'FF' | 'SF';
 }
 
 export interface Event {
@@ -17,8 +15,8 @@ export interface Event {
     resp: string;
     startDate: string;
     endDate: string;
-    plannedStartDate?: string; // Baseline start
-    plannedEndDate?: string;   // Baseline end
+    plannedStartDate?: string; // New: Baseline start
+    plannedEndDate?: string;   // New: Baseline end
     checklist: ChecklistItem[];
     completed: boolean;
     dependencies?: Dependency[];
@@ -34,7 +32,7 @@ export interface Scope {
     name: string;
     colorClass: string;
     startDate: string;
-    plannedStartDate?: string; // Baseline start for scope
+    plannedStartDate?: string; // New: Baseline start for scope
     resp: string;
     status: string;
     protocolWeek?: number;
@@ -55,7 +53,7 @@ export interface Project {
     lod: string;
     name: string;
     logoUrl?: string;
-    coverUrl?: string;
+    coverUrl?: string; // New: Project facade/background image
     createdAt: string;
     updatedAt: string;
     timelineStart: string;
@@ -67,6 +65,7 @@ export interface Project {
 export interface Company {
     id: number;
     name: string;
+    logoUrl?: string; // Added logoUrl
 }
 
 export interface Discipline {
@@ -81,7 +80,7 @@ export interface DB {
     activeProjectId: number | null;
     lods: string[];
     companies: Company[];
-    disciplines: Discipline[];
+    disciplines: Discipline[]; // New: Dynamic disciplines list
     projects: Project[];
     team: string[];
 }
@@ -89,13 +88,4 @@ export interface DB {
 export interface ChatMessage {
     role: 'user' | 'ai';
     text: string;
-}
-
-// Helper Types for UI
-export interface EventDependencyView {
-    id: string;
-    title: string;
-    scopeName: string;
-    color: string;
-    type: DependencyType;
 }

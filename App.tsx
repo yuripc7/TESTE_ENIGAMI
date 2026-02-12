@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { INITIAL_DB } from './constants';
-import { DB, ChatMessage, DependencyType } from './types';
+import { DB, ChatMessage, Project, Event, Company } from './types';
 import { generateChatResponse } from './services/geminiService';
 import {
     LodModal, CompanyModal, ProjectModal, ScopeModal, EventModal,
@@ -8,34 +8,37 @@ import {
 } from './components/Modals';
 import Timeline from './components/Timeline';
 
+const STORAGE_KEY = 'design_board_db_v1';
+const THEME_KEY = 'design_board_theme_v1';
+
 export const App = () => {
-    // --- STATE: Data & Config ---
-    // Removido localStorage: Inicia sempre com INITIAL_DB
-    const [db, setDb] = useState<DB>(INITIAL_DB);
+    const [db, setDb] = useState<DB>(() => {
+        const savedDb = localStorage.getItem(STORAGE_KEY);
+        return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
+    });
 
-    // Removido localStorage: Inicia sempre com dark mode (ou padrão desejado)
-    const [theme, setTheme] = useState('dark');
+    const [theme, setTheme] = useState(() => {
+        const savedTheme = localStorage.getItem(THEME_KEY);
+        return savedTheme || 'dark';
+    });
 
-    // --- STATE: UI Filters & View ---
+    const [deadlineRespFilter, setDeadlineRespFilter] = useState('');
     const [logSearch, setLogSearch] = useState('');
     const [logAuthorFilter, setLogAuthorFilter] = useState('');
+    
+    // CHANGED: zoomLevel is now a number for smooth scrolling
     const [zoomLevel, setZoomLevel] = useState<number>(1);
+    
+    const [activityImage, setActivityImage] = useState<string | undefined>(undefined);
+    const activityFileRef = useRef<HTMLInputElement>(null);
     const [activeHealthTab, setActiveHealthTab] = useState<'total' | 'progress' | 'done' | 'efficiency'>('efficiency');
-    const [memberFilter, setMemberFilter] = useState<string | null>(null);
     const [viewingImage, setViewingImage] = useState<string | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
 
-    // --- STATE: Interaction / Selection ---
-    const [activityImage, setActivityImage] = useState<string | undefined>(undefined);
-    const activityFileRef = useRef<HTMLInputElement>(null);
-    
-    const [editingScopeId, setEditingScopeId] = useState<string | null>(null);
-    const [editingEventId, setEditingEventId] = useState<string | null>(null);
-    const [selectedScopeIdForFiles, setSelectedScopeIdForFiles] = useState<string | null>(null);
-    const [activeScopeIdForEvent, setActiveScopeIdForEvent] = useState<string | null>(null);
-    const [activeChecklistIds, setActiveChecklistIds] = useState<{ sid: string; eid: string } | null>(null);
+    // New: Team Filter State
+    const [memberFilter, setMemberFilter] = useState<string | null>(null);
 
-    // --- STATE: Modals ---
+    // Modals state
     const [showLodModal, setShowLodModal] = useState(false);
     const [showCompanyModal, setShowCompanyModal] = useState(false);
     const [showProjectModal, setShowProjectModal] = useState(false);
@@ -47,26 +50,33 @@ export const App = () => {
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [showAdminModal, setShowAdminModal] = useState(false);
 
-    // --- STATE: Chat ---
+    // Chat
     const [showAIChat, setShowAIChat] = useState(false);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [aiLoading, setAiLoading] = useState(false);
     const [userInput, setUserInput] = useState('');
     const chatEndRef = useRef<HTMLDivElement>(null);
 
-    // --- EFFECTS ---
-    // Removido useEffect de salvamento automático do DB
+    // Selection IDs
+    const [editingScopeId, setEditingScopeId] = useState<string | null>(null);
+    const [editingEventId, setEditingEventId] = useState<string | null>(null);
+    const [selectedScopeIdForFiles, setSelectedScopeIdForFiles] = useState<string | null>(null);
+    const [activeScopeIdForEvent, setActiveScopeIdForEvent] = useState<string | null>(null);
+    const [activeChecklistIds, setActiveChecklistIds] = useState<{ sid: string; eid: string } | null>(null);
+
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    }, [db]);
 
     useEffect(() => {
         document.documentElement.className = theme;
-        // Removido salvamento do tema no localStorage
+        localStorage.setItem(THEME_KEY, theme);
     }, [theme]);
 
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages]);
 
-    // --- COMPUTED VALUES ---
     const activeProject = useMemo(() => {
         return db.projects.find(p => p.id === db.activeProjectId) || null;
     }, [db.projects, db.activeProjectId]);
@@ -85,19 +95,22 @@ export const App = () => {
         return scope?.events.find(e => e.id === editingEventId) || null;
     }, [activeProject, activeScopeIdForEvent, editingEventId]);
 
+    // Calculate Team Stats (Action Counts & Leadership)
     const teamStats = useMemo(() => {
         const stats: Record<string, { count: number; leaderOf: string[] }> = {};
         db.team.forEach(t => { stats[t] = { count: 0, leaderOf: [] }; });
 
         if (activeProject) {
             activeProject.scopes.forEach(s => {
-                if (!stats[s.resp]) stats[s.resp] = { count: 0, leaderOf: [] };
-                stats[s.resp].leaderOf.push(s.name);
-                
+                if (stats[s.resp]) {
+                    if (!stats[s.resp]) stats[s.resp] = { count: 0, leaderOf: [] };
+                    stats[s.resp].leaderOf.push(s.name);
+                }
                 s.events.forEach(e => {
                     if (stats[e.resp]) {
                          stats[e.resp].count++;
                     } else if (stats[e.resp] === undefined) {
+                         // Handle case where resp might not be in db.team list explicitly
                          stats[e.resp] = { count: 1, leaderOf: [] };
                     }
                 });
@@ -106,6 +119,7 @@ export const App = () => {
         return stats;
     }, [activeProject, db.team]);
 
+    // Dynamic Bounds based on Content (Scope Start -> Last Event End)
     const projectBounds = useMemo(() => {
         if (!activeProject || activeProject.scopes.length === 0) {
             return activeProject 
@@ -138,39 +152,54 @@ export const App = () => {
         };
     }, [activeProject]);
 
+    // Calculate Global Progress Percentage
     const globalProgress = useMemo(() => {
         if (!activeProject) return 0;
+        
         const start = new Date(activeProject.timelineStart).getTime();
         const end = new Date(activeProject.timelineEnd).getTime();
         const now = new Date().getTime();
+        
         if (now < start) return 0;
         if (now > end) return 100;
+        
         const total = end - start;
         const elapsed = now - start;
+        
         if (total <= 0) return 0;
         return Math.min(Math.max((elapsed / total) * 100, 0), 100);
     }, [activeProject]);
 
+    // Calculate Hours Spent (8h per business day from start to now/end)
     const hoursSpent = useMemo(() => {
         if (!activeProject) return 0;
+        
         const start = new Date(projectBounds.start);
         const endCap = new Date(projectBounds.end);
         const now = new Date();
+        
+        // Use the lesser of 'today' or 'project end' as the calculation boundary
         const calcEnd = now < endCap ? now : endCap;
+        
         if (calcEnd < start) return 0;
 
         let businessDays = 0;
         const cur = new Date(start);
         while (cur <= calcEnd) {
             const dayOfWeek = cur.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) businessDays++;
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sun (0) or Sat (6)
+                businessDays++;
+            }
             cur.setDate(cur.getDate() + 1);
         }
+
         return businessDays * 8;
     }, [activeProject, projectBounds]);
 
+    // Wave Path Generator based on Checklist Quantity Density
     const wavePath = useMemo(() => {
         if (!activeProject) return "M0,100 L100,100";
+
         const start = new Date(projectBounds.start).getTime();
         const end = new Date(projectBounds.end).getTime();
         const duration = end - start;
@@ -180,6 +209,7 @@ export const App = () => {
         const interval = duration / segments;
         const buckets = new Array(segments + 1).fill(0);
 
+        // Count checklist items per time segment
         activeProject.scopes.forEach(s => {
             s.events.forEach(e => {
                 const eEnd = new Date(e.endDate).getTime();
@@ -190,26 +220,31 @@ export const App = () => {
             });
         });
 
+        // Smooth curve generation
         const maxVal = Math.max(...buckets, 1);
         const points = buckets.map((count, i) => {
             const x = (i / segments) * 100;
-            const y = 100 - ((count / maxVal) * 60); 
+            const y = 100 - ((count / maxVal) * 60); // Max height 60% of container to keep it wavy at bottom
             return { x, y };
         });
 
+        // Start path
         let d = `M0,100 L0,${points[0].y}`;
+        
+        // Quadratic bezier for smoothness
         for (let i = 0; i < points.length - 1; i++) {
             const p0 = points[i];
             const p1 = points[i + 1];
             const midX = (p0.x + p1.x) / 2;
             const midY = (p0.y + p1.y) / 2;
+            // Control point logic for wave
             d += ` Q${p0.x + (midX - p0.x)/2},${p0.y} ${midX},${midY} T${p1.x},${p1.y}`;
         }
-        d += ` L100,100 Z`; 
+
+        d += ` L100,100 Z`; // Close path
         return d;
     }, [activeProject, projectBounds]);
 
-    // --- ACTIONS & HANDLERS ---
     const getNowString = () => {
         const d = new Date();
         return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -234,6 +269,7 @@ export const App = () => {
         addLog("SISTEMA", `DISCIPLINA REMOVIDA`);
     };
     
+    // Function to Add File (Missing previously)
     const onAddFile = (label: string, path: string) => {
         if (!activeProject || !selectedScopeIdForFiles) return;
         setDb(prev => ({
@@ -250,28 +286,41 @@ export const App = () => {
         addLog("SISTEMA", `ARQUIVO VINCULADO: ${label}`);
     };
 
+    const onDeleteEvent = (sid: string, eid: string) => {
+        if (!activeProject) return;
+        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) }));
+        addLog("SISTEMA", `AÇÃO REMOVIDA`);
+    };
     const onToggleDependency = (sid: string, eid: string, targetId: string) => {
         setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies||[]), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) }));
     };
-
     const onChangeDependencyType = (sid: string, eid: string, targetId: string) => {
-        const types: DependencyType[] = ['FS', 'SS', 'FF', 'SF'];
+        const types = ['FS', 'SS', 'FF', 'SF'] as const;
         setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: (ev.dependencies||[]).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type)+1)%types.length] } : d) } : ev) } : s) } : p) }));
     };
     
-    const onAddDependency = (sourceId: string, targetId: string, type: DependencyType) => {
+    // NEW: Function to Add Dependency via Drag & Drop
+    const onAddDependency = (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => {
         if (!activeProject) return;
+        
+        // Find scope for source event
         const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId));
         if (!sourceScope) return;
+
+        // Find scope for target event
         const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId));
+        // We only update the TARGET event to depend on SOURCE event
         if (!targetScope) return;
+
+        // Check if dependency already exists to avoid duplicates
         const targetEvent = targetScope.events.find(e => e.id === targetId);
-        
         if (targetEvent?.dependencies?.some(d => d.id === sourceId)) {
+            // Already linked - maybe notify or ignore
             setNotification("Vínculo já existe!");
             setTimeout(() => setNotification(null), 2000);
             return;
         }
+
         setDb(prev => ({
             ...prev,
             projects: prev.projects.map(p => p.id === activeProject.id ? {
@@ -286,9 +335,11 @@ export const App = () => {
                 } : s)
             } : p)
         }));
+        
         addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`);
     };
 
+    // NEW: Project Deletion & Editing
     const onDeleteProject = (id: number) => {
         setDb(prev => ({
             ...prev,
@@ -304,11 +355,124 @@ export const App = () => {
         }));
     };
 
-    // --- PRINT ONLY ---
-    // Removidas funções de exportHTML e importProject conforme solicitado.
+    const exportHTML = () => {
+        const clone = document.documentElement.cloneNode(true) as HTMLElement;
+        const originalInputs = document.querySelectorAll('input');
+        const clonedInputs = clone.querySelectorAll('input');
+        originalInputs.forEach((input, i) => {
+            if (clonedInputs[i]) {
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                    if (input.checked) clonedInputs[i].setAttribute('checked', 'checked');
+                    else clonedInputs[i].removeAttribute('checked');
+                } else {
+                    clonedInputs[i].setAttribute('value', input.value);
+                }
+            }
+        });
+
+        const originalTextareas = document.querySelectorAll('textarea');
+        const clonedTextareas = clone.querySelectorAll('textarea');
+        originalTextareas.forEach((txt, i) => {
+            if (clonedTextareas[i]) {
+                clonedTextareas[i].textContent = txt.value;
+                clonedTextareas[i].innerHTML = txt.value;
+            }
+        });
+
+        const originalSelects = document.querySelectorAll('select');
+        const clonedSelects = clone.querySelectorAll('select');
+        originalSelects.forEach((sel, i) => {
+            if (clonedSelects[i]) {
+                const val = sel.value;
+                const options = clonedSelects[i].querySelectorAll('option');
+                options.forEach(opt => {
+                    if (opt.value === val) opt.setAttribute('selected', 'selected');
+                    else opt.removeAttribute('selected');
+                });
+            }
+        });
+
+        const scripts = clone.querySelectorAll('script');
+        scripts.forEach(script => {
+            const src = script.getAttribute('src') || '';
+            const content = script.innerHTML || '';
+            if (!src.includes('tailwindcss') && !content.includes('tailwind.config')) {
+                script.remove();
+            }
+        });
+
+        const floatingButtons = clone.querySelector('.fixed.bottom-8.right-8');
+        if (floatingButtons) floatingButtons.remove();
+
+        const aiChat = clone.querySelector('.fixed.bottom-28.right-8');
+        if (aiChat) aiChat.remove();
+
+        const openModals = clone.querySelectorAll('[data-modal-overlay="true"]');
+        openModals.forEach(el => el.remove());
+        
+        const notifications = clone.querySelectorAll('.fixed.top-8');
+        notifications.forEach(el => el.remove());
+
+        const htmlContent = `<!DOCTYPE html>\n${clone.outerHTML}`;
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `dashboard-${activeProject?.name || 'export'}-${new Date().toISOString().split('T')[0]}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        addLog("SISTEMA", "DASHBOARD EXPORTADO PARA HTML");
+    };
+
+    const exportPython = () => {
+        if (!activeProject) return;
+
+        // Convert data to JSON string then replace JS bools/null with Python equivalents
+        const jsonStr = JSON.stringify(activeProject, null, 4)
+            .replace(/: true/g, ': True')
+            .replace(/: false/g, ': False')
+            .replace(/: null/g, ': None');
+
+        const pyContent = `# Exportado do Design Board Dashboard
+# Projeto: ${activeProject.name}
+# Data: ${new Date().toLocaleString()}
+
+import datetime
+
+# Dicionário com dados do projeto
+project_data = ${jsonStr}
+
+def print_project_summary(data):
+    print(f"--- Resumo do Projeto: {data['name']} ---")
+    print(f"Empresa ID: {data['companyId']}")
+    print(f"Disciplinas: {len(data['scopes'])}")
+    total_actions = sum(len(scope['events']) for scope in data['scopes'])
+    print(f"Total de Ações: {total_actions}")
+    print("-" * 30)
+
+if __name__ == "__main__":
+    print_project_summary(project_data)
+    # Você pode acessar os dados via 'project_data'
+`;
+
+        const blob = new Blob([pyContent], { type: 'text/x-python' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `dados_${activeProject.name.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.py`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        addLog("SISTEMA", "DADOS EXPORTADOS EM PYTHON");
+    };
+
     const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESSÃO"); };
 
-    // --- STATISTICS & HEALTH ---
     const filteredActivities = useMemo(() => {
         if (!activeProject) return [];
         return activeProject.activities.filter(a => {
@@ -350,8 +514,11 @@ export const App = () => {
 
     const progressPercentage = useMemo(() => {
         if (!activeProject) return 0;
+        // CHANGED: Start date is now Project Creation Date
         const start = new Date(activeProject.createdAt);
+        // End date is based on project bounds (latest event or timeline end)
         const end = new Date(projectBounds.end);
+        
         const today = new Date();
         if (today < start) return 0;
         if (today > end) return 100;
@@ -363,6 +530,7 @@ export const App = () => {
         return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
     }, [activeProject, projectBounds]);
 
+    // MODIFIED: Strict delay logic
     const projectHealth = useMemo(() => {
         if (!activeProject) return { label: '---', color: 'text-theme-textMuted', border: 'border-theme-card', bg: 'bg-theme-card' };
 
@@ -383,11 +551,12 @@ export const App = () => {
         return { label: 'DENTRO DO PRAZO', color: 'text-theme-green', border: 'border-theme-green', bg: 'bg-theme-green/10' };
     }, [activeProject, stats.rate, progressPercentage]);
 
-    // --- AI ---
+    // AI Chat Handler
     const handleAISend = async () => {
         if (!userInput.trim() || !activeProject) return;
         const query = userInput; setUserInput(''); setChatMessages(prev => [...prev, { role: 'user', text: query }]); setAiLoading(true);
         
+        // Enhanced Context
         const delayedEvents = activeProject.scopes.flatMap(s => s.events.filter(ev => ev.plannedEndDate && new Date(ev.endDate) > new Date(ev.plannedEndDate)).map(ev => `${ev.title} (Resp: ${ev.resp}) - Atraso`));
         const contextData = { 
             project: activeProject.name, 
@@ -470,31 +639,34 @@ export const App = () => {
             )}
 
             <div className="flex flex-col gap-8 w-full max-w-[1600px]">
-                {/* ... (Main Grid content) ... */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
                      <div className="lg:col-span-4 flex flex-col gap-6">
                         <div className="grid grid-cols-2 gap-4">
-                            {/* 1. COMPANY CARD (Was previously Position 3) */}
+                            {/* 1. Cliente (Agora o primeiro) */}
                             <div className={`ds-card-accent p-4 flex flex-col items-center justify-center text-center h-48 transition-all relative cursor-pointer hover:-translate-y-1`} onClick={() => setShowCompanyModal(true)}>
                                 <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-2 flex items-center gap-1 border border-white/20 px-2 py-0.5 rounded-full bg-white/10">1. Cliente <span className="material-symbols-outlined text-xs">chevron_right</span></span>
-                                <h2 className="font-square font-black text-white uppercase text-lg truncate w-full px-2 mt-1">{activeCompany?.name || 'Selecione'}</h2>
+                                {activeCompany?.logoUrl ? (
+                                    <img src={activeCompany.logoUrl} className="w-16 h-16 object-contain my-2 bg-white/10 rounded-lg backdrop-blur-md" />
+                                ) : (
+                                    <h2 className="font-square font-black text-white uppercase text-lg truncate w-full px-2 mt-1">{activeCompany?.name || 'Selecione'}</h2>
+                                )}
                                 {hasCompany && <span className="material-symbols-outlined absolute right-3 bottom-3 text-white/30 text-2xl">check_circle</span>}
                             </div>
 
-                            {/* DATES CARD (Position 2 - Unchanged) */}
+                            {/* Datas */}
                             <div className={`grid grid-rows-2 gap-3 h-48 transition-all ${!hasProject ? 'opacity-30 blur-[1px]' : ''}`}>
                                 <div className={`ds-card p-2 flex flex-col justify-center items-center group hover:border-theme-orange/30 transition-colors`}><span className="text-theme-orange font-bold text-[9px] mb-1 uppercase tracking-widest text-center opacity-80">Última Atualização</span><span className="text-xs font-mono font-medium text-theme-text/90 bg-theme-highlight px-2 py-1 rounded-md border border-theme-divider">{activeProject ? new Date(activeProject.updatedAt).toLocaleDateString() : '--/--/--'}</span></div>
                                 <div className={`ds-card p-2 flex flex-col justify-center items-center group hover:border-theme-orange/30 transition-colors`}><span className="text-theme-orange font-bold text-[9px] mb-1 uppercase tracking-widest opacity-80">Início do Projeto</span><span className="text-xs font-mono font-medium text-theme-text/90 bg-theme-highlight px-2 py-1 rounded-md border border-theme-divider">{activeProject ? new Date(activeProject.createdAt).toLocaleDateString() : '--/--/--'}</span></div>
                             </div>
                             
-                            {/* 2. LOD/PHASE CARD (Was previously Position 1) */}
+                            {/* 2. Fase (Agora o segundo) */}
                             <div className={`ds-card-accent cursor-pointer p-4 flex flex-col justify-center items-center text-center h-48 transition-all relative group overflow-hidden ${!hasCompany ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:-translate-y-1'}`} onClick={() => hasCompany && setShowLodModal(true)}>
                                 <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-1 flex items-center gap-1 border border-white/20 px-2 py-0.5 rounded-full bg-white/10">2. Fase <span className="material-symbols-outlined text-xs">chevron_right</span></span>
                                 <h1 className="text-xl md:text-2xl font-square font-black text-white leading-tight uppercase drop-shadow-sm mt-2">{db.activeLod ? <>{db.activeLod}_<br /><span className="text-lg opacity-90 font-medium font-sans">{db.lods.find(l => l.startsWith(db.activeLod))?.split('_ ')[1] || '---'}</span></> : 'Selecionar'}</h1>
                                 {hasLod && <span className="material-symbols-outlined absolute right-3 bottom-3 text-white/30 text-2xl">check_circle</span>}
                             </div>
                             
-                            {/* 3. PROJECT CARD (Position 4 - Condition Updated to check hasCompany && hasLod) */}
+                            {/* 3. Projeto */}
                             <div className={`ds-card-accent p-4 flex flex-col items-center justify-center h-48 transition-all relative group overflow-hidden ${!hasCompany || !hasLod ? 'opacity-30 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-1'}`} onClick={() => hasCompany && hasLod && setShowProjectModal(true)}>
                                 {activeProject?.coverUrl && (
                                     <div 
@@ -642,6 +814,10 @@ export const App = () => {
                                             <span className="text-[9px] font-black text-theme-textMuted uppercase tracking-wider truncate">
                                                 {db.disciplines.find(d => d.code === scope.name)?.name || scope.name}
                                             </span>
+                                            {/* RESPONSAVEL VISIVEL NA LISTA */}
+                                            <span className="text-[8px] text-theme-textMuted/70 uppercase block mt-0.5 flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-[10px]">person</span> {scope.resp}
+                                            </span>
                                         </div>
                                     </div>
                                 ))}
@@ -673,6 +849,7 @@ export const App = () => {
                     </div>
                 </div>
 
+                {/* Timeline Section */}
                 <div className={`transition-all duration-1000 flex flex-col gap-10 ${!hasProject ? 'opacity-0 grayscale blur-md pointer-events-none' : 'opacity-100'}`}>
                     <div className={`self-center ds-card rounded-full p-1.5 flex gap-1 no-print`}>
                         <button onClick={() => setZoomLevel(0.6)} className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase transition-all ${zoomLevel < 0.8 ? 'bg-theme-orange text-white shadow-lg' : 'text-zinc-500 hover:text-theme-text hover:bg-theme-highlight'}`}>MACRO</button>
@@ -717,7 +894,6 @@ export const App = () => {
                                     <span className="material-symbols-outlined text-theme-orange text-3xl">timer</span>
                                     Controle de Prazo Global
                                 </h2>
-                                
                                 <div className="mt-4 flex items-center gap-4">
                                     <button 
                                         onClick={() => setShowTeamModal(true)} 
@@ -824,7 +1000,7 @@ export const App = () => {
                     setDb(prev => ({ ...prev, activeCompanyId: id, activeProjectId: null }));
                     setShowCompanyModal(false);
                 }}
-                onAdd={(name) => setDb(prev => ({ ...prev, companies: [...prev.companies, { id: Date.now(), name }] }))}
+                onAdd={(name, logoUrl) => setDb(prev => ({ ...prev, companies: [...prev.companies, { id: Date.now(), name, logoUrl }] }))}
                 onRemove={(id) => setDb(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id) }))}
                 onReorder={(c) => setDb(prev => ({ ...prev, companies: c }))}
             />
@@ -972,6 +1148,8 @@ export const App = () => {
                 onClose={() => setShowAdminModal(false)}
                 onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
                 onPrint={printDashboard}
+                onExport={exportHTML}
+                onExportPython={exportPython}
             />
 
             <DisciplinesManagerModal

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { INITIAL_DB } from './constants';
-import { DB, ChatMessage, Project, Event, Company, ProjectDataRow } from './types';
+import { DB, ChatMessage, Project, Event, Company, ProjectDataRow, Scope } from './types';
 import { generateChatResponse } from './services/geminiService';
 import {
     LodModal, CompanyModal, ProjectModal, ScopeModal, EventModal,
@@ -16,8 +16,13 @@ type Tab = 'timeline' | 'gallery' | 'files' | 'data';
 
 export const App = () => {
     const [db, setDb] = useState<DB>(() => {
-        const savedDb = localStorage.getItem(STORAGE_KEY);
-        return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
+        try {
+            const savedDb = localStorage.getItem(STORAGE_KEY);
+            return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
+        } catch (error) {
+            console.error("Erro ao carregar dados locais, resetando para padrão:", error);
+            return INITIAL_DB;
+        }
     });
 
     const [theme, setTheme] = useState(() => {
@@ -75,7 +80,12 @@ export const App = () => {
     const [activeChecklistIds, setActiveChecklistIds] = useState<{ sid: string; eid: string } | null>(null);
 
     useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        } catch (error) {
+            console.error("Erro ao salvar dados:", error);
+            setNotification("Erro ao salvar alterações localmente!");
+        }
     }, [db]);
 
     useEffect(() => {
@@ -140,15 +150,6 @@ export const App = () => {
         return Math.min(Math.max((elapsed / total) * 100, 0), 100);
     }, [activeProject]);
 
-    const hoursSpent = useMemo(() => {
-        if (!activeProject) return 0;
-        const start = new Date(projectBounds.start); const endCap = new Date(projectBounds.end); const now = new Date();
-        const calcEnd = now < endCap ? now : endCap; if (calcEnd < start) return 0;
-        let businessDays = 0; const cur = new Date(start);
-        while (cur <= calcEnd) { const dayOfWeek = cur.getDay(); if (dayOfWeek !== 0 && dayOfWeek !== 6) businessDays++; cur.setDate(cur.getDate() + 1); }
-        return businessDays * 8;
-    }, [activeProject, projectBounds]);
-
     const getNowString = () => {
         const d = new Date();
         return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -159,7 +160,16 @@ export const App = () => {
         if (name) { setCurrentUser({ name, avatar: `https://ui-avatars.com/api/?name=${name}&background=E86C3F&color=fff` }); setNotification(`Bem-vindo, ${name}!`); setTimeout(() => setNotification(null), 3000); }
     };
 
-    const handleManualSave = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); setNotification("Projeto Salvo com Sucesso!"); setTimeout(() => setNotification(null), 3000); };
+    const handleManualSave = () => { 
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); 
+            setNotification("Projeto Salvo com Sucesso!"); 
+        } catch (e) {
+            setNotification("Erro ao salvar!");
+        }
+        setTimeout(() => setNotification(null), 3000); 
+    };
+    
     const onUpdateCompany = (id: number, name: string, logoUrl?: string) => { setDb(prev => ({ ...prev, companies: prev.companies.map(c => c.id === id ? { ...c, name, logoUrl } : c) })); addLog("SISTEMA", `CLIENTE ATUALIZADO: ${name}`); };
     const addLog = (author: string, text: string, imageUrl?: string) => { if (!db.activeProjectId) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === db.activeProjectId ? { ...p, updatedAt: new Date().toISOString(), activities: [...p.activities, { date: getNowString(), author: author.toUpperCase(), text: text.toUpperCase(), imageUrl }] } : p) })); };
     const onDeleteScope = (sid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.filter(s => s.id !== sid) } : p) })); if (selectedScopeIdForFiles === sid) setSelectedScopeIdForFiles(null); addLog("SISTEMA", `DISCIPLINA REMOVIDA`); };
@@ -170,149 +180,50 @@ export const App = () => {
     const onAddDependency = (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (!activeProject) return; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); setTimeout(() => setNotification(null), 2000); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); };
     const onDeleteProject = (id: number) => { setDb(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), activeProjectId: prev.activeProjectId === id ? null : prev.activeProjectId })); };
     const onEditProject = (id: number, name: string, logo?: string, cover?: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, name, logoUrl: logo, coverUrl: cover, updatedAt: new Date().toISOString() } : p) })); };
-    const exportHTML = () => { const clone = document.documentElement.cloneNode(true) as HTMLElement; const htmlContent = `<!DOCTYPE html>\n${clone.outerHTML}`; const blob = new Blob([htmlContent], { type: 'text/html' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `dashboard-${activeProject?.name || 'export'}-${new Date().toISOString().split('T')[0]}.html`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); addLog("SISTEMA", "DASHBOARD EXPORTADO PARA HTML"); };
-    const exportPython = () => { if (!activeProject) return; const jsonStr = JSON.stringify(activeProject, null, 4).replace(/: true/g, ': True').replace(/: false/g, ': False').replace(/: null/g, ': None'); const pyContent = `# Exportado do Design Board\nproject_data = ${jsonStr}`; const blob = new Blob([pyContent], { type: 'text/x-python' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `dados_${activeProject.name.toLowerCase()}_${new Date().toISOString().split('T')[0]}.py`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); addLog("SISTEMA", "DADOS EXPORTADOS EM PYTHON"); };
-    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESSÃO"); };
-
-    const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!activeProject) return;
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const url = reader.result as string;
-                setDb(prev => ({
-                    ...prev,
-                    projects: prev.projects.map(p => p.id === activeProject.id ? {
-                        ...p,
-                        updatedAt: new Date().toISOString(),
-                        gallery: [...(p.gallery || []), url],
-                        galleryDescriptions: { ...(p.galleryDescriptions || {}), [(p.gallery || []).length]: "Nova mídia adicionada." }
-                    } : p)
-                }));
-                addLog("SISTEMA", "MÍDIA ADICIONADA À GALERIA");
-            };
-            reader.readAsDataURL(file);
-        }
+    
+    // EXPORT JSON
+    const handleExportJSON = () => {
+        const jsonString = JSON.stringify(db, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `enigami-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        addLog("SISTEMA", "BACKUP DO SISTEMA EXPORTADO");
     };
 
-    const handleScopeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!activeProject || !selectedScopeIdForFiles) return;
+    // IMPORT JSON
+    const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const fileName = prompt("Nome do Arquivo:", file.name);
-            if (fileName) {
-                onAddFile(fileName, "LINK_SIMULADO");
-                setNotification("Arquivo vinculado com sucesso!");
-                setTimeout(() => setNotification(null), 3000);
-            }
-        }
-    };
+        if (!file) return;
 
-    const handleDeleteGalleryImage = (idx: number) => {
-        if (!activeProject) return;
-        if(confirm('Excluir mídia?')) {
-            const newGallery = (activeProject.gallery || []).filter((_, i) => i !== idx);
-            const newDescriptions: Record<number, string> = {};
-            let newIdx = 0;
-            (activeProject.gallery || []).forEach((_, i) => {
-                if(i !== idx) {
-                    newDescriptions[newIdx] = activeProject.galleryDescriptions?.[i] || "";
-                    newIdx++;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const importedData = JSON.parse(event.target?.result as string);
+                if (importedData && importedData.companies && importedData.projects) {
+                    if (confirm("ATENÇÃO: Isso substituirá todos os dados atuais pelos dados do backup. Deseja continuar?")) {
+                        setDb(importedData);
+                        setNotification("Backup importado com sucesso!");
+                        addLog("SISTEMA", "BACKUP DO SISTEMA IMPORTADO");
+                    }
+                } else {
+                    alert("Arquivo de backup inválido.");
                 }
-            });
-
-            setDb(prev => ({
-                ...prev,
-                projects: prev.projects.map(p => p.id === activeProject.id ? {
-                    ...p,
-                    updatedAt: new Date().toISOString(),
-                    gallery: newGallery,
-                    galleryDescriptions: newDescriptions
-                } : p)
-            }));
-            if (currentGalleryIndex >= newGallery.length && newGallery.length > 0) {
-                setCurrentGalleryIndex(newGallery.length - 1);
+            } catch (err) {
+                console.error("Erro ao importar JSON", err);
+                alert("Erro ao ler o arquivo de backup.");
             }
-        }
-    };
-
-    const updateGalleryDescription = (text: string) => {
-        if (!activeProject) return;
-        setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === activeProject.id ? {
-                ...p,
-                galleryDescriptions: { ...(p.galleryDescriptions || {}), [currentGalleryIndex]: text }
-            } : p)
-        }));
-    };
-
-    const generateGalleryAI = async () => {
-        if(!activeProject) return;
-        setAiLoading(true);
-        const desc = await generateChatResponse("Descreva esta imagem de arquitetura de forma criativa e profissional para um portfólio.", "Você é um arquiteto senior.");
-        updateGalleryDescription(desc);
-        setAiLoading(false);
-    };
-
-    const isVideo = (url: string) => {
-        return url.startsWith('data:video') || url.match(/\.(mp4|webm|ogg)$/i);
-    };
-
-    // Data Row Management
-    const onAddDataRow = () => {
-        if (!activeProject) return;
-        const newRow: ProjectDataRow = {
-            id: `row-${Date.now()}`,
-            order: String((activeProject.dataRows?.length || 0) + 1),
-            location: '',
-            status: 'NÃO INICIADO',
-            landArea: '',
-            builtArea: '',
-            salesArea: '',
-            zoning: '',
-            potential: '',
-            broker: '',
-            resp: '',
-            updatedAt: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
         };
-        setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === activeProject.id ? {
-                ...p,
-                dataRows: [...(p.dataRows || []), newRow]
-            } : p)
-        }));
+        reader.readAsText(file);
+        e.target.value = '';
     };
 
-    const onUpdateDataRow = (id: string, field: keyof ProjectDataRow, value: string) => {
-        if (!activeProject) return;
-        setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === activeProject.id ? {
-                ...p,
-                dataRows: (p.dataRows || []).map(r => r.id === id ? { 
-                    ...r, 
-                    [field]: value,
-                    updatedAt: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                } : r)
-            } : p)
-        }));
-    };
-
-    const onDeleteDataRow = (id: string) => {
-        if (!activeProject) return;
-        if (confirm('Excluir esta linha?')) {
-            setDb(prev => ({
-                ...prev,
-                projects: prev.projects.map(p => p.id === activeProject.id ? {
-                    ...p,
-                    dataRows: (p.dataRows || []).filter(r => r.id !== id)
-                } : p)
-            }));
-        }
-    };
+    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESSÃO"); };
 
     const filteredActivities = useMemo(() => { if (!activeProject) return []; return activeProject.activities.filter(a => { const matchText = a.text.toLowerCase().includes(logSearch.toLowerCase()); const matchAuthor = logAuthorFilter === '' || a.author === logAuthorFilter.toUpperCase(); return matchText && matchAuthor; }); }, [activeProject, logSearch, logAuthorFilter]);
     const stats = useMemo(() => { if (!activeProject) return { tot: 0, don: 0, lat: 0, rate: 0, inProgress: 0, taskCount: 0 }; let totItems = 0; let donItems = 0; let latEvents = 0; let inProg = 0; let tasks = 0; const today = new Date(); activeProject.scopes.forEach(sc => { sc.events.forEach(ev => { tasks++; const items = ev.checklist && ev.checklist.length > 0 ? ev.checklist.length : 1; const done = ev.checklist && ev.checklist.length > 0 ? ev.checklist.filter(i => i.done).length : (ev.completed ? 1 : 0); totItems += items; donItems += done; if (!ev.completed && new Date(ev.startDate) <= today) { inProg++; } if (!ev.completed && new Date(ev.endDate) < today) latEvents++; }); }); return { tot: totItems, don: donItems, lat: latEvents, rate: totItems ? Math.round((donItems / totItems) * 100) : 0, inProgress: inProg, taskCount: tasks }; }, [activeProject]);
@@ -357,6 +268,133 @@ export const App = () => {
         setAiLoading(false);
         setNotification("Relatório Gerado no Feed!");
         setTimeout(() => setNotification(null), 3000);
+    };
+
+    const isVideo = (url: string) => {
+        return url.startsWith('data:video') || !!url.match(/\.(mp4|webm|ogg)$/i);
+    };
+
+    const handleScopeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && activeProject && selectedScopeIdForFiles) {
+             const fakePath = `/uploads/${activeProject.id}/${selectedScopeIdForFiles}/${file.name}`;
+             onAddFile(file.name, fakePath);
+             addLog("SISTEMA", `ARQUIVO ADICIONADO: ${file.name}`);
+        }
+        if (scopeFileRef.current) scopeFileRef.current.value = '';
+    };
+
+    const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0 && activeProject) {
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const result = reader.result as string;
+                    setDb(prev => ({
+                        ...prev,
+                        projects: prev.projects.map(p => p.id === activeProject.id ? {
+                            ...p,
+                            gallery: [...(p.gallery || []), result],
+                            updatedAt: new Date().toISOString()
+                        } : p)
+                    }));
+                };
+                reader.readAsDataURL(file);
+            });
+            addLog("SISTEMA", `${files.length} MÍDIA(S) ADICIONADA(S) À GALERIA`);
+        }
+        if (galleryFileRef.current) galleryFileRef.current.value = '';
+    };
+
+    const handleDeleteGalleryImage = (index: number) => {
+        if (!activeProject || !activeProject.gallery) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                gallery: p.gallery!.filter((_, i) => i !== index),
+                galleryDescriptions: p.galleryDescriptions ? Object.fromEntries(Object.entries(p.galleryDescriptions).filter(([k]) => parseInt(k) !== index)) : {},
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+        if (currentGalleryIndex >= (activeProject.gallery.length - 1)) {
+            setCurrentGalleryIndex(Math.max(0, activeProject.gallery.length - 2));
+        }
+        addLog("SISTEMA", `MÍDIA REMOVIDA DA GALERIA`);
+    };
+
+    const updateGalleryDescription = (text: string) => {
+        if (!activeProject) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                galleryDescriptions: { ...(p.galleryDescriptions || {}), [currentGalleryIndex]: text }
+            } : p)
+        }));
+    };
+
+    const generateGalleryAI = async () => {
+        if (!activeProject || !activeProject.gallery?.[currentGalleryIndex]) return;
+        setNotification("Analisando mídia com IA...");
+        const prompt = `Atue como um Arquiteto Sênior. Gere uma descrição técnica breve (máx 200 caracteres) para uma imagem de acompanhamento de obra ou render do projeto ${activeProject.name}, considerando a fase ${activeProject.lod}. Foco em evolução e qualidade.`;
+        const description = await generateChatResponse(prompt, "Você é um especialista em documentação arquitetônica.");
+        updateGalleryDescription(description);
+        setNotification("Descrição Gerada!");
+        setTimeout(() => setNotification(null), 3000);
+    };
+
+    const onAddDataRow = () => {
+        if (!activeProject) return;
+        const newRow: ProjectDataRow = {
+            id: `row-${Date.now()}`,
+            order: ((activeProject.dataRows?.length || 0) + 1).toString(),
+            location: '',
+            status: 'NÃO INICIADO',
+            landArea: '',
+            builtArea: '',
+            salesArea: '',
+            zoning: '',
+            potential: '',
+            broker: '',
+            resp: '',
+            updatedAt: new Date().toLocaleDateString()
+        };
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                dataRows: [...(p.dataRows || []), newRow],
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+        addLog("SISTEMA", "NOVA LINHA DE DADOS ADICIONADA");
+    };
+
+    const onUpdateDataRow = (id: string, field: keyof ProjectDataRow, value: string) => {
+        if (!activeProject) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                dataRows: p.dataRows?.map(r => r.id === id ? { ...r, [field]: value } : r),
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+    };
+
+    const onDeleteDataRow = (id: string) => {
+        if (!activeProject) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                dataRows: p.dataRows?.filter(r => r.id !== id),
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+        addLog("SISTEMA", "LINHA DE DADOS REMOVIDA");
     };
 
     const hasLod = !!db.activeLod; const hasCompany = !!db.activeCompanyId; const hasProject = !!db.activeProjectId;
@@ -407,6 +445,163 @@ export const App = () => {
             
             {/* ... Chat Window ... */}
             {showAIChat && (<div className="fixed bottom-28 right-8 z-[120] w-[380px] h-[550px] bg-theme-card/80 backdrop-blur-xl rounded-[30px] flex flex-col overflow-hidden animate-scaleIn no-print shadow-2xl border border-white/20"><div className="bg-gradient-to-r from-theme-cyan to-blue-400 p-5 flex justify-between items-center"><div className="flex items-center gap-3"><span className="material-symbols-outlined text-white bg-white/20 rounded-lg p-1.5 text-xl">smart_toy</span><div><h4 className="text-white font-square font-bold text-sm tracking-wide leading-none">DesignBot</h4><span className="text-white/80 text-[10px] font-medium uppercase tracking-wider">Online</span></div></div><button onClick={() => setShowAIChat(false)} className="text-white/70 hover:text-white transition-colors"><span className="material-symbols-outlined">close</span></button></div><div className="flex-1 overflow-y-auto scroller p-5 space-y-4">{chatMessages.length === 0 && <div className="flex flex-col items-center justify-center h-full text-center p-6 gap-3 opacity-50"><span className="material-symbols-outlined text-5xl text-theme-textMuted">chat_bubble</span><p className="text-[11px] font-medium text-theme-textMuted uppercase tracking-widest">Estou analisando o projeto...</p></div>}{chatMessages.map((msg, i) => <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-theme-cyan text-white rounded-tr-sm' : 'bg-theme-card border border-theme-divider text-theme-textMuted rounded-tl-sm'}`}>{msg.text}</div></div>)}{aiLoading && <div className="flex justify-start animate-pulse"><div className="bg-theme-card border border-theme-divider text-theme-textMuted px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest">Pensando...</div></div>}<div ref={chatEndRef} /></div><div className="p-4 border-t border-theme-divider bg-theme-card/50"><form onSubmit={(e) => { e.preventDefault(); handleAISend(); }} className="flex gap-2"><input type="text" placeholder="Perguntar sobre o projeto..." className="flex-1 bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-cyan transition-all placeholder:text-theme-textMuted shadow-sm" value={userInput} onChange={(e) => setUserInput(e.target.value)} disabled={aiLoading} /><button type="submit" className="bg-theme-cyan text-white rounded-xl px-4 flex items-center justify-center hover:bg-cyan-600 transition-all disabled:opacity-50 shadow-lg" disabled={aiLoading || !userInput.trim()}><span className="material-symbols-outlined text-lg">send</span></button></form></div></div>)}
+
+            {/* --- MODALS INJECTION --- */}
+            <CompanyModal
+                isOpen={showCompanyModal}
+                companies={db.companies}
+                onClose={() => setShowCompanyModal(false)}
+                onSelect={(id) => { setDb(prev => ({ ...prev, activeCompanyId: id, activeProjectId: null })); setShowCompanyModal(false); }}
+                onAdd={(name, logo) => { const newId = Date.now(); setDb(prev => ({ ...prev, companies: [...prev.companies, { id: newId, name, logoUrl: logo }] })); }}
+                onUpdate={onUpdateCompany}
+                onRemove={(id) => { setDb(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id), activeCompanyId: prev.activeCompanyId === id ? null : prev.activeCompanyId })); }}
+                onReorder={(newCompanies) => setDb(prev => ({ ...prev, companies: newCompanies }))}
+            />
+            
+            <LodModal
+                isOpen={showLodModal}
+                lods={db.lods}
+                activeLod={db.activeLod}
+                onClose={() => setShowLodModal(false)}
+                onSelect={(lod) => { setDb(prev => ({ ...prev, activeLod: lod })); setShowLodModal(false); }}
+                onAdd={(l) => setDb(prev => ({ ...prev, lods: [...prev.lods, l] }))}
+                onRemove={(l) => setDb(prev => ({ ...prev, lods: prev.lods.filter(item => item !== l), activeLod: prev.activeLod === l ? "" : prev.activeLod }))}
+                onReorder={(newLods) => setDb(prev => ({ ...prev, lods: newLods }))}
+            />
+
+            <ProjectModal
+                isOpen={showProjectModal}
+                companyName={activeCompany?.name || ''}
+                projects={db.projects.filter(p => p.companyId === db.activeCompanyId)}
+                onClose={() => setShowProjectModal(false)}
+                onSelect={(id) => { setDb(prev => ({ ...prev, activeProjectId: id })); setShowProjectModal(false); }}
+                onAdd={(name, logo, cover) => { 
+                    if (!db.activeCompanyId || !db.activeLod) return;
+                    const newProj: Project = { 
+                        id: Date.now(), 
+                        companyId: db.activeCompanyId, 
+                        lod: db.activeLod, 
+                        name, 
+                        logoUrl: logo,
+                        coverUrl: cover,
+                        createdAt: new Date().toISOString(), 
+                        updatedAt: new Date().toISOString(), 
+                        timelineStart: '2026-01-01', 
+                        timelineEnd: '2026-12-31', 
+                        activities: [], 
+                        scopes: [] 
+                    };
+                    setDb(prev => ({ ...prev, projects: [...prev.projects, newProj], activeProjectId: newProj.id }));
+                    setShowProjectModal(false);
+                }}
+                onDelete={onDeleteProject}
+                onEdit={onEditProject}
+            />
+
+            <ScopeModal
+                isOpen={showScopeModal}
+                scope={selectedScope}
+                disciplines={db.disciplines}
+                team={db.team}
+                onClose={() => { setShowScopeModal(false); setEditingScopeId(null); }}
+                onManage={() => { setShowScopeModal(false); setShowDisciplinesModal(true); }}
+                onSave={(name, startDate, color, status, pWeek, resp) => {
+                    if (!activeProject) return;
+                    if (editingScopeId) {
+                         setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === editingScopeId ? { ...s, name, startDate, colorClass: color, status, protocolWeek: pWeek, resp } : s) } : p) }));
+                    } else {
+                        const newScope: Scope = { id: `sc${Date.now()}`, name, colorClass: color, startDate, resp, status, protocolWeek: pWeek, events: [] };
+                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: [...p.scopes, newScope] } : p) }));
+                    }
+                    setShowScopeModal(false);
+                    setEditingScopeId(null);
+                }}
+            />
+
+            <EventModal
+                isOpen={showEventModal}
+                team={db.team}
+                event={editingEvent}
+                onClose={() => { setShowEventModal(false); setEditingEventId(null); }}
+                onSave={(title, resp, start, end, checklistStr) => {
+                    if (!activeProject || !activeScopeIdForEvent) return;
+                    const checklist = checklistStr.split('\n').filter(t => t.trim()).map(t => ({ text: t, done: false }));
+                    if (editingEventId) {
+                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeScopeIdForEvent ? { ...s, events: s.events.map(e => e.id === editingEventId ? { ...e, title, resp, startDate: start, endDate: end, checklist: e.checklist } : e) } : s) } : p) }));
+                    } else {
+                        const newEvent: Event = { id: `ev${Date.now()}`, title, resp, startDate: start, endDate: end, plannedStartDate: start, plannedEndDate: end, checklist, completed: false };
+                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeScopeIdForEvent ? { ...s, events: [...s.events, newEvent] } : s) } : p) }));
+                        addLog("SISTEMA", `NOVA AÇÃO: ${title}`);
+                    }
+                    setShowEventModal(false);
+                    setEditingEventId(null);
+                }}
+            />
+
+            <ChecklistModal
+                isOpen={showChecklistModal}
+                event={activeChecklistIds ? activeProject?.scopes.find(s => s.id === activeChecklistIds.sid)?.events.find(e => e.id === activeChecklistIds.eid) || null : null}
+                project={activeProject}
+                onClose={() => setShowChecklistModal(false)}
+                onEdit={() => { 
+                    if(activeChecklistIds) {
+                         setActiveScopeIdForEvent(activeChecklistIds.sid); 
+                         setEditingEventId(activeChecklistIds.eid); 
+                         setShowChecklistModal(false); 
+                         setShowEventModal(true); 
+                    }
+                }}
+                onToggleCheck={(idx) => {
+                    if (!activeProject || !activeChecklistIds) return;
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: e.checklist.map((it, i) => i === idx ? { ...it, done: !it.done } : it) } : e) } : s) } : p) }));
+                }}
+                onComplete={() => {
+                    if (!activeProject || !activeChecklistIds) return;
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, completed: !e.completed } : e) } : s) } : p) }));
+                    setShowChecklistModal(false);
+                }}
+                onToggleLink={(targetId) => onAddDependency(activeChecklistIds!.eid, targetId, 'FS')}
+                onChangeType={(targetId) => onChangeDependencyType(activeChecklistIds!.sid, activeChecklistIds!.eid, targetId)}
+            />
+
+            <TeamModal 
+                isOpen={showTeamModal} 
+                team={db.team} 
+                onClose={() => setShowTeamModal(false)} 
+                onAdd={(name) => setDb(prev => ({ ...prev, team: [...prev.team, name] }))} 
+                onRemove={(idx) => setDb(prev => ({ ...prev, team: prev.team.filter((_, i) => i !== idx) }))} 
+            />
+            
+            <TimelineSettingsModal 
+                isOpen={showSettingsModal} 
+                project={activeProject} 
+                onClose={() => setShowSettingsModal(false)} 
+                onSave={(start, end) => {
+                     if (!activeProject) return;
+                     setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, timelineStart: start, timelineEnd: end } : p) }));
+                     setShowSettingsModal(false);
+                }}
+            />
+            
+            <AdminSettingsModal 
+                isOpen={showAdminModal} 
+                theme={theme} 
+                onClose={() => setShowAdminModal(false)} 
+                onToggleTheme={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')} 
+                onPrint={printDashboard} 
+                onExportJSON={handleExportJSON}
+                onImportJSON={handleImportJSON}
+            />
+
+            <DisciplinesManagerModal
+                isOpen={showDisciplinesModal}
+                disciplines={db.disciplines}
+                onClose={() => setShowDisciplinesModal(false)}
+                onAdd={(d) => setDb(prev => ({ ...prev, disciplines: [...prev.disciplines, d] }))}
+                onUpdate={(oldCode, d) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.map(item => item.code === oldCode ? d : item) }))}
+                onRemove={(code) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.filter(d => d.code !== code) }))}
+                onReorder={(list) => setDb(prev => ({ ...prev, disciplines: list }))}
+            />
 
             <div className="flex flex-col gap-10 w-full max-w-[1600px]">
                 {/* Header Cards */}
@@ -686,265 +881,150 @@ export const App = () => {
 
                 {/* --- TAB: GALLERY VIEW --- */}
                 {activeTab === 'gallery' && hasProject && (
-                    <div className="w-full h-full flex flex-col items-center justify-center animate-fadeIn no-print mb-20">
-                        <div className="w-full flex items-center justify-between mb-8 max-w-6xl">
-                            <span className="w-32 border-b border-theme-textMuted/30"></span>
-                            <h2 className="font-square font-medium text-2xl uppercase tracking-[0.5em] text-theme-text">Our Projects</h2>
-                            <span className="w-32 border-b border-theme-textMuted/30"></span>
-                        </div>
-
-                        <div className="w-full max-w-6xl h-[650px] flex gap-8 relative">
-                            {/* Main Gallery Area */}
-                            <div className="flex-1 bg-theme-card border border-theme-divider rounded-[40px] shadow-neuro relative overflow-hidden flex items-center justify-center group">
-                                {(activeProject?.gallery || []).length > 0 ? (
-                                    <>
-                                        {isVideo((activeProject?.gallery || [])[currentGalleryIndex] || '') ? (
-                                            <video 
-                                                src={(activeProject?.gallery || [])[currentGalleryIndex] || ''} 
-                                                className="w-full h-full object-contain bg-black"
-                                                controls
-                                            />
+                    <div className="animate-fadeIn">
+                        <div className="ds-card p-8 bg-theme-card relative overflow-hidden min-h-[600px]">
+                            {activeProject.gallery && activeProject.gallery.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                                    <div className="relative rounded-3xl overflow-hidden shadow-2xl group border border-theme-divider bg-black aspect-video md:aspect-auto">
+                                        {isVideo(activeProject.gallery[currentGalleryIndex]) ? (
+                                            <video src={activeProject.gallery[currentGalleryIndex]} controls className="w-full h-full object-contain" />
                                         ) : (
-                                            <img 
-                                                src={(activeProject?.gallery || [])[currentGalleryIndex] || ''} 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-in-out" 
-                                            />
+                                            <img src={activeProject.gallery[currentGalleryIndex]} className="w-full h-full object-contain" />
                                         )}
-                                        
-                                        {/* Controls */}
-                                        <div className="absolute inset-0 flex justify-between items-center px-6 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                            <button 
-                                                onClick={() => setCurrentGalleryIndex(prev => Math.max(0, prev - 1))}
-                                                disabled={currentGalleryIndex === 0}
-                                                className="bg-theme-card/80 backdrop-blur-md p-4 rounded-full hover:bg-theme-highlight text-theme-text transition-all shadow-lg disabled:opacity-30 pointer-events-auto"
-                                            >
-                                                <span className="material-symbols-outlined text-2xl">arrow_back</span>
-                                            </button>
-                                            <button 
-                                                onClick={() => setCurrentGalleryIndex(prev => Math.min((activeProject?.gallery?.length || 1) - 1, prev + 1))}
-                                                disabled={currentGalleryIndex === ((activeProject?.gallery?.length || 1) - 1)}
-                                                className="bg-theme-card/80 backdrop-blur-md p-4 rounded-full hover:bg-theme-highlight text-theme-text transition-all shadow-lg disabled:opacity-30 pointer-events-auto"
-                                            >
-                                                <span className="material-symbols-outlined text-2xl">arrow_forward</span>
-                                            </button>
+                                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => handleDeleteGalleryImage(currentGalleryIndex)} className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"><span className="material-symbols-outlined">delete</span></button>
                                         </div>
-
-                                        <button 
-                                            onClick={() => handleDeleteGalleryImage(currentGalleryIndex)}
-                                            className="absolute top-6 right-6 bg-theme-card/80 text-red-500 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-md hover:bg-theme-highlight shadow-lg z-10"
-                                        >
-                                            <span className="material-symbols-outlined">delete</span>
-                                        </button>
-                                        <div className="absolute bottom-6 left-6 bg-theme-card/90 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-mono font-bold text-theme-text shadow-lg z-10">
-                                            MÍDIA_{String(currentGalleryIndex + 1).padStart(2,'0')} / {String(activeProject?.gallery?.length).padStart(2,'0')}
+                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/50 rounded-full backdrop-blur-md">
+                                            <button onClick={() => setCurrentGalleryIndex(prev => (prev - 1 + activeProject.gallery!.length) % activeProject.gallery!.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_left</span></button>
+                                            <span className="text-white text-xs font-mono self-center">{currentGalleryIndex + 1} / {activeProject.gallery.length}</span>
+                                            <button onClick={() => setCurrentGalleryIndex(prev => (prev + 1) % activeProject.gallery!.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_right</span></button>
                                         </div>
-                                    </>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center text-theme-textMuted">
-                                        <span className="material-symbols-outlined text-8xl mb-4 opacity-30">perm_media</span>
-                                        <span className="text-sm font-square uppercase tracking-widest font-bold">Nenhuma mídia</span>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Side Panel: Description & AI */}
-                            <div className="w-[400px] shrink-0 bg-theme-card border border-theme-divider rounded-[40px] shadow-neuro p-8 flex flex-col relative">
-                                <div className="absolute top-6 right-6">
-                                    <button onClick={() => galleryFileRef.current?.click()} className="text-theme-textMuted hover:text-theme-orange transition-colors bg-theme-highlight p-2 rounded-full">
-                                        <span className="material-symbols-outlined text-xl">add_photo_alternate</span>
+                                    <div className="flex flex-col h-full">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text">Detalhes da Mídia</h3>
+                                            <button onClick={generateGalleryAI} className="flex items-center gap-2 bg-theme-purple/10 text-theme-purple px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-theme-purple hover:text-white transition-all border border-theme-purple/20">
+                                                <span className="material-symbols-outlined text-lg">auto_awesome</span> Gerar Descrição IA
+                                            </button>
+                                        </div>
+                                        <textarea 
+                                            className="flex-1 w-full bg-theme-bg border border-theme-divider rounded-2xl p-6 text-sm text-theme-text outline-none focus:border-theme-orange transition-all resize-none shadow-inner leading-relaxed" 
+                                            placeholder="Adicione uma descrição técnica ou observações sobre esta imagem..."
+                                            value={activeProject.galleryDescriptions?.[currentGalleryIndex] || ""}
+                                            onChange={(e) => updateGalleryDescription(e.target.value)}
+                                        />
+                                        <div className="mt-6 grid grid-cols-4 gap-2 overflow-x-auto pb-2">
+                                            {activeProject.gallery.map((img, idx) => (
+                                                <div key={idx} onClick={() => setCurrentGalleryIndex(idx)} className={`cursor-pointer rounded-xl overflow-hidden border-2 aspect-square relative ${currentGalleryIndex === idx ? 'border-theme-orange ring-2 ring-theme-orange/30' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                                                    {isVideo(img) ? <video src={img} className="w-full h-full object-cover" /> : <img src={img} className="w-full h-full object-cover" />}
+                                                </div>
+                                            ))}
+                                            <button onClick={() => galleryFileRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-theme-divider flex flex-col items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all bg-theme-bg">
+                                                <span className="material-symbols-outlined text-2xl">add_photo_alternate</span>
+                                                <span className="text-[8px] font-bold uppercase mt-1">Upload</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full text-theme-textMuted border-2 border-dashed border-theme-divider rounded-3xl m-4 bg-theme-bg/50">
+                                    <span className="material-symbols-outlined text-6xl mb-4 opacity-50">photo_library</span>
+                                    <h3 className="font-square font-black text-xl uppercase tracking-widest mb-2">Galeria Vazia</h3>
+                                    <p className="text-xs mb-6 max-w-md text-center">Adicione renders, fotos de obra ou referências visuais para documentar o projeto.</p>
+                                    <button onClick={() => galleryFileRef.current?.click()} className="bg-theme-orange text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-orange-600 transition-all flex items-center gap-2">
+                                        <span className="material-symbols-outlined">upload</span> Carregar Mídia
                                     </button>
-                                    <input type="file" ref={galleryFileRef} className="hidden" accept="image/*,video/*" onChange={handleGalleryUpload} />
                                 </div>
-
-                                <div className="flex-1 flex flex-col justify-center">
-                                    <div className="mb-6 flex items-center justify-center">
-                                        <div className="w-20 h-20 bg-theme-highlight rounded-full flex items-center justify-center text-theme-textMuted border border-theme-divider">
-                                            <span className="material-symbols-outlined text-4xl">landscape</span>
-                                        </div>
-                                    </div>
-                                    <textarea 
-                                        className="w-full h-full bg-transparent text-theme-text text-sm font-light leading-loose outline-none resize-none placeholder:text-theme-textMuted text-center" 
-                                        placeholder="Escreva sobre este render ou utilize a IA para gerar uma descrição..."
-                                        value={activeProject?.galleryDescriptions?.[currentGalleryIndex] || ""}
-                                        onChange={(e) => updateGalleryDescription(e.target.value)}
-                                    />
-                                </div>
-
-                                <button 
-                                    onClick={generateGalleryAI}
-                                    disabled={aiLoading || !activeProject?.gallery?.length}
-                                    className="mt-6 w-full border border-theme-cyan text-theme-cyan hover:bg-theme-cyan hover:text-white py-4 rounded-2xl uppercase text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-cyan-500/20"
-                                >
-                                    <span className="material-symbols-outlined text-lg">auto_awesome</span>
-                                    {aiLoading ? "Gerando..." : "Gerar Descrição IA"}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Navigation Dots */}
-                        <div className="flex gap-3 mt-8">
-                            {(activeProject?.gallery || []).map((_, idx) => (
-                                <button 
-                                    key={idx} 
-                                    onClick={() => setCurrentGalleryIndex(idx)}
-                                    className={`transition-all duration-300 rounded-full ${idx === currentGalleryIndex ? 'bg-theme-text w-8 h-2' : 'bg-theme-textMuted w-2 h-2 hover:bg-theme-text'}`}
-                                ></button>
-                            ))}
+                            )}
+                            <input type="file" ref={galleryFileRef} className="hidden" multiple accept="image/*,video/*" onChange={handleGalleryUpload} />
                         </div>
                     </div>
                 )}
-                
+
                 {/* --- TAB: FILES VIEW --- */}
                 {activeTab === 'files' && hasProject && (
-                    <div className="min-h-[600px] animate-fadeIn mb-20">
-                        <div className="ds-card p-10 bg-theme-card shadow-neuro border border-theme-divider">
-                            <div className="flex justify-between items-center mb-10 pb-6 border-b border-theme-divider">
-                                <div>
-                                    <h2 className="font-square font-black text-3xl uppercase tracking-[0.2em] text-theme-text">Central de Arquivos</h2>
-                                    <p className="text-[10px] font-mono text-theme-textMuted mt-2 bg-theme-highlight px-3 py-1 rounded-full w-fit">FILES_MANAGEMENT_DB</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                                {activeProject?.scopes.map((scope) => (
-                                    <div key={scope.id} className="bg-theme-card border border-theme-divider rounded-3xl overflow-hidden hover:shadow-xl transition-all group">
-                                        <div className="p-5 border-b border-theme-divider flex justify-between items-center bg-theme-highlight">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1.5 h-10 rounded-full" style={{ backgroundColor: scope.colorClass }}></div>
-                                                <div>
-                                                    <h3 className="text-sm font-black uppercase text-theme-text">{scope.name}</h3>
-                                                    <span className="text-[9px] font-mono text-theme-textMuted uppercase">{scope.resp}</span>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => { setSelectedScopeIdForFiles(scope.id); scopeFileRef.current?.click(); }} className="bg-theme-card border border-theme-divider text-theme-textMuted hover:text-white hover:bg-theme-orange hover:border-theme-orange p-2.5 rounded-xl transition-all shadow-sm" title="Upload Arquivo">
-                                                <span className="material-symbols-outlined text-base">upload_file</span>
-                                            </button>
-                                        </div>
-                                        <div className="p-5 space-y-3 max-h-56 overflow-y-auto scroller">
-                                            {scope.fileLinks && scope.fileLinks.length > 0 ? (
-                                                scope.fileLinks.map((file, fIdx) => (
-                                                    <div key={fIdx} className="flex items-center gap-4 p-3 rounded-2xl bg-theme-bg border border-transparent hover:border-theme-divider hover:bg-theme-card hover:shadow-sm transition-all group/file cursor-pointer">
-                                                        <div className="bg-theme-card p-2 rounded-lg shadow-sm text-theme-orange"><span className="material-symbols-outlined text-lg">description</span></div>
-                                                        <span className="flex-1 text-[10px] font-bold uppercase truncate text-theme-text">{file.label}</span>
-                                                        <span className="material-symbols-outlined text-theme-textMuted text-base opacity-50 group-hover/file:opacity-100 hover:text-theme-cyan transition-colors">download</span>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="py-8 text-center flex flex-col items-center">
-                                                    <span className="material-symbols-outlined text-3xl text-theme-textMuted mb-2 opacity-50">folder_off</span>
-                                                    <span className="text-[9px] font-bold text-theme-textMuted uppercase">Sem arquivos</span>
-                                                </div>
-                                            )}
-                                        </div>
+                    <div className="animate-fadeIn ds-card p-8 bg-theme-card min-h-[600px]">
+                        <div className="flex justify-between items-center mb-8 border-b border-theme-divider pb-4">
+                            <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text flex items-center gap-3">
+                                <span className="material-symbols-outlined text-theme-orange">folder_open</span> Central de Arquivos
+                            </h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {activeProject.scopes.map(scope => (
+                                <div key={scope.id} className="bg-theme-bg border border-theme-divider rounded-2xl p-5 hover:border-theme-orange transition-all group shadow-sm">
+                                    <div className="flex items-center gap-3 mb-4 pb-3 border-b border-theme-divider">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: scope.colorClass }}></div>
+                                        <span className="font-black text-xs text-theme-text uppercase tracking-wider flex-1">{scope.name}</span>
+                                        <button onClick={() => { setSelectedScopeIdForFiles(scope.id); scopeFileRef.current?.click(); }} className="text-theme-textMuted hover:text-theme-orange"><span className="material-symbols-outlined">add_circle</span></button>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto scroller pr-1">
+                                        {scope.fileLinks && scope.fileLinks.length > 0 ? scope.fileLinks.map((f, i) => (
+                                            <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-theme-card border border-theme-divider hover:bg-theme-highlight cursor-pointer">
+                                                <span className="material-symbols-outlined text-theme-cyan text-sm">description</span>
+                                                <span className="text-[10px] font-bold text-theme-text truncate flex-1">{f.label}</span>
+                                                <span className="material-symbols-outlined text-theme-textMuted text-xs hover:text-theme-orange">download</span>
+                                            </div>
+                                        )) : <p className="text-[9px] text-theme-textMuted italic text-center py-2">Nenhum arquivo vinculado.</p>}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
 
                 {/* --- TAB: DATA VIEW --- */}
                 {activeTab === 'data' && hasProject && (
-                    <div className="min-h-[600px] animate-fadeIn mb-20">
-                        <div className="ds-card p-10 bg-theme-card shadow-neuro border border-theme-divider">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest">Processo de Dados do Projeto</h3>
-                                <button onClick={onAddDataRow} className="bg-theme-orange text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-orange-600 transition-all flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">add</span> Nova Linha
-                                </button>
-                            </div>
-                            <div className="overflow-auto scroller border border-theme-divider rounded-2xl bg-theme-bg">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-theme-highlight sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            {['Localização', 'Status', 'Área do Terreno', 'Área Construída', 'Área de Vendas', 'Zoneamento', 'Potencial Construtivo', 'Corretor', 'Resp.', 'Data Modificação', ''].map((h, i) => (
-                                                <th key={i} className="p-3 text-[9px] font-black text-theme-textMuted uppercase tracking-widest border-b border-theme-divider whitespace-nowrap">
-                                                    {h}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(activeProject?.dataRows || []).map((row) => (
-                                            <tr key={row.id} className="border-b border-theme-divider hover:bg-theme-card transition-colors group">
-                                                <td className="p-2">
-                                                    <div className="flex items-center gap-1">
-                                                        <input className="bg-transparent text-[10px] font-bold text-theme-text w-full outline-none uppercase" value={row.location} onChange={(e) => onUpdateDataRow(row.id, 'location', e.target.value)} />
-                                                        {row.location && (row.location.startsWith('http') || row.location.startsWith('https')) && (
-                                                            <a href={row.location} target="_blank" rel="noopener noreferrer" className="text-theme-cyan hover:text-theme-text transition-colors p-1" title="Abrir Link">
-                                                                <span className="material-symbols-outlined text-sm">open_in_new</span>
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="p-2">
-                                                    <select 
-                                                        className={`text-[9px] font-black px-2 py-1 rounded-full outline-none cursor-pointer border ${
-                                                            row.status === 'VIÁVEL' ? 'bg-green-500/10 text-theme-green border-green-500/20' : 
-                                                            row.status === 'STAND BY' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
-                                                            row.status === 'EM ANÁLISE' ? 'bg-yellow-500/5 text-yellow-600 border-yellow-500/20 border-dashed' : 
-                                                            'bg-theme-divider/50 text-theme-textMuted border-theme-divider border-dashed'
-                                                        }`}
-                                                        value={row.status}
-                                                        onChange={(e) => onUpdateDataRow(row.id, 'status', e.target.value as any)}
-                                                    >
-                                                        <option value="VIÁVEL">VIÁVEL</option>
-                                                        <option value="STAND BY">STAND BY</option>
-                                                        <option value="EM ANÁLISE">EM ANÁLISE</option>
-                                                        <option value="NÃO INICIADO">NÃO INICIADO</option>
-                                                    </select>
-                                                </td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.landArea} onChange={(e) => onUpdateDataRow(row.id, 'landArea', e.target.value)} /></td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.builtArea} onChange={(e) => onUpdateDataRow(row.id, 'builtArea', e.target.value)} /></td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.salesArea} onChange={(e) => onUpdateDataRow(row.id, 'salesArea', e.target.value)} /></td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none uppercase" value={row.zoning} onChange={(e) => onUpdateDataRow(row.id, 'zoning', e.target.value)} /></td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.potential} onChange={(e) => onUpdateDataRow(row.id, 'potential', e.target.value)} /></td>
-                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none uppercase" value={row.broker} onChange={(e) => onUpdateDataRow(row.id, 'broker', e.target.value)} /></td>
-                                                <td className="p-2">
-                                                    <input 
-                                                        list="team-list" 
-                                                        className="bg-transparent text-[10px] font-bold text-theme-text w-full outline-none uppercase" 
-                                                        value={row.resp} 
-                                                        onChange={(e) => onUpdateDataRow(row.id, 'resp', e.target.value)} 
-                                                    />
-                                                    <datalist id="team-list">
-                                                        {db.team.map(t => <option key={t} value={t} />)}
-                                                    </datalist>
-                                                </td>
-                                                <td className="p-2"><span className="text-[10px] font-mono text-theme-textMuted">{row.updatedAt}</span></td>
-                                                <td className="p-2 text-right">
-                                                    <button onClick={() => onDeleteDataRow(row.id)} className="text-theme-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                                                        <span className="material-symbols-outlined text-sm">delete</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
+                    <div className="animate-fadeIn ds-card p-8 bg-theme-card min-h-[600px] overflow-hidden flex flex-col">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text flex items-center gap-3">
+                                <span className="material-symbols-outlined text-theme-orange">table_chart</span> Dados & Processos
+                            </h3>
+                            <button onClick={onAddDataRow} className="bg-theme-text text-theme-bg px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-theme-textMuted transition-all flex items-center gap-2 shadow-lg">
+                                <span className="material-symbols-outlined text-sm">add</span> Nova Linha
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-auto scroller border border-theme-divider rounded-2xl bg-theme-bg shadow-inner">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-theme-card sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        {['ORDEM', 'LOCAL', 'STATUS', 'ÁREA TERRENO', 'ÁREA CONSTR.', 'ÁREA VENDÁVEL', 'ZONEAMENTO', 'POTENCIAL', 'CORRETOR', 'RESP.', 'ATUALIZAÇÃO', 'AÇÕES'].map(h => (
+                                            <th key={h} className="p-4 text-[9px] font-black text-theme-textMuted uppercase tracking-widest border-b border-theme-divider whitespace-nowrap">{h}</th>
                                         ))}
-                                        {(!activeProject?.dataRows || activeProject.dataRows.length === 0) && (
-                                            <tr>
-                                                <td colSpan={12} className="p-8 text-center text-theme-textMuted text-xs font-bold uppercase tracking-widest">
-                                                    Nenhum dado registrado. Clique em "Nova Linha".
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-theme-divider">
+                                    {activeProject.dataRows?.map(row => (
+                                        <tr key={row.id} className="hover:bg-theme-highlight transition-colors group">
+                                            <td className="p-3"><input className="bg-transparent text-xs font-bold text-center w-12 outline-none text-theme-text" value={row.order} onChange={(e) => onUpdateDataRow(row.id, 'order', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs font-medium w-full outline-none text-theme-text placeholder:text-theme-textMuted/50" placeholder="..." value={row.location} onChange={(e) => onUpdateDataRow(row.id, 'location', e.target.value)} /></td>
+                                            <td className="p-3">
+                                                <select className={`bg-transparent text-[9px] font-black uppercase outline-none px-2 py-1 rounded-full border ${row.status === 'VIÁVEL' ? 'border-theme-green text-theme-green bg-green-500/10' : row.status === 'STAND BY' ? 'border-orange-500 text-orange-500 bg-orange-500/10' : 'border-theme-divider text-theme-textMuted'}`} value={row.status} onChange={(e) => onUpdateDataRow(row.id, 'status', e.target.value)}>
+                                                    <option value="NÃO INICIADO">NÃO INICIADO</option>
+                                                    <option value="EM ANÁLISE">EM ANÁLISE</option>
+                                                    <option value="VIÁVEL">VIÁVEL</option>
+                                                    <option value="STAND BY">STAND BY</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-3"><input className="bg-transparent text-xs font-mono text-theme-text w-20 outline-none" value={row.landArea} onChange={(e) => onUpdateDataRow(row.id, 'landArea', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs font-mono text-theme-text w-20 outline-none" value={row.builtArea} onChange={(e) => onUpdateDataRow(row.id, 'builtArea', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs font-mono text-theme-text w-20 outline-none" value={row.salesArea} onChange={(e) => onUpdateDataRow(row.id, 'salesArea', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-24 outline-none" value={row.zoning} onChange={(e) => onUpdateDataRow(row.id, 'zoning', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-20 outline-none" value={row.potential} onChange={(e) => onUpdateDataRow(row.id, 'potential', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-24 outline-none" value={row.broker} onChange={(e) => onUpdateDataRow(row.id, 'broker', e.target.value)} /></td>
+                                            <td className="p-3"><select className="bg-transparent text-[10px] text-theme-text w-24 outline-none uppercase font-bold" value={row.resp} onChange={(e) => onUpdateDataRow(row.id, 'resp', e.target.value)}><option value="">-</option>{db.team.map(t => <option key={t} value={t}>{t}</option>)}</select></td>
+                                            <td className="p-3 text-[10px] font-mono text-theme-textMuted">{row.updatedAt}</td>
+                                            <td className="p-3 text-center"><button onClick={() => onDeleteDataRow(row.id)} className="text-red-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><span className="material-symbols-outlined text-lg">delete</span></button></td>
+                                        </tr>
+                                    ))}
+                                    {(!activeProject.dataRows || activeProject.dataRows.length === 0) && (
+                                        <tr><td colSpan={12} className="p-8 text-center text-xs text-theme-textMuted font-bold uppercase tracking-widest">Nenhum dado registrado</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
             </div>
-
-            {/* Modals - Passed as is */}
-            <LodModal isOpen={showLodModal} lods={db.lods} activeLod={db.activeLod} onClose={() => setShowLodModal(false)} onSelect={(l) => { setDb(prev => ({ ...prev, activeLod: l })); setShowLodModal(false); }} onAdd={(l) => setDb(prev => ({ ...prev, lods: [...prev.lods, l] }))} onRemove={(l) => setDb(prev => ({ ...prev, lods: prev.lods.filter(x => x !== l) }))} onReorder={(l) => setDb(prev => ({ ...prev, lods: l }))} />
-            <CompanyModal isOpen={showCompanyModal} companies={db.companies} onClose={() => setShowCompanyModal(false)} onSelect={(id) => { setDb(prev => ({ ...prev, activeCompanyId: id, activeProjectId: null })); setShowCompanyModal(false); }} onAdd={(name, logoUrl) => setDb(prev => ({ ...prev, companies: [...prev.companies, { id: Date.now(), name, logoUrl }] }))} onUpdate={onUpdateCompany} onRemove={(id) => setDb(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id) }))} onReorder={(c) => setDb(prev => ({ ...prev, companies: c }))} />
-            <ProjectModal isOpen={showProjectModal} companyName={activeCompany?.name || ''} projects={db.projects.filter(p => p.companyId === db.activeCompanyId && p.lod === db.activeLod)} onClose={() => setShowProjectModal(false)} onSelect={(id) => { setDb(prev => ({ ...prev, activeProjectId: id })); setShowProjectModal(false); }} onAdd={(name, logo, cover) => { setDb(prev => ({ ...prev, projects: [...prev.projects, { id: Date.now(), companyId: db.activeCompanyId!, lod: db.activeLod, name, logoUrl: logo, coverUrl: cover, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), timelineStart: '2026-01-01', timelineEnd: '2026-12-31', activities: [], scopes: [] }] })); setShowProjectModal(false); }} onDelete={onDeleteProject} onEdit={onEditProject} />
-            <ScopeModal isOpen={showScopeModal} scope={selectedScope || (editingScopeId ? activeProject?.scopes.find(s => s.id === editingScopeId) || null : null)} disciplines={db.disciplines} onClose={() => { setShowScopeModal(false); setEditingScopeId(null); }} onManage={() => setShowDisciplinesModal(true)} team={db.team} onSave={(name, start, color, status, pWeek, resp) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: editingScopeId ? p.scopes.map(s => s.id === editingScopeId ? { ...s, name, startDate: start, colorClass: color, status, protocolWeek: pWeek, resp } : s) : [...p.scopes, { id: `sc${Date.now()}`, name, colorClass: color, startDate: start, resp, status, protocolWeek: pWeek, events: [] }] } : p) })); setShowScopeModal(false); setEditingScopeId(null); addLog("SISTEMA", editingScopeId ? `DISCIPLINA ATUALIZADA: ${name}` : `NOVA DISCIPLINA: ${name}`); }} />
-            <EventModal isOpen={showEventModal} team={db.team} event={editingEvent} onClose={() => { setShowEventModal(false); setEditingEventId(null); }} onSave={(title, resp, start, end, checklistStr) => { if (!activeProject || !activeScopeIdForEvent) return; const checklistItems = checklistStr.split('\n').filter(t => t.trim()).map(t => ({ text: t.trim(), done: false })); setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeScopeIdForEvent ? { ...s, events: editingEventId ? s.events.map(e => e.id === editingEventId ? { ...e, title, resp, startDate: start, endDate: end, checklist: checklistItems } : e) : [...s.events, { id: `ev${Date.now()}`, title, resp, startDate: start, endDate: end, checklist: checklistItems, completed: false }] } : s) } : p) })); setShowEventModal(false); setEditingEventId(null); addLog("SISTEMA", editingEventId ? `AÇÃO ATUALIZADA: ${title}` : `NOVA AÇÃO: ${title}`); }} />
-            <ChecklistModal isOpen={showChecklistModal} event={activeChecklistIds ? activeProject?.scopes.find(s => s.id === activeChecklistIds.sid)?.events.find(e => e.id === activeChecklistIds.eid) || null : null} project={activeProject} onClose={() => setShowChecklistModal(false)} onToggleCheck={(idx) => { if (!activeProject || !activeChecklistIds) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: e.checklist.map((it, i) => i === idx ? { ...it, done: !it.done } : it) } : e) } : s) } : p) })); }} onComplete={() => { if (!activeProject || !activeChecklistIds) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, completed: !e.completed } : e) } : s) } : p) })); if (!editingEvent?.completed) addLog("SISTEMA", "AÇÃO VALIDADA / CONCLUÍDA"); setShowChecklistModal(false); }} onToggleLink={(targetId) => { if (activeChecklistIds) onToggleDependency(activeChecklistIds.sid, activeChecklistIds.eid, targetId); }} onChangeType={(targetId) => { if (activeChecklistIds) onChangeDependencyType(activeChecklistIds.sid, activeChecklistIds.eid, targetId); }} onEdit={() => { if (activeChecklistIds) { setActiveScopeIdForEvent(activeChecklistIds.sid); setEditingEventId(activeChecklistIds.eid); setShowChecklistModal(false); setShowEventModal(true); } }} />
-            <TeamModal isOpen={showTeamModal} team={db.team} onClose={() => setShowTeamModal(false)} onAdd={(name) => setDb(prev => ({ ...prev, team: [...prev.team, name] }))} onRemove={(idx) => setDb(prev => ({ ...prev, team: prev.team.filter((_, i) => i !== idx) }))} />
-            <TimelineSettingsModal isOpen={showSettingsModal} project={activeProject} onClose={() => setShowSettingsModal(false)} onSave={(start, end) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, timelineStart: start, timelineEnd: end } : p) })); setShowSettingsModal(false); }} />
-            <AdminSettingsModal isOpen={showAdminModal} theme={theme} onClose={() => setShowAdminModal(false)} onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} onPrint={printDashboard} onExport={exportHTML} onExportPython={exportPython} />
-            <DisciplinesManagerModal isOpen={showDisciplinesModal} disciplines={db.disciplines} onClose={() => setShowDisciplinesModal(false)} onAdd={(d) => setDb(prev => ({ ...prev, disciplines: [...prev.disciplines, d] }))} onUpdate={(oldCode, d) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.map(x => x.code === oldCode ? d : x) }))} onRemove={(code) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.filter(x => x.code !== code) }))} onReorder={(d) => setDb(prev => ({ ...prev, disciplines: d }))} />
         </div>
     );
 };

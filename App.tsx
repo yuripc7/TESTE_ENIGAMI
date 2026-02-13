@@ -1,17 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { INITIAL_DB } from './constants';
-import { DB, ChatMessage, Project, Event, Company } from './types';
+import { DB, ChatMessage, Project, Event, Company, ProjectDataRow } from './types';
 import { generateChatResponse } from './services/geminiService';
 import {
     LodModal, CompanyModal, ProjectModal, ScopeModal, EventModal,
     ChecklistModal, TeamModal, TimelineSettingsModal, AdminSettingsModal, DisciplinesManagerModal
 } from './components/Modals';
 import Timeline from './components/Timeline';
+import { TextReveal } from './components/ui/TextReveal';
 
 const STORAGE_KEY = 'design_board_db_v1';
 const THEME_KEY = 'design_board_theme_v1';
 
-type Tab = 'timeline' | 'gallery' | 'files';
+type Tab = 'timeline' | 'gallery' | 'files' | 'data';
 
 export const App = () => {
     const [db, setDb] = useState<DB>(() => {
@@ -165,7 +166,7 @@ export const App = () => {
     const onAddFile = (label: string, path: string) => { if (!activeProject || !selectedScopeIdForFiles) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === selectedScopeIdForFiles ? { ...s, fileLinks: [...(s.fileLinks || []), { label, path }] } : s) } : p) })); addLog("SISTEMA", `ARQUIVO VINCULADO: ${label}`); };
     const onDeleteEvent = (sid: string, eid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `AÇÃO REMOVIDA`); };
     const onToggleDependency = (sid: string, eid: string, targetId: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies||[]), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) })); };
-    const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: (ev.dependencies||[]).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type)+1)%types.length] } : d) } : ev) } : s) } : p) })); };
+    const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(e => e.id === eid ? { ...e, dependencies: (e.dependencies||[]).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type)+1)%types.length] } : d) } : e) } : s) } : p) })); };
     const onAddDependency = (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (!activeProject) return; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); setTimeout(() => setNotification(null), 2000); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); };
     const onDeleteProject = (id: number) => { setDb(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), activeProjectId: prev.activeProjectId === id ? null : prev.activeProjectId })); };
     const onEditProject = (id: number, name: string, logo?: string, cover?: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, name, logoUrl: logo, coverUrl: cover, updatedAt: new Date().toISOString() } : p) })); };
@@ -259,12 +260,105 @@ export const App = () => {
         return url.startsWith('data:video') || url.match(/\.(mp4|webm|ogg)$/i);
     };
 
+    // Data Row Management
+    const onAddDataRow = () => {
+        if (!activeProject) return;
+        const newRow: ProjectDataRow = {
+            id: `row-${Date.now()}`,
+            order: String((activeProject.dataRows?.length || 0) + 1),
+            location: '',
+            status: 'NÃO INICIADO',
+            landArea: '',
+            builtArea: '',
+            salesArea: '',
+            zoning: '',
+            potential: '',
+            broker: '',
+            resp: '',
+            updatedAt: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+        };
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                dataRows: [...(p.dataRows || []), newRow]
+            } : p)
+        }));
+    };
+
+    const onUpdateDataRow = (id: string, field: keyof ProjectDataRow, value: string) => {
+        if (!activeProject) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                dataRows: (p.dataRows || []).map(r => r.id === id ? { 
+                    ...r, 
+                    [field]: value,
+                    updatedAt: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+                } : r)
+            } : p)
+        }));
+    };
+
+    const onDeleteDataRow = (id: string) => {
+        if (!activeProject) return;
+        if (confirm('Excluir esta linha?')) {
+            setDb(prev => ({
+                ...prev,
+                projects: prev.projects.map(p => p.id === activeProject.id ? {
+                    ...p,
+                    dataRows: (p.dataRows || []).filter(r => r.id !== id)
+                } : p)
+            }));
+        }
+    };
+
     const filteredActivities = useMemo(() => { if (!activeProject) return []; return activeProject.activities.filter(a => { const matchText = a.text.toLowerCase().includes(logSearch.toLowerCase()); const matchAuthor = logAuthorFilter === '' || a.author === logAuthorFilter.toUpperCase(); return matchText && matchAuthor; }); }, [activeProject, logSearch, logAuthorFilter]);
     const stats = useMemo(() => { if (!activeProject) return { tot: 0, don: 0, lat: 0, rate: 0, inProgress: 0, taskCount: 0 }; let totItems = 0; let donItems = 0; let latEvents = 0; let inProg = 0; let tasks = 0; const today = new Date(); activeProject.scopes.forEach(sc => { sc.events.forEach(ev => { tasks++; const items = ev.checklist && ev.checklist.length > 0 ? ev.checklist.length : 1; const done = ev.checklist && ev.checklist.length > 0 ? ev.checklist.filter(i => i.done).length : (ev.completed ? 1 : 0); totItems += items; donItems += done; if (!ev.completed && new Date(ev.startDate) <= today) { inProg++; } if (!ev.completed && new Date(ev.endDate) < today) latEvents++; }); }); return { tot: totItems, don: donItems, lat: latEvents, rate: totItems ? Math.round((donItems / totItems) * 100) : 0, inProgress: inProg, taskCount: tasks }; }, [activeProject]);
     const progressPercentage = useMemo(() => { if (!activeProject) return 0; const start = new Date(activeProject.createdAt); const end = new Date(projectBounds.end); const today = new Date(); if (today < start) return 0; if (today > end) return 100; const totalDuration = end.getTime() - start.getTime(); const elapsed = today.getTime() - start.getTime(); if (totalDuration <= 0) return 0; return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100); }, [activeProject, projectBounds]);
     const projectHealth = useMemo(() => { if (!activeProject) return { label: '---', color: 'text-theme-textMuted', border: 'border-theme-card', bg: 'bg-theme-card' }; const today = new Date(); const isAnyEventLate = activeProject.scopes.some(scope => scope.events.some(ev => { const endDate = new Date(ev.endDate); return !ev.completed && today > endDate; })); if (isAnyEventLate) { return { label: 'CRÍTICO', color: 'text-theme-red', border: 'border-theme-red', bg: 'bg-theme-red/10' }; } const diff = stats.rate - progressPercentage; if (diff < 0) return { label: 'ATENÇÃO', color: 'text-yellow-500', border: 'border-yellow-500', bg: 'bg-yellow-500/10' }; return { label: 'ESTÁVEL', color: 'text-theme-green', border: 'border-theme-green', bg: 'bg-theme-green/10' }; }, [activeProject, stats.rate, progressPercentage]);
 
     const handleAISend = async () => { if (!userInput.trim() || !activeProject) return; const query = userInput; setUserInput(''); setChatMessages(prev => [...prev, { role: 'user', text: query }]); setAiLoading(true); const contextData = { project: activeProject.name, health: projectHealth.label, completionRate: `${stats.rate}%` }; const responseText = await generateChatResponse(query, `DesignBot Context: ${JSON.stringify(contextData)}`); setChatMessages(prev => [...prev, { role: 'ai', text: responseText }]); setAiLoading(false); };
+    
+    // New Feature: Generate Project Report for Feed
+    const generateProjectReport = async () => {
+        if (!activeProject) return;
+        setNotification("Gerando Relatório Inteligente...");
+        setAiLoading(true);
+        
+        const summaryData = {
+            project: activeProject.name,
+            phase: activeProject.lod,
+            stats: stats,
+            health: projectHealth,
+            scopes: activeProject.scopes.map(s => ({ 
+                name: s.name, 
+                resp: s.resp, 
+                status: s.status,
+                delayedEvents: s.events.filter(e => !e.completed && new Date(e.endDate) < new Date()).length
+            })),
+            dataRows: activeProject.dataRows
+        };
+
+        const prompt = `Atue como um Gerente de Projetos Sênior. Gere um Relatório de Status Executivo (em pt-BR) para o projeto.
+        
+        Use a seguinte estrutura:
+        1. 📊 RESUMO GERAL (Saúde do projeto e progresso)
+        2. ⚠️ PONTOS DE ATENÇÃO (Atrasos e riscos baseados nos dados)
+        3. 🚀 PRÓXIMOS PASSOS (Sugestões baseadas no status atual)
+        
+        Seja conciso, direto e profissional. Use emojis moderados.
+        Dados do Projeto: ${JSON.stringify(summaryData)}`;
+
+        const report = await generateChatResponse(prompt, "Você é um especialista em gestão de projetos de arquitetura e engenharia.");
+        
+        addLog("IA MANAGER", report);
+        setAiLoading(false);
+        setNotification("Relatório Gerado no Feed!");
+        setTimeout(() => setNotification(null), 3000);
+    };
+
     const hasLod = !!db.activeLod; const hasCompany = !!db.activeCompanyId; const hasProject = !!db.activeProjectId;
 
     return (
@@ -323,7 +417,9 @@ export const App = () => {
                             <div className={`ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center text-center h-56 transition-all relative cursor-pointer hover:-translate-y-2 hover:shadow-2xl`} onClick={() => setShowCompanyModal(true)}>
                                 <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest mb-4 flex items-center gap-1 border border-white/30 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm">1. Cliente <span className="material-symbols-outlined text-xs">chevron_right</span></span>
                                 {activeCompany?.logoUrl && <img src={activeCompany.logoUrl} className="w-20 h-20 object-contain my-2 bg-white/20 rounded-2xl backdrop-blur-md shadow-lg" />}
-                                <h2 className="font-square font-black text-white uppercase text-xl truncate w-full px-2 mt-2 drop-shadow-sm">{activeCompany?.name || 'Selecione'}</h2>
+                                <div className="w-full px-2 mt-2">
+                                    <TextReveal text={activeCompany?.name || 'Selecione'} className="font-square font-black text-white uppercase text-xl truncate w-full drop-shadow-sm" />
+                                </div>
                                 {hasCompany && <span className="material-symbols-outlined absolute right-4 bottom-4 text-white/40 text-3xl">check_circle</span>}
                             </div>
                             
@@ -335,7 +431,16 @@ export const App = () => {
                             {/* 2. Fase - Vibrant Purple */}
                             <div className={`ds-card-accent gradient-purple cursor-pointer p-6 flex flex-col justify-center items-center text-center h-56 transition-all relative group overflow-hidden ${!hasCompany ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:-translate-y-2 hover:shadow-2xl'}`} onClick={() => hasCompany && setShowLodModal(true)}>
                                 <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest mb-2 flex items-center gap-1 border border-white/30 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm">2. Fase <span className="material-symbols-outlined text-xs">chevron_right</span></span>
-                                <h1 className="text-3xl md:text-4xl font-square font-black text-white leading-tight uppercase drop-shadow-md mt-2">{db.activeLod ? <>{db.activeLod}_<br /><span className="text-xl opacity-90 font-medium font-sans">{db.lods.find(l => l.startsWith(db.activeLod))?.split('_ ')[1] || '---'}</span></> : 'Selecionar'}</h1>
+                                <div className="mt-2 flex flex-col items-center">
+                                    {db.activeLod ? (
+                                        <>
+                                            <TextReveal text={db.activeLod + "_"} className="text-3xl md:text-4xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
+                                            <TextReveal text={db.lods.find(l => l.startsWith(db.activeLod))?.split('_ ')[1] || '---'} className="text-xl opacity-90 font-medium font-sans text-white mt-1" delay={0.5} />
+                                        </>
+                                    ) : (
+                                        <TextReveal text="Selecionar" className="text-3xl md:text-4xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
+                                    )}
+                                </div>
                                 {hasLod && <span className="material-symbols-outlined absolute right-4 bottom-4 text-white/40 text-3xl">check_circle</span>}
                             </div>
 
@@ -345,7 +450,9 @@ export const App = () => {
                                 <div className="relative z-10 flex flex-col items-center w-full">
                                     <span className="text-[10px] font-bold text-theme-text/80 uppercase tracking-widest mb-2 flex items-center gap-1 border border-black/10 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm">3. Projeto <span className="material-symbols-outlined text-xs">chevron_right</span></span>
                                     {activeProject?.logoUrl ? <img src={activeProject.logoUrl} className="w-16 h-16 object-contain mb-2 mt-2 bg-white/30 rounded-2xl shadow-sm" /> : <span className="material-symbols-outlined text-5xl text-theme-text/80 mb-1 mt-2">rocket_launch</span>}
-                                    <h2 className="text-lg font-square font-black text-theme-text uppercase truncate w-full px-2 text-center drop-shadow-sm">{activeProject?.name || 'Selecione'}</h2>
+                                    <div className="w-full px-2 mt-2">
+                                        <TextReveal text={activeProject?.name || 'Selecione'} className="text-lg font-square font-black text-theme-text uppercase truncate w-full text-center drop-shadow-sm" />
+                                    </div>
                                 </div>
                                 {hasProject && <span className="material-symbols-outlined absolute right-4 bottom-4 text-black/20 text-3xl z-10">check_circle</span>}
                             </div>
@@ -402,17 +509,44 @@ export const App = () => {
                     
                     {/* --- CENTER COLUMN (Activity Log) --- */}
                     <div className={`lg:col-span-4 flex flex-col gap-8 transition-all duration-700 ${!hasProject ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100'}`}>
-                         <div className="ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center h-32 relative overflow-hidden shadow-lg"><div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div><h2 className="text-xs font-square font-black text-white tracking-[0.25em] mb-4 uppercase flex items-center gap-2 relative z-10"><span className="material-symbols-outlined text-lg">history</span> Feed de Projeto</h2><div className="w-full flex gap-3 px-2 relative z-10"><input type="text" placeholder="PESQUISAR..." className="flex-1 bg-white/20 backdrop-blur-md border border-white/30 rounded-xl py-2 px-4 text-[10px] font-bold text-white placeholder:text-white/70 outline-none focus:bg-white/30 transition-all shadow-inner" value={logSearch} onChange={(e) => setLogSearch(e.target.value)} /><select className="w-28 bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-2 text-[9px] font-bold text-white outline-none focus:bg-white/30 shadow-inner" value={logAuthorFilter} onChange={(e) => setLogAuthorFilter(e.target.value)}><option value="" className="text-black">TODOS</option>{db.team.map(t => <option key={t} value={t} className="text-black">{t}</option>)}<option value="SISTEMA" className="text-black">SISTEMA</option></select></div></div>
+                         <div className="ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center h-32 relative overflow-hidden shadow-lg">
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+                            
+                            {/* Updated Header with Report Button */}
+                            <div className="flex justify-between items-center w-full relative z-10 mb-4 px-2">
+                                <h2 className="text-xs font-square font-black text-white tracking-[0.25em] uppercase flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-lg">history</span> Feed de Projeto
+                                </h2>
+                                <button 
+                                    onClick={generateProjectReport} 
+                                    disabled={aiLoading}
+                                    className="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                                >
+                                    <span className="material-symbols-outlined text-sm">{aiLoading ? 'hourglass_empty' : 'auto_awesome'}</span>
+                                    {aiLoading ? 'Gerando...' : 'Gerar Relatório'}
+                                </button>
+                            </div>
+
+                            <div className="w-full flex gap-3 px-2 relative z-10">
+                                <input type="text" placeholder="PESQUISAR..." className="flex-1 bg-white/20 backdrop-blur-md border border-white/30 rounded-xl py-2 px-4 text-[10px] font-bold text-white placeholder:text-white/70 outline-none focus:bg-white/30 transition-all shadow-inner" value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
+                                <select className="w-28 bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-2 text-[9px] font-bold text-white outline-none focus:bg-white/30 shadow-inner" value={logAuthorFilter} onChange={(e) => setLogAuthorFilter(e.target.value)}>
+                                    <option value="" className="text-black">TODOS</option>
+                                    {db.team.map(t => <option key={t} value={t} className="text-black">{t}</option>)}
+                                    <option value="SISTEMA" className="text-black">SISTEMA</option>
+                                    <option value="IA MANAGER" className="text-black">IA MANAGER</option>
+                                </select>
+                            </div>
+                        </div>
                          <div className={`ds-card p-8 flex flex-col h-[740px] overflow-hidden relative shadow-neuro bg-theme-card`}>
                             <div className="flex-grow scroller overflow-y-auto space-y-6 pr-3 mb-4 pt-2">
                                 {filteredActivities.slice().reverse().map((a, i) => (
                                     <div key={i} className="flex flex-col gap-2 border-l-2 border-theme-divider pl-6 pb-2 relative group">
                                         <div className="absolute -left-[5px] top-1.5 w-[8px] h-[8px] rounded-full bg-theme-bg border-2 border-theme-orange shadow-sm" />
                                         <div className="flex justify-between items-baseline">
-                                            <span className={`font-black text-[10px] uppercase tracking-wide ${a.author === 'SISTEMA' ? 'text-theme-orange' : 'text-theme-purple'}`}>{a.author}</span>
+                                            <span className={`font-black text-[10px] uppercase tracking-wide ${a.author === 'SISTEMA' || a.author === 'IA MANAGER' ? 'text-theme-orange' : 'text-theme-purple'}`}>{a.author}</span>
                                             <span className="text-theme-textMuted font-mono text-[9px] bg-theme-highlight px-2 py-0.5 rounded-full">{a.date}</span>
                                         </div>
-                                        <p className={`text-xs font-medium leading-relaxed text-theme-text`}>{a.text}</p>
+                                        <p className={`text-xs font-medium leading-relaxed text-theme-text ${a.author === 'IA MANAGER' ? 'whitespace-pre-wrap' : ''}`}>{a.text}</p>
                                         {a.imageUrl && <img src={a.imageUrl} onClick={() => setViewingImage(a.imageUrl)} className="mt-3 rounded-2xl border border-theme-divider shadow-md max-w-full hover:scale-105 transition-transform cursor-zoom-in" />}
                                     </div>
                                 ))}
@@ -491,6 +625,9 @@ export const App = () => {
                         </button>
                          <button onClick={() => setActiveTab('files')} className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-[0.2em] transition-all relative flex items-center gap-2 ${activeTab === 'files' ? 'bg-theme-orange text-white shadow-lg scale-105' : 'text-theme-textMuted hover:text-theme-text hover:bg-theme-highlight'}`}>
                             <span className="material-symbols-outlined text-lg">folder_open</span> Arquivos
+                        </button>
+                        <button onClick={() => setActiveTab('data')} className={`px-8 py-3 rounded-full text-xs font-black uppercase tracking-[0.2em] transition-all relative flex items-center gap-2 ${activeTab === 'data' ? 'bg-theme-text text-theme-bg shadow-lg scale-105' : 'text-theme-textMuted hover:text-theme-text hover:bg-theme-highlight'}`}>
+                            <span className="material-symbols-outlined text-lg">dataset</span> Dados
                         </button>
                     </div>
                 )}
@@ -701,6 +838,96 @@ export const App = () => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- TAB: DATA VIEW --- */}
+                {activeTab === 'data' && hasProject && (
+                    <div className="min-h-[600px] animate-fadeIn mb-20">
+                        <div className="ds-card p-10 bg-theme-card shadow-neuro border border-theme-divider">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest">Processo de Dados do Projeto</h3>
+                                <button onClick={onAddDataRow} className="bg-theme-orange text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-orange-600 transition-all flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm">add</span> Nova Linha
+                                </button>
+                            </div>
+                            <div className="overflow-auto scroller border border-theme-divider rounded-2xl bg-theme-bg">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-theme-highlight sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            {['Localização', 'Status', 'Área do Terreno', 'Área Construída', 'Área de Vendas', 'Zoneamento', 'Potencial Construtivo', 'Corretor', 'Resp.', 'Data Modificação', ''].map((h, i) => (
+                                                <th key={i} className="p-3 text-[9px] font-black text-theme-textMuted uppercase tracking-widest border-b border-theme-divider whitespace-nowrap">
+                                                    {h}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(activeProject?.dataRows || []).map((row) => (
+                                            <tr key={row.id} className="border-b border-theme-divider hover:bg-theme-card transition-colors group">
+                                                <td className="p-2">
+                                                    <div className="flex items-center gap-1">
+                                                        <input className="bg-transparent text-[10px] font-bold text-theme-text w-full outline-none uppercase" value={row.location} onChange={(e) => onUpdateDataRow(row.id, 'location', e.target.value)} />
+                                                        {row.location && (row.location.startsWith('http') || row.location.startsWith('https')) && (
+                                                            <a href={row.location} target="_blank" rel="noopener noreferrer" className="text-theme-cyan hover:text-theme-text transition-colors p-1" title="Abrir Link">
+                                                                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-2">
+                                                    <select 
+                                                        className={`text-[9px] font-black px-2 py-1 rounded-full outline-none cursor-pointer border ${
+                                                            row.status === 'VIÁVEL' ? 'bg-green-500/10 text-theme-green border-green-500/20' : 
+                                                            row.status === 'STAND BY' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
+                                                            row.status === 'EM ANÁLISE' ? 'bg-yellow-500/5 text-yellow-600 border-yellow-500/20 border-dashed' : 
+                                                            'bg-theme-divider/50 text-theme-textMuted border-theme-divider border-dashed'
+                                                        }`}
+                                                        value={row.status}
+                                                        onChange={(e) => onUpdateDataRow(row.id, 'status', e.target.value as any)}
+                                                    >
+                                                        <option value="VIÁVEL">VIÁVEL</option>
+                                                        <option value="STAND BY">STAND BY</option>
+                                                        <option value="EM ANÁLISE">EM ANÁLISE</option>
+                                                        <option value="NÃO INICIADO">NÃO INICIADO</option>
+                                                    </select>
+                                                </td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.landArea} onChange={(e) => onUpdateDataRow(row.id, 'landArea', e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.builtArea} onChange={(e) => onUpdateDataRow(row.id, 'builtArea', e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.salesArea} onChange={(e) => onUpdateDataRow(row.id, 'salesArea', e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none uppercase" value={row.zoning} onChange={(e) => onUpdateDataRow(row.id, 'zoning', e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none" value={row.potential} onChange={(e) => onUpdateDataRow(row.id, 'potential', e.target.value)} /></td>
+                                                <td className="p-2"><input className="bg-transparent text-[10px] font-medium text-theme-text w-full outline-none uppercase" value={row.broker} onChange={(e) => onUpdateDataRow(row.id, 'broker', e.target.value)} /></td>
+                                                <td className="p-2">
+                                                    <input 
+                                                        list="team-list" 
+                                                        className="bg-transparent text-[10px] font-bold text-theme-text w-full outline-none uppercase" 
+                                                        value={row.resp} 
+                                                        onChange={(e) => onUpdateDataRow(row.id, 'resp', e.target.value)} 
+                                                    />
+                                                    <datalist id="team-list">
+                                                        {db.team.map(t => <option key={t} value={t} />)}
+                                                    </datalist>
+                                                </td>
+                                                <td className="p-2"><span className="text-[10px] font-mono text-theme-textMuted">{row.updatedAt}</span></td>
+                                                <td className="p-2 text-right">
+                                                    <button onClick={() => onDeleteDataRow(row.id)} className="text-theme-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {(!activeProject?.dataRows || activeProject.dataRows.length === 0) && (
+                                            <tr>
+                                                <td colSpan={12} className="p-8 text-center text-theme-textMuted text-xs font-bold uppercase tracking-widest">
+                                                    Nenhum dado registrado. Clique em "Nova Linha".
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>

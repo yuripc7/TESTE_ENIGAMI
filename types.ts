@@ -47,6 +47,21 @@ export interface Activity {
     imageUrl?: string;
 }
 
+export interface ProjectDataRow {
+    id: string;
+    order: string;
+    location: string;
+    status: 'VIÁVEL' | 'STAND BY' | 'EM ANÁLISE' | 'NÃO INICIADO';
+    landArea: string;
+    builtArea: string;
+    salesArea: string;
+    zoning: string;
+    potential: string;
+    broker: string;
+    resp: string;
+    updatedAt: string;
+}
+
 export interface Project {
     id: number;
     companyId: number;
@@ -62,6 +77,7 @@ export interface Project {
     timelineEnd: string;
     activities: Activity[];
     scopes: Scope[];
+    dataRows?: ProjectDataRow[]; // New: Data Process Rows
 }
 
 export interface Company {

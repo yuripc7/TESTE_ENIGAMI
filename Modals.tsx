@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Company, Project, Scope, Event, Discipline } from '../types';
+import Plan from './ui/agent-plan';
 
 interface ModalBaseProps {
     isOpen: boolean;
@@ -36,6 +37,10 @@ export const GalleryModal: React.FC<{
         }
     };
 
+    const isVideo = (url: string) => {
+        return url.startsWith('data:video') || url.match(/\.(mp4|webm|ogg)$/i);
+    };
+
     return (
         <ModalBase isOpen={isOpen} onClose={onClose}>
             <div className="p-8 h-[600px] flex flex-col">
@@ -49,26 +54,35 @@ export const GalleryModal: React.FC<{
                 <div className="flex-1 overflow-y-auto scroller p-2 bg-theme-bg border border-theme-divider rounded-xl grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
                     {images.map((img, idx) => (
                         <div key={idx} className="relative group rounded-lg overflow-hidden border border-theme-divider bg-black aspect-square">
-                            <img src={img} className="w-full h-full object-cover" />
+                            {isVideo(img) ? (
+                                <video src={img} className="w-full h-full object-cover" />
+                            ) : (
+                                <img src={img} className="w-full h-full object-cover" />
+                            )}
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button onClick={() => onDelete(idx)} className="bg-red-500 text-white p-2 rounded-full hover:scale-110 transition-transform shadow-lg">
                                     <span className="material-symbols-outlined">delete</span>
                                 </button>
                             </div>
+                            {isVideo(img) && (
+                                <div className="absolute bottom-2 right-2 bg-black/60 p-1 rounded-full text-white pointer-events-none">
+                                    <span className="material-symbols-outlined text-sm">videocam</span>
+                                </div>
+                            )}
                         </div>
                     ))}
                     {images.length === 0 && (
                         <div className="col-span-full flex flex-col items-center justify-center h-48 text-theme-textMuted">
                             <span className="material-symbols-outlined text-4xl mb-2 opacity-50">perm_media</span>
-                            <span className="text-[10px] font-bold uppercase">Nenhuma imagem na galeria</span>
+                            <span className="text-[10px] font-bold uppercase">Nenhuma mídia na galeria</span>
                         </div>
                     )}
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-theme-divider">
-                    <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+                    <input type="file" ref={fileRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
                     <button onClick={() => fileRef.current?.click()} className="w-full bg-theme-orange text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg">
-                        <span className="material-symbols-outlined">upload</span> Upload Nova Imagem
+                        <span className="material-symbols-outlined">upload</span> Upload Nova Mídia
                     </button>
                 </div>
             </div>
@@ -76,50 +90,76 @@ export const GalleryModal: React.FC<{
     );
 };
 
-export const AdminSettingsModal: React.FC<{ isOpen: boolean; theme: string; onClose: () => void; onToggleTheme: () => void; onPrint: () => void; onExport: () => void; onExportPython?: () => void; }> = ({ isOpen, theme, onClose, onToggleTheme, onPrint, onExport, onExportPython }) => (
-    <ModalBase isOpen={isOpen} onClose={onClose}>
-        <div className="p-8">
-            <div className="flex justify-between items-center mb-8 border-b border-theme-divider pb-4">
-                <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-3">
-                    <span className="material-symbols-outlined text-theme-orange">tune</span> Admin Board
-                </h3>
-                <button className="text-theme-textMuted hover:text-theme-text" onClick={onClose}>
-                    <span className="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-theme-bg rounded-xl border border-theme-divider">
-                    <div>
-                        <span className="text-xs font-black text-theme-text uppercase block">Tema da Interface</span>
-                        <span className="text-[10px] text-theme-textMuted font-bold uppercase">{theme === 'dark' ? 'Modo Escuro' : 'Modo Claro'}</span>
-                    </div>
-                    <button onClick={onToggleTheme} className="bg-theme-orange text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 shadow-lg">
-                        {theme === 'dark' ? 'Mudar para Light' : 'Mudar para Dark'}
+export const AdminSettingsModal: React.FC<{ 
+    isOpen: boolean; 
+    theme: string; 
+    onClose: () => void; 
+    onToggleTheme: () => void; 
+    onPrint: () => void; 
+    onExportJSON: () => void;
+    onImportJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}> = ({ isOpen, theme, onClose, onToggleTheme, onPrint, onExportJSON, onImportJSON }) => {
+    const importInputRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <ModalBase isOpen={isOpen} onClose={onClose}>
+            <div className="p-8">
+                <div className="flex justify-between items-center mb-8 border-b border-theme-divider pb-4">
+                    <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-3">
+                        <span className="material-symbols-outlined text-theme-orange">tune</span> Admin Board
+                    </h3>
+                    <button className="text-theme-textMuted hover:text-theme-text" onClick={onClose}>
+                        <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
-                <div className="flex flex-col gap-3">
-                    <span className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest px-2">Gestão de Documento</span>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={onPrint} className="flex items-center justify-center gap-2 p-5 bg-theme-bg border border-theme-divider text-theme-text rounded-xl hover:bg-theme-highlight transition-all text-[10px] font-black uppercase shadow-lg">
-                            <span className="material-symbols-outlined text-lg">print</span> Imprimir
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-theme-bg rounded-xl border border-theme-divider">
+                        <div>
+                            <span className="text-xs font-black text-theme-text uppercase block">Tema da Interface</span>
+                            <span className="text-[10px] text-theme-textMuted font-bold uppercase">{theme === 'dark' ? 'Modo Escuro' : 'Modo Claro'}</span>
+                        </div>
+                        <button onClick={onToggleTheme} className="bg-theme-orange text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 shadow-lg">
+                            {theme === 'dark' ? 'Mudar para Light' : 'Mudar para Dark'}
                         </button>
-                        <button onClick={onExport} className="flex items-center justify-center gap-2 p-5 bg-theme-bg border border-theme-divider text-theme-text rounded-xl hover:bg-theme-highlight transition-all text-[10px] font-black uppercase shadow-lg">
-                            <span className="material-symbols-outlined text-lg">html</span> Exportar HTML
-                        </button>
-                        {onExportPython && (
-                            <button onClick={onExportPython} className="col-span-2 flex items-center justify-center gap-2 p-5 bg-theme-bg border border-theme-divider text-theme-text rounded-xl hover:bg-theme-highlight transition-all text-[10px] font-black uppercase shadow-lg border-l-4 border-l-blue-500">
-                                <span className="material-symbols-outlined text-lg">terminal</span> Exportar Python (.py)
+                    </div>
+                    
+                    <div className="flex flex-col gap-3">
+                        <span className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest px-2">Gestão de Documento</span>
+                        <div className="grid grid-cols-1 gap-3">
+                            <button onClick={onPrint} className="flex items-center justify-center gap-2 p-4 bg-theme-bg border border-theme-divider text-theme-text rounded-xl hover:bg-theme-highlight transition-all text-[10px] font-black uppercase shadow-lg">
+                                <span className="material-symbols-outlined text-lg">print</span> Imprimir Visualização Atual
                             </button>
-                        )}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        <span className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest px-2">Backup & Migração</span>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button onClick={onExportJSON} className="flex items-center justify-center gap-2 p-4 bg-theme-cyan/10 border border-theme-cyan/30 text-theme-cyan rounded-xl hover:bg-theme-cyan/20 transition-all text-[10px] font-black uppercase shadow-lg">
+                                <span className="material-symbols-outlined text-lg">download</span> Baixar Projeto (.json)
+                            </button>
+                            
+                            <button onClick={() => importInputRef.current?.click()} className="flex items-center justify-center gap-2 p-4 bg-theme-bg border border-theme-divider text-theme-text rounded-xl hover:bg-theme-highlight transition-all text-[10px] font-black uppercase shadow-lg">
+                                <span className="material-symbols-outlined text-lg">upload</span> Importar Backup
+                            </button>
+                            <input 
+                                type="file" 
+                                ref={importInputRef} 
+                                className="hidden" 
+                                accept=".json" 
+                                onChange={onImportJSON} 
+                            />
+                        </div>
+                        <p className="text-[9px] text-theme-textMuted px-2 text-center">Use o arquivo .json para salvar seu progresso e carregar em outro dispositivo.</p>
                     </div>
                 </div>
+                <div className="mt-8 text-center border-t border-theme-divider pt-6">
+                    <p className="text-[9px] text-theme-textMuted font-bold uppercase tracking-widest">Board Engine v2.9.2 • Tonolher</p>
+                </div>
             </div>
-            <div className="mt-8 text-center border-t border-theme-divider pt-6">
-                <p className="text-[9px] text-theme-textMuted font-bold uppercase tracking-widest">Board Engine v2.9.1 • Tonolher</p>
-            </div>
-        </div>
-    </ModalBase>
-);
+        </ModalBase>
+    );
+};
 
 export const ChecklistModal: React.FC<{
     isOpen: boolean; event: Event | null; project: Project | null; onClose: () => void;
@@ -128,7 +168,12 @@ export const ChecklistModal: React.FC<{
     onEdit: () => void;
 }> = ({ isOpen, event, project, onClose, onToggleCheck, onComplete, onToggleLink, onChangeType, onEdit }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [showAgentPlan, setShowAgentPlan] = useState(false);
     
+    useEffect(() => {
+        if (!isOpen) setShowAgentPlan(false);
+    }, [isOpen]);
+
     const allOtherEvents = useMemo(() => {
         if (!project || !event) return [];
         const list: { id: string; title: string; scopeName: string; color: string }[] = [];
@@ -174,13 +219,19 @@ export const ChecklistModal: React.FC<{
 
     return (
         <ModalBase isOpen={isOpen} onClose={onClose}>
-            <div className="p-6 max-h-[90vh] overflow-y-auto scroller">
-                <div className="flex justify-between items-start mb-4 border-b border-theme-divider pb-4">
+            <div className="p-6 max-h-[90vh] overflow-y-auto scroller h-[600px] flex flex-col">
+                <div className="flex justify-between items-start mb-4 border-b border-theme-divider pb-4 flex-shrink-0">
                     <div>
                         <h3 className="text-xl font-square font-black text-theme-text flex items-center gap-2">Validação Técnica</h3>
                         <p className="text-xs text-theme-textMuted mt-1 uppercase tracking-widest">{event.title}</p>
                     </div>
                     <div className="flex gap-2">
+                        <button 
+                            onClick={() => setShowAgentPlan(!showAgentPlan)} 
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1 ${showAgentPlan ? 'bg-theme-orange text-white' : 'bg-theme-bg border border-theme-divider text-theme-textMuted hover:text-theme-text'}`}
+                        >
+                            <span className="material-symbols-outlined text-sm">smart_toy</span> {showAgentPlan ? 'Voltar' : 'Plano IA'}
+                        </button>
                         <button className="text-theme-textMuted hover:text-theme-orange transition-colors" onClick={onEdit} title="Editar Detalhes">
                             <span className="material-symbols-outlined">edit</span>
                         </button>
@@ -189,79 +240,89 @@ export const ChecklistModal: React.FC<{
                         </button>
                     </div>
                 </div>
-                <div className="mb-6">
-                    <label className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-2 block">Checklist</label>
-                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                        {event.checklist && event.checklist.length > 0 ? event.checklist.map((it, i) => (
-                            <div key={i} className={`flex items-center gap-3 p-3 bg-theme-bg rounded-xl border cursor-pointer transition-all ${it.done ? 'border-theme-green bg-green-900/10' : 'border-theme-divider hover:border-theme-textMuted'}`} onClick={() => onToggleCheck(i)}>
-                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${it.done ? 'bg-theme-green border-theme-green' : 'bg-transparent border-zinc-600'}`}>
-                                    {it.done && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
-                                </div>
-                                <span className={`text-xs font-medium ${it.done ? 'text-theme-textMuted line-through' : 'text-theme-text'}`}>{it.text}</span>
-                            </div>
-                        )) : (
-                            <div className="p-4 border border-dashed border-theme-divider rounded-xl text-center">
-                                <span className="text-[10px] font-bold text-theme-textMuted uppercase">Sem itens vinculados</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                
-                <div className="mb-6 border-t border-theme-divider pt-6">
-                    <label className="text-[10px] font-black text-theme-cyan uppercase tracking-widest mb-3 block flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm">link</span> Vínculos de Dependência
-                    </label>
-                    {currentDependencies.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {currentDependencies.map((dep: any) => {
-                                const def = DEP_DEFINITIONS[dep.type as keyof typeof DEP_DEFINITIONS] || { label: dep.type, name: dep.type, desc: '' };
-                                return (
-                                    <div key={dep.id} className="bg-theme-cyan/10 border border-theme-cyan/30 px-2 py-1 rounded-lg flex items-center gap-2 group">
-                                        <span className="text-[9px] font-black text-theme-cyan uppercase">{dep.scopeName}: {dep.title}</span>
-                                        <button 
-                                            onClick={() => onChangeType(dep.id)} 
-                                            className="bg-theme-cyan text-black text-[8px] font-black px-1.5 py-0.5 rounded hover:bg-white transition-colors cursor-pointer" 
-                                            title={`${def.name}: ${def.desc}`}
-                                        >
-                                            {def.label}
-                                        </button>
-                                        <button onClick={() => onToggleLink(dep.id)} className="text-theme-cyan hover:text-red-500 transition-colors">
-                                            <span className="material-symbols-outlined text-xs">close</span>
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-theme-textMuted text-sm">search</span>
-                        <input type="text" placeholder="Buscar entrega para vincular..." className="w-full bg-theme-bg border border-theme-divider rounded-xl py-2 pl-9 pr-4 text-xs text-theme-text outline-none focus:border-theme-cyan transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                        {searchTerm && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-theme-bg border border-theme-divider rounded-xl shadow-2xl z-[110] max-h-48 overflow-y-auto scroller">
-                                {filteredEvents.map(e => (
-                                    <button key={e.id} className="w-full text-left p-3 hover:bg-theme-highlight border-b border-theme-divider flex justify-between items-center group" onClick={() => { onToggleLink(e.id); setSearchTerm(''); }}>
-                                        <div>
-                                            <span className="text-[10px] block opacity-50 uppercase font-black" style={{ color: e.color }}>{e.scopeName}</span>
-                                            <span className="text-xs font-bold text-theme-text">{e.title}</span>
-                                        </div>
-                                        <span className="material-symbols-outlined text-theme-cyan opacity-0 group-hover:opacity-100 transition-opacity">add_link</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
 
-                <button className={`w-full py-4 rounded-2xl font-black text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-all transform active:scale-95 ${event.completed ? 'bg-theme-bg border border-theme-divider text-theme-textMuted' : allDone ? 'bg-theme-green text-white shadow-lg' : 'bg-theme-bg border border-theme-divider text-theme-textMuted opacity-50'}`} onClick={onComplete}>
-                    <span className="material-symbols-outlined">{event.completed ? 'undo' : 'task_alt'}</span>
-                    {event.completed ? 'REABRIR ENTREGA' : 'VALIDAR ENTREGA'}
-                </button>
+                {showAgentPlan ? (
+                    <div className="flex-1 overflow-hidden relative rounded-xl border border-theme-divider bg-theme-bg">
+                        <Plan />
+                    </div>
+                ) : (
+                    <div className="flex-1 overflow-y-auto scroller">
+                        <div className="mb-6">
+                            <label className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-2 block">Checklist</label>
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                                {event.checklist && event.checklist.length > 0 ? event.checklist.map((it, i) => (
+                                    <div key={i} className={`flex items-center gap-3 p-3 bg-theme-bg rounded-xl border cursor-pointer transition-all ${it.done ? 'border-theme-green bg-green-900/10' : 'border-theme-divider hover:border-theme-textMuted'}`} onClick={() => onToggleCheck(i)}>
+                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${it.done ? 'bg-theme-green border-theme-green' : 'bg-transparent border-zinc-600'}`}>
+                                            {it.done && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
+                                        </div>
+                                        <span className={`text-xs font-medium ${it.done ? 'text-theme-textMuted line-through' : 'text-theme-text'}`}>{it.text}</span>
+                                    </div>
+                                )) : (
+                                    <div className="p-4 border border-dashed border-theme-divider rounded-xl text-center">
+                                        <span className="text-[10px] font-bold text-theme-textMuted uppercase">Sem itens vinculados</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="mb-6 border-t border-theme-divider pt-6">
+                            <label className="text-[10px] font-black text-theme-cyan uppercase tracking-widest mb-3 block flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm">link</span> Vínculos de Dependência
+                            </label>
+                            {currentDependencies.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {currentDependencies.map((dep: any) => {
+                                        const def = DEP_DEFINITIONS[dep.type as keyof typeof DEP_DEFINITIONS] || { label: dep.type, name: dep.type, desc: '' };
+                                        return (
+                                            <div key={dep.id} className="bg-theme-cyan/10 border border-theme-cyan/30 px-2 py-1 rounded-lg flex items-center gap-2 group">
+                                                <span className="text-[9px] font-black text-theme-cyan uppercase">{dep.scopeName}: {dep.title}</span>
+                                                <button 
+                                                    onClick={() => onChangeType(dep.id)} 
+                                                    className="bg-theme-cyan text-black text-[8px] font-black px-1.5 py-0.5 rounded hover:bg-white transition-colors cursor-pointer" 
+                                                    title={`${def.name}: ${def.desc}`}
+                                                >
+                                                    {def.label}
+                                                </button>
+                                                <button onClick={() => onToggleLink(dep.id)} className="text-theme-cyan hover:text-red-500 transition-colors">
+                                                    <span className="material-symbols-outlined text-xs">close</span>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-theme-textMuted text-sm">search</span>
+                                <input type="text" placeholder="Buscar entrega para vincular..." className="w-full bg-theme-bg border border-theme-divider rounded-xl py-2 pl-9 pr-4 text-xs text-theme-text outline-none focus:border-theme-cyan transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                {searchTerm && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-theme-bg border border-theme-divider rounded-xl shadow-2xl z-[110] max-h-48 overflow-y-auto scroller">
+                                        {filteredEvents.map(e => (
+                                            <button key={e.id} className="w-full text-left p-3 hover:bg-theme-highlight border-b border-theme-divider flex justify-between items-center group" onClick={() => { onToggleLink(e.id); setSearchTerm(''); }}>
+                                                <div>
+                                                    <span className="text-[10px] block opacity-50 uppercase font-black" style={{ color: e.color }}>{e.scopeName}</span>
+                                                    <span className="text-xs font-bold text-theme-text">{e.title}</span>
+                                                </div>
+                                                <span className="material-symbols-outlined text-theme-cyan opacity-0 group-hover:opacity-100 transition-opacity">add_link</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <button className={`w-full py-4 rounded-2xl font-black text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-all transform active:scale-95 ${event.completed ? 'bg-theme-bg border border-theme-divider text-theme-textMuted' : allDone ? 'bg-theme-green text-white shadow-lg' : 'bg-theme-bg border border-theme-divider text-theme-textMuted opacity-50'}`} onClick={onComplete}>
+                            <span className="material-symbols-outlined">{event.completed ? 'undo' : 'task_alt'}</span>
+                            {event.completed ? 'REABRIR ENTREGA' : 'VALIDAR ENTREGA'}
+                        </button>
+                    </div>
+                )}
             </div>
         </ModalBase>
     );
 };
 
 export const LodModal: React.FC<{ isOpen: boolean; lods: string[]; activeLod: string; onClose: () => void; onSelect: (lod: string) => void; onAdd: (l: string) => void; onRemove: (l: string) => void; onReorder: (l: string[]) => void; }> = ({ isOpen, lods, activeLod, onClose, onSelect, onAdd, onRemove, onReorder }) => {
+    // ... LodModal implementation (no changes needed) ...
     const [isEditing, setIsEditing] = useState(false);
     const [newLod, setNewLod] = useState('');
     const [draggedItem, setDraggedItem] = useState<number | null>(null);
@@ -351,6 +412,7 @@ export const CompanyModal: React.FC<{
     onRemove: (id: number) => void; 
     onReorder: (c: Company[]) => void; 
 }> = ({ isOpen, companies, onClose, onSelect, onAdd, onUpdate, onRemove, onReorder }) => {
+    // ... CompanyModal implementation ...
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState('');
     const [logo, setLogo] = useState<string | undefined>(undefined);
@@ -487,11 +549,9 @@ export const CompanyModal: React.FC<{
     );
 };
 
-// ... other modals (ProjectModal, ScopeModal, EventModal, TeamModal, TimelineSettingsModal, DisciplinesManagerModal) remain unchanged but are needed for the file to be valid. 
-// Assuming they are preserved in the context of the output if not explicitly changed, but for XML completeness I should include them if I'm replacing the file content completely.
-// Since the prompt asks to "only return files that need to be updated", and I'm updating Modals.tsx, I must provide the full content including the new GalleryModal and existing ones.
-
+// ... ProjectModal, ScopeModal ...
 export const ProjectModal: React.FC<{ isOpen: boolean; companyName: string; projects: Project[]; onClose: () => void; onSelect: (id: number) => void; onAdd: (name: string, logo?: string, cover?: string) => void; onDelete: (id: number) => void; onEdit: (id: number, name: string, logo?: string, cover?: string) => void; }> = ({ isOpen, companyName, projects, onClose, onSelect, onAdd, onDelete, onEdit }) => {
+    // ... ProjectModal implementation ...
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState('');
     const [logo, setLogo] = useState<string | undefined>(undefined);
@@ -627,6 +687,7 @@ export const ScopeModal: React.FC<{
     onManage: () => void;
     onSave: (name: string, startDate: string, color: string, status: string, pWeek: number, resp: string) => void; 
 }> = ({ isOpen, scope, disciplines, team, onClose, onManage, onSave }) => {
+    // ... ScopeModal implementation ...
     const [discCode, setDiscCode] = useState('');
     const [start, setStart] = useState('');
     const [status, setStatus] = useState('walking');
@@ -727,6 +788,8 @@ export const EventModal: React.FC<{
     const [start, setStart] = useState('');
     const [end, setEnd] = useState('');
     const [checklist, setChecklist] = useState('');
+    const [delay, setDelay] = useState(0);
+    const plannedEndRef = useRef('');
 
     useEffect(() => {
         if (event) {
@@ -734,15 +797,50 @@ export const EventModal: React.FC<{
             setResp(event.resp);
             setStart(event.startDate);
             setEnd(event.endDate);
+            
+            const pEnd = event.plannedEndDate || event.endDate;
+            plannedEndRef.current = pEnd;
+            
             setChecklist(event.checklist?.map(i => i.text).join('\n') || '');
+            
+            // Calculate initial delay
+            const diffTime = new Date(event.endDate).getTime() - new Date(pEnd).getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            setDelay(diffDays > 0 ? diffDays : 0);
         } else {
             setTitle('');
             setResp(team[0] || '');
             setStart(new Date().toISOString().split('T')[0]);
-            setEnd(new Date().toISOString().split('T')[0]);
+            const today = new Date().toISOString().split('T')[0];
+            setEnd(today);
+            plannedEndRef.current = today; 
             setChecklist('');
+            setDelay(0);
         }
     }, [event, isOpen, team]);
+
+    const handleDelayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const d = parseInt(e.target.value) || 0;
+        setDelay(d);
+        if (plannedEndRef.current) {
+            const date = new Date(plannedEndRef.current);
+            date.setDate(date.getDate() + d + 1); // Compensate slightly for TZ or direct addition logic if needed, but standard +d is usually correct. JS dates are tricky.
+            // Actually, simpler:
+            const base = new Date(plannedEndRef.current);
+            const newDate = new Date(base.getTime() + (d * 24 * 60 * 60 * 1000));
+            setEnd(newDate.toISOString().split('T')[0]);
+        }
+    };
+
+    const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newEnd = e.target.value;
+        setEnd(newEnd);
+        if (plannedEndRef.current && newEnd) {
+             const diffTime = new Date(newEnd).getTime() - new Date(plannedEndRef.current).getTime();
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             setDelay(diffDays > 0 ? diffDays : 0);
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -773,11 +871,16 @@ export const EventModal: React.FC<{
                             </select>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Prazo (Início / Fim)</label>
-                            <div className="flex gap-2">
-                                <input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-1/2 bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-[10px] text-theme-text outline-none focus:border-theme-orange" />
-                                <input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-1/2 bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-[10px] text-theme-text outline-none focus:border-theme-orange" />
-                            </div>
+                            <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Atraso (+ Dias)</label>
+                            <input type="number" min="0" value={delay} onChange={handleDelayChange} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-red border-l-4 border-l-theme-red font-mono font-bold" placeholder="0" />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Prazo (Início / Fim)</label>
+                        <div className="flex gap-2">
+                            <input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-1/2 bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-[10px] text-theme-text outline-none focus:border-theme-orange" />
+                            <input type="date" value={end} onChange={handleEndDateChange} className="w-1/2 bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-[10px] text-theme-text outline-none focus:border-theme-orange" />
                         </div>
                     </div>
 
@@ -796,7 +899,9 @@ export const EventModal: React.FC<{
     );
 };
 
+// ... TeamModal, TimelineSettingsModal, DisciplinesManagerModal ...
 export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () => void; onAdd: (name: string) => void; onRemove: (idx: number) => void; }> = ({ isOpen, team, onClose, onAdd, onRemove }) => {
+    // ... TeamModal implementation (no changes needed) ...
     const [newName, setNewName] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -834,6 +939,7 @@ export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () 
 };
 
 export const TimelineSettingsModal: React.FC<{ isOpen: boolean; project: Project | null; onClose: () => void; onSave: (start: string, end: string) => void; }> = ({ isOpen, project, onClose, onSave }) => {
+    // ... TimelineSettingsModal implementation (no changes needed) ...
     const [start, setStart] = useState('');
     const [end, setEnd] = useState('');
 
@@ -881,6 +987,7 @@ export const DisciplinesManagerModal: React.FC<{
     onRemove: (code: string) => void;
     onReorder: (d: Discipline[]) => void;
 }> = ({ isOpen, disciplines, onClose, onAdd, onUpdate, onRemove, onReorder }) => {
+    // ... DisciplinesManagerModal implementation (no changes needed) ...
     const [isEditing, setIsEditing] = useState(false);
     const [draggedItem, setDraggedItem] = useState<number | null>(null);
     

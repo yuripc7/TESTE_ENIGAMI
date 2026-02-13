@@ -326,12 +326,15 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
                                         const topPos = (rowIndex * ROW_HEIGHT) + 20;
                                         let extensionWidth = 0;
                                         let hasExtension = false;
+                                        let daysLate = 0;
                                         let mainBarWidth = w; 
                                         if (isExecuted && ev.plannedEndDate && ev.endDate) {
                                             const plannedEnd = new Date(ev.plannedEndDate);
                                             const actualEnd = new Date(ev.endDate);
                                             if (actualEnd > plannedEnd) {
                                                 hasExtension = true;
+                                                const diffTime = Math.abs(actualEnd.getTime() - plannedEnd.getTime());
+                                                daysLate = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                                                 const l_plannedEnd = getPositionPercent(ev.plannedEndDate);
                                                 const l_actualEnd = getPositionPercent(ev.endDate);
                                                 mainBarWidth = l_plannedEnd - l;
@@ -348,13 +351,17 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
                                             <div key={ev.id} id={`${isExecuted ? 'exe' : 'pla'}-ev-${ev.id}`} className={`absolute h-8 flex flex-col items-center justify-center z-40 group/bar transition-transform hover:-translate-y-1 ${!isExecuted ? 'pointer-events-none opacity-50 grayscale' : ''}`} style={{ left: `${l}%`, width: `${Math.max(mainBarWidth + extensionWidth, 4)}%`, top: `${topPos}px` }} onClick={() => { if (isExecuted && !dragState) onBarClick(s.id, ev.id); }} onContextMenu={(e) => { e.preventDefault(); if (isExecuted) onBarContextMenu(s.id, ev.id); }}>
                                                 {isExecuted && (<><div className="absolute -left-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'start')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'start')} /><div className="absolute -right-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'end')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'end')} /></>)}
                                                 <div className="absolute -top-3 left-0 bg-theme-bg/90 backdrop-blur-sm border border-theme-divider px-1 rounded-none border-l-2" style={{ borderLeftColor: s.colorClass }}>
-                                                    <span className="text-[6px] font-black text-theme-text uppercase tracking-wider font-square">{ev.resp.split(' ')[0]} {hasExtension && <span className="text-red-500">(!ATRASO)</span>}</span>
+                                                    <span className="text-[6px] font-black text-theme-text uppercase tracking-wider font-square">{`${s.resp} • ${ev.resp}`} {hasExtension && <span className="text-red-500">(!ATRASO)</span>}</span>
                                                 </div>
                                                 <div className={`w-full h-full relative flex ${isExecuted ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                                                     <div className={`h-full border flex items-center justify-center px-1 shadow-lg overflow-hidden relative ${hasExtension ? 'border-r-0' : ''}`} style={{ borderColor: borderColor, backgroundColor: bgColor, borderLeftWidth: '2px', width: hasExtension ? `${(mainBarWidth / (mainBarWidth + extensionWidth)) * 100}%` : '100%' }}>
                                                         <span className="text-[8px] font-black uppercase text-white truncate text-center tracking-tight z-10 relative drop-shadow-md select-none font-square">{ev.title}</span>
                                                     </div>
-                                                    {hasExtension && (<div className="h-full border border-red-500 bg-red-500/80 flex items-center justify-center shadow-lg relative" style={{ width: `${(extensionWidth / (mainBarWidth + extensionWidth)) * 100}%`, borderLeft: 'none' }}><span className="material-symbols-outlined text-[8px] text-white animate-pulse">warning</span></div>)}
+                                                    {hasExtension && (
+                                                        <div className="h-full border border-red-500 bg-red-500/80 flex items-center justify-center shadow-lg relative" style={{ width: `${(extensionWidth / (mainBarWidth + extensionWidth)) * 100}%`, borderLeft: 'none' }}>
+                                                            <span className="text-[7px] font-bold text-white uppercase drop-shadow-md whitespace-nowrap overflow-hidden">+{daysLate}d</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );

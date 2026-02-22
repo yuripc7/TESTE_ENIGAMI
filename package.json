@@ -1,9 +1,9 @@
 {
-  "name": "enigami",
+  "name": "teste-enigami",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://ypcun.github.io/enigami",
+  "homepage": "https://yuripc7.github.io/TESTE_ENIGAMI/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

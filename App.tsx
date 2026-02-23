@@ -16,23 +16,15 @@ const THEME_KEY = 'design_board_theme_v1';
 
 type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade';
 
+import { useApp } from './contexts/AppContext';
+
 export const App = () => {
-    const [db, setDb] = useState<DB>(() => {
-        try {
-            const savedDb = localStorage.getItem(STORAGE_KEY);
-            return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
-        } catch (error) {
-            console.error("Erro ao carregar dados locais, resetando para padrão:", error);
-            return INITIAL_DB;
-        }
-    });
+    const {
+        db, setDb, theme, setTheme, currentUser, setCurrentUser,
+        notification, setNotification, addLog, handleManualSave,
+        handleExportJSON, handleImportJSON, activeProject, activeCompany
+    } = useApp();
 
-    const [theme, setTheme] = useState(() => {
-        const savedTheme = localStorage.getItem(THEME_KEY);
-        return savedTheme || 'light';
-    });
-
-    const [currentUser, setCurrentUser] = useState<{ name: string; avatar?: string } | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('timeline');
     const [activeTimelineView, setActiveTimelineView] = useState<'timeline' | 'agenda'>('timeline');
 
@@ -46,7 +38,6 @@ export const App = () => {
     const activityFileRef = useRef<HTMLInputElement>(null);
     const [activeHealthTab, setActiveHealthTab] = useState<'total' | 'progress' | 'done' | 'efficiency'>('efficiency');
     const [viewingImage, setViewingImage] = useState<string | null>(null);
-    const [notification, setNotification] = useState<string | null>(null);
     const [memberFilter, setMemberFilter] = useState<string | null>(null);
 
     // Gallery State
@@ -127,7 +118,7 @@ export const App = () => {
             eventId: timerEventId || undefined
         });
         const scopeName = timerScopeId ? activeProject.scopes.find(s => s.id === timerScopeId)?.name : '';
-        addLog(currentUser.name, `INICIOU CRON�”METRO: ${activity} ${scopeName ? `[${scopeName}]` : ''}`);
+        addLog(currentUser.name, `INICIOU CRONÔMETRO: ${activity} ${scopeName ? `[${scopeName}]` : ''}`);
     };
 
     const handleStopTimer = () => {
@@ -176,40 +167,6 @@ export const App = () => {
         }));
         setEditingLogId(null);
     };
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-        } catch (error) {
-            console.error("Erro ao salvar dados:", error);
-            setNotification("Erro ao salvar alterações localmente!");
-        }
-    }, [db]);
-
-    useEffect(() => {
-        document.documentElement.className = theme;
-        localStorage.setItem(THEME_KEY, theme);
-    }, [theme]);
-
-    useEffect(() => {
-        if (chatOpen) {
-            // Scroll to bottom of chat history
-            const chatEnd = document.getElementById('chat-end');
-            chatEnd?.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [chatHistory, chatOpen]);
-    const getEmbedUrl = (loc: string) => {
-        if (!loc) return '';
-        return `https://maps.google.com/maps?q=${encodeURIComponent(loc)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
-    };
-
-    const activeProject = useMemo(() => {
-        return db.projects.find(p => p.id === db.activeProjectId) || null;
-    }, [db.projects, db.activeProjectId]);
-
-    const activeCompany = useMemo(() => {
-        return db.companies.find(c => c.id === db.activeCompanyId) || null;
-    }, [db.companies, db.activeCompanyId]);
 
     const selectedScope = useMemo(() => {
         return activeProject?.scopes.find(s => s.id === (selectedScopeIdForFiles || editingScopeId)) || null;
@@ -274,19 +231,6 @@ export const App = () => {
         }
     };
 
-    const handleManualSave = () => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-            setNotification("Projeto Salvo com Sucesso!");
-        } catch (e) {
-            setNotification("Erro ao salvar!");
-        }
-        setTimeout(() => setNotification(null), 3000);
-    };
-
-    const onUpdateCompany = (id: number, name: string, logoUrl?: string) => { setDb(prev => ({ ...prev, companies: prev.companies.map(c => c.id === id ? { ...c, name, logoUrl } : c) })); addLog("SISTEMA", `CLIENTE ATUALIZADO: ${name}`); };
-    const addLog = (author: string, text: string, imageUrl?: string) => { if (!db.activeProjectId) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === db.activeProjectId ? { ...p, updatedAt: new Date().toISOString(), activities: [...p.activities, { date: getNowString(), author: author.toUpperCase(), text: text.toUpperCase(), imageUrl }] } : p) })); };
-    const onDeleteScope = (sid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.filter(s => s.id !== sid) } : p) })); if (selectedScopeIdForFiles === sid) setSelectedScopeIdForFiles(null); addLog("SISTEMA", `DISCIPLINA REMOVIDA`); };
     const onAddFile = (scopeId: string, label: string, path: string) => {
         setDb(prev => {
             const activePId = prev.activeProjectId;
@@ -309,85 +253,20 @@ export const App = () => {
         setTimeout(() => setNotification(null), 3000);
     };
 
-    const onDeleteFile = (scopeId: string, fileIndex: number) => {
-        if (!activeProject) return;
-        if (!confirm("Tem certeza que deseja excluir este arquivo?")) return;
 
-        setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === activeProject.id ? {
-                ...p,
-                updatedAt: new Date().toISOString(),
-                scopes: p.scopes.map(s => s.id === scopeId ? {
-                    ...s,
-                    fileLinks: s.fileLinks?.filter((_, i) => i !== fileIndex)
-                } : s)
-            } : p)
-        }));
-        addLog("SISTEMA", "ARQUIVO REMOVIDO");
-    };
+    const onUpdateCompany = (id: number, name: string, logoUrl?: string) => { setDb(prev => ({ ...prev, companies: prev.companies.map(c => c.id === id ? { ...c, name, logoUrl } : c) })); addLog("SISTEMA", `CLIENTE ATUALIZADO: ${name}`); };
+    const onDeleteScope = (sid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.filter(s => s.id !== sid) } : p) })); if (selectedScopeIdForFiles === sid) setSelectedScopeIdForFiles(null); addLog("SISTEMA", `DISCIPLINA REMOVIDA`); };
+    const onDeleteFile = (sid: string, fidx: number) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, fileLinks: s.fileLinks?.filter((_, i) => i !== fidx) } : s) } : p) })); addLog("SISTEMA", `ARQUIVO REMOVIDO`); };
+    const onUpdatePowerBiUrl = (url: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, powerBiUrl: url } : p) })); };
 
-    const onUpdatePowerBiUrl = (url: string) => {
-        if (!activeProject) return;
-        setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === activeProject.id ? {
-                ...p,
-                powerBiUrl: url,
-                updatedAt: new Date().toISOString()
-            } : p)
-        }));
-    };
-    const onDeleteEvent = (sid: string, eid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `A�‡�ƒO REMOVIDA`); };
+    const onDeleteEvent = (sid: string, eid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `AÇÃO REMOVIDA`); };
     const onToggleDependency = (sid: string, eid: string, targetId: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies || []), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) })); };
     const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(e => e.id === eid ? { ...e, dependencies: (e.dependencies || []).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type) + 1) % types.length] } : d) } : e) } : s) } : p) })); };
     const onAddDependency = (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (!activeProject) return; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); setTimeout(() => setNotification(null), 2000); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); };
     const onDeleteProject = (id: number) => { setDb(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), activeProjectId: prev.activeProjectId === id ? null : prev.activeProjectId })); };
     const onEditProject = (id: number, name: string, logo?: string, cover?: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, name, logoUrl: logo, coverUrl: cover, updatedAt: new Date().toISOString() } : p) })); };
 
-    // EXPORT JSON
-    const handleExportJSON = () => {
-        const jsonString = JSON.stringify(db, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `enigami-backup-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        addLog("SISTEMA", "BACKUP DO SISTEMA EXPORTADO");
-    };
-
-    // IMPORT JSON
-    const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const importedData = JSON.parse(event.target?.result as string);
-                if (importedData && importedData.companies && importedData.projects) {
-                    if (confirm("ATEN�‡�ƒO: Isso substituirá todos os dados atuais pelos dados do backup. Deseja continuar?")) {
-                        setDb(importedData);
-                        setNotification("Backup importado com sucesso!");
-                        addLog("SISTEMA", "BACKUP DO SISTEMA IMPORTADO");
-                    }
-                } else {
-                    alert("Arquivo de backup inválido.");
-                }
-            } catch (err) {
-                console.error("Erro ao importar JSON", err);
-                alert("Erro ao ler o arquivo de backup.");
-            }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-    };
-
-    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESS�ƒO"); };
+    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESSÃO"); };
 
     const filteredActivities = useMemo(() => { if (!activeProject) return []; return activeProject.activities.filter(a => { const matchText = a.text.toLowerCase().includes(logSearch.toLowerCase()); const matchAuthor = logAuthorFilter === '' || a.author === logAuthorFilter.toUpperCase(); return matchText && matchAuthor; }); }, [activeProject, logSearch, logAuthorFilter]);
     const stats = useMemo(() => {
@@ -420,68 +299,71 @@ export const App = () => {
             taskCount: tasks,
             totalTime // Seconds
         };
-    }, [activeTimer]);
+    }, [activeProject]);
 
     // --- EFFECT: DATA MIGRATION & DEFAULT FOLDERS ---
     useEffect(() => {
         if (!activeProject) return;
 
         let needsSave = false;
-        const updatedProjects = db.projects.map(p => {
-            if (p.id !== activeProject.id) return p;
+        const currentGalleryFolders = activeProject.galleryFolders || [];
 
-            let projectUpdated = false;
+        // 1. Check for legacy gallery
+        const legacyProj = activeProject as any;
+        const hasLegacyGallery = legacyProj.gallery && legacyProj.gallery.length > 0;
 
-            // 1. Migrate old gallery (flat array) to folder structure
-            const legacyProj = p as any;
-            if (legacyProj.gallery && legacyProj.gallery.length > 0) {
-                const defaultFolders: GalleryFolder[] = [
-                    { id: 'marketing', name: 'MARKETING', images: [] },
-                    { id: 'fachadas', name: 'FACHADAS', images: [] },
-                    { id: 'interiores', name: 'INTERIORES', images: [] },
-                    { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
-                ];
+        // 2. Check for missing default folders
+        const hasFolders = currentGalleryFolders.length > 0;
 
-                const existingFolders = p.galleryFolders || defaultFolders;
-                const miscFolder = existingFolders.find(f => f.id === 'diversos') || { id: 'diversos', name: 'DIVERSOS', images: [] };
+        if (hasLegacyGallery || !hasFolders) {
+            setDb(prev => {
+                const proj = prev.projects.find(p => p.id === activeProject.id);
+                if (!proj) return prev;
 
-                const migratedImages: GalleryImage[] = legacyProj.gallery.map((url: string, idx: number) => ({
-                    url,
-                    description: legacyProj.galleryDescriptions?.[idx] || ""
-                }));
+                const newProj = { ...proj };
 
-                miscFolder.images = [...miscFolder.images, ...migratedImages];
+                // Handle legacy migration
+                if (hasLegacyGallery) {
+                    const defaultFolders: GalleryFolder[] = [
+                        { id: 'marketing', name: 'MARKETING', images: [] },
+                        { id: 'fachadas', name: 'FACHADAS', images: [] },
+                        { id: 'interiores', name: 'INTERIORES', images: [] },
+                        { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
+                    ];
 
-                if (!existingFolders.find(f => f.id === 'diversos')) {
-                    existingFolders.push(miscFolder);
+                    const existingFolders = [...(newProj.galleryFolders || defaultFolders)];
+                    const miscFolder = existingFolders.find(f => f.id === 'diversos') || { id: 'diversos', name: 'DIVERSOS', images: [] };
+
+                    const migratedImages: GalleryImage[] = (newProj as any).gallery.map((url: string, idx: number) => ({
+                        url,
+                        description: (newProj as any).galleryDescriptions?.[idx] || ""
+                    }));
+
+                    miscFolder.images = [...miscFolder.images, ...migratedImages];
+                    if (!existingFolders.find(f => f.id === 'diversos')) existingFolders.push(miscFolder);
+
+                    newProj.galleryFolders = existingFolders;
+                    delete (newProj as any).gallery;
+                    delete (newProj as any).galleryDescriptions;
                 }
 
-                p.galleryFolders = existingFolders;
-                delete legacyProj.gallery;
-                delete legacyProj.galleryDescriptions;
-                projectUpdated = true;
-                needsSave = true;
-            }
+                // Handle missing folders
+                if (!newProj.galleryFolders || newProj.galleryFolders.length === 0) {
+                    newProj.galleryFolders = [
+                        { id: 'marketing', name: 'MARKETING', images: [] },
+                        { id: 'fachadas', name: 'FACHADAS', images: [] },
+                        { id: 'interiores', name: 'INTERIORES', images: [] },
+                        { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
+                    ];
+                }
 
-            // 2. Ensure default folders exist for new projects
-            if (!p.galleryFolders || p.galleryFolders.length === 0) {
-                p.galleryFolders = [
-                    { id: 'marketing', name: 'MARKETING', images: [] },
-                    { id: 'fachadas', name: 'FACHADAS', images: [] },
-                    { id: 'interiores', name: 'INTERIORES', images: [] },
-                    { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
-                ];
-                projectUpdated = true;
-                needsSave = true;
-            }
-
-            return projectUpdated ? { ...p } : p;
-        });
-
-        if (needsSave) {
-            setDb(prev => ({ ...prev, projects: updatedProjects }));
+                return {
+                    ...prev,
+                    projects: prev.projects.map(p => p.id === activeProject.id ? newProj : p)
+                };
+            });
         }
-    }, [activeProject, db.activeProjectId]);
+    }, [activeProject?.id, activeProject?.galleryFolders?.length]); // Run on ID or folder count change
     const progressPercentage = useMemo(() => { if (!activeProject) return 0; const start = new Date(activeProject.createdAt); const end = new Date(projectBounds.end); const today = new Date(); if (today < start) return 0; if (today > end) return 100; const totalDuration = end.getTime() - start.getTime(); const elapsed = today.getTime() - start.getTime(); if (totalDuration <= 0) return 0; return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100); }, [activeProject, projectBounds]);
     const projectHealth = useMemo(() => { if (!activeProject) return { label: '---', color: 'text-theme-textMuted', border: 'border-theme-card', bg: 'bg-theme-card' }; const today = new Date(); const isAnyEventLate = activeProject.scopes.some(scope => scope.events.some(ev => { const endDate = new Date(ev.endDate); return !ev.completed && today > endDate; })); if (isAnyEventLate) { return { label: 'CRÍTICO', color: 'text-theme-red', border: 'border-theme-red', bg: 'bg-theme-red/10' }; } const diff = stats.rate - progressPercentage; if (diff < 0) return { label: 'ATEN�‡�ƒO', color: 'text-yellow-500', border: 'border-yellow-500', bg: 'bg-yellow-500/10' }; return { label: 'ESTÁVEL', color: 'text-theme-green', border: 'border-theme-green', bg: 'bg-theme-green/10' }; }, [activeProject, stats.rate, progressPercentage]);
 

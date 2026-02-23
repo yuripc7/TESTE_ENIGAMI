@@ -28,6 +28,18 @@ export interface FileLink {
     path: string;
 }
 
+export interface GalleryImage {
+    url: string;
+    description?: string;
+    date?: string;
+}
+
+export interface GalleryFolder {
+    id: string;
+    name: string;
+    images: GalleryImage[];
+}
+
 export interface Scope {
     id: string;
     name: string;
@@ -36,7 +48,7 @@ export interface Scope {
     plannedStartDate?: string; // New: Baseline start for scope
     resp: string;
     status: string;
-    protocolWeek?: number;
+    protocolDate?: string;
     events: Event[];
     fileLinks?: FileLink[];
 }
@@ -58,6 +70,7 @@ export interface ProjectDataRow {
     salesArea: string;
     zoning: string;
     potential: string;
+    height: string;
     broker: string;
     resp: string;
     updatedAt: string;
@@ -70,8 +83,8 @@ export interface Project {
     name: string;
     logoUrl?: string;
     coverUrl?: string; // New: Project facade/background image
-    gallery?: string[]; // New: Project Gallery Images
     galleryDescriptions?: Record<number, string>; // Stores text for each gallery image index
+    galleryFolders?: GalleryFolder[]; // New: Organized gallery folders
     createdAt: string;
     updatedAt: string;
     timelineStart: string;

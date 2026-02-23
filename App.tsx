@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { INITIAL_DB } from './constants';
-import { DB, ChatMessage, Project, Event, Company, ProjectDataRow, Scope, Dependency, ChecklistItem, Activity, FileLink } from './types';
+import { DB, ChatMessage, Project, Event, Company, ProjectDataRow, Scope, Dependency, ChecklistItem, Activity, FileLink, GalleryImage, GalleryFolder } from './types';
 import { generateChatResponse } from './services/geminiService';
 import {
     LodModal, CompanyModal, ProjectModal, ScopeModal, EventModal,
@@ -51,6 +51,7 @@ export const App = () => {
 
     // Gallery State
     const [currentGalleryIndex, setCurrentGalleryIndex] = useState(0);
+    const [selectedGalleryFolderId, setSelectedGalleryFolderId] = useState<string | null>(null);
     const galleryFileRef = useRef<HTMLInputElement>(null);
 
     // Modals state
@@ -126,7 +127,7 @@ export const App = () => {
             eventId: timerEventId || undefined
         });
         const scopeName = timerScopeId ? activeProject.scopes.find(s => s.id === timerScopeId)?.name : '';
-        addLog(currentUser.name, `INICIOU CRONÔMETRO: ${activity} ${scopeName ? `[${scopeName}]` : ''}`);
+        addLog(currentUser.name, `INICIOU CRON�”METRO: ${activity} ${scopeName ? `[${scopeName}]` : ''}`);
     };
 
     const handleStopTimer = () => {
@@ -337,7 +338,7 @@ export const App = () => {
             } : p)
         }));
     };
-    const onDeleteEvent = (sid: string, eid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `AÇÃO REMOVIDA`); };
+    const onDeleteEvent = (sid: string, eid: string) => { if (!activeProject) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `A�‡�ƒO REMOVIDA`); };
     const onToggleDependency = (sid: string, eid: string, targetId: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies || []), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) })); };
     const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject?.id ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(e => e.id === eid ? { ...e, dependencies: (e.dependencies || []).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type) + 1) % types.length] } : d) } : e) } : s) } : p) })); };
     const onAddDependency = (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (!activeProject) return; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); setTimeout(() => setNotification(null), 2000); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); };
@@ -369,7 +370,7 @@ export const App = () => {
             try {
                 const importedData = JSON.parse(event.target?.result as string);
                 if (importedData && importedData.companies && importedData.projects) {
-                    if (confirm("ATENÇÃO: Isso substituirá todos os dados atuais pelos dados do backup. Deseja continuar?")) {
+                    if (confirm("ATEN�‡�ƒO: Isso substituirá todos os dados atuais pelos dados do backup. Deseja continuar?")) {
                         setDb(importedData);
                         setNotification("Backup importado com sucesso!");
                         addLog("SISTEMA", "BACKUP DO SISTEMA IMPORTADO");
@@ -386,7 +387,7 @@ export const App = () => {
         e.target.value = '';
     };
 
-    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESSÃO"); };
+    const printDashboard = () => { window.print(); addLog("SISTEMA", "DASHBOARD ENVIADO PARA IMPRESS�ƒO"); };
 
     const filteredActivities = useMemo(() => { if (!activeProject) return []; return activeProject.activities.filter(a => { const matchText = a.text.toLowerCase().includes(logSearch.toLowerCase()); const matchAuthor = logAuthorFilter === '' || a.author === logAuthorFilter.toUpperCase(); return matchText && matchAuthor; }); }, [activeProject, logSearch, logAuthorFilter]);
     const stats = useMemo(() => {
@@ -419,9 +420,70 @@ export const App = () => {
             taskCount: tasks,
             totalTime // Seconds
         };
-    }, [activeProject]);
+    }, [activeTimer]);
+
+    // --- EFFECT: DATA MIGRATION & DEFAULT FOLDERS ---
+    useEffect(() => {
+        if (!activeProject) return;
+
+        let needsSave = false;
+        const updatedProjects = db.projects.map(p => {
+            if (p.id !== activeProject.id) return p;
+
+            let projectUpdated = false;
+
+            // 1. Migrate old gallery (flat array) to folder structure
+            const legacyProj = p as any;
+            if (legacyProj.gallery && legacyProj.gallery.length > 0) {
+                const defaultFolders: GalleryFolder[] = [
+                    { id: 'marketing', name: 'MARKETING', images: [] },
+                    { id: 'fachadas', name: 'FACHADAS', images: [] },
+                    { id: 'interiores', name: 'INTERIORES', images: [] },
+                    { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
+                ];
+
+                const existingFolders = p.galleryFolders || defaultFolders;
+                const miscFolder = existingFolders.find(f => f.id === 'diversos') || { id: 'diversos', name: 'DIVERSOS', images: [] };
+
+                const migratedImages: GalleryImage[] = legacyProj.gallery.map((url: string, idx: number) => ({
+                    url,
+                    description: legacyProj.galleryDescriptions?.[idx] || ""
+                }));
+
+                miscFolder.images = [...miscFolder.images, ...migratedImages];
+
+                if (!existingFolders.find(f => f.id === 'diversos')) {
+                    existingFolders.push(miscFolder);
+                }
+
+                p.galleryFolders = existingFolders;
+                delete legacyProj.gallery;
+                delete legacyProj.galleryDescriptions;
+                projectUpdated = true;
+                needsSave = true;
+            }
+
+            // 2. Ensure default folders exist for new projects
+            if (!p.galleryFolders || p.galleryFolders.length === 0) {
+                p.galleryFolders = [
+                    { id: 'marketing', name: 'MARKETING', images: [] },
+                    { id: 'fachadas', name: 'FACHADAS', images: [] },
+                    { id: 'interiores', name: 'INTERIORES', images: [] },
+                    { id: 'humanizadas', name: 'PLANTAS HUMANIZADAS', images: [] }
+                ];
+                projectUpdated = true;
+                needsSave = true;
+            }
+
+            return projectUpdated ? { ...p } : p;
+        });
+
+        if (needsSave) {
+            setDb(prev => ({ ...prev, projects: updatedProjects }));
+        }
+    }, [activeProject, db.activeProjectId]);
     const progressPercentage = useMemo(() => { if (!activeProject) return 0; const start = new Date(activeProject.createdAt); const end = new Date(projectBounds.end); const today = new Date(); if (today < start) return 0; if (today > end) return 100; const totalDuration = end.getTime() - start.getTime(); const elapsed = today.getTime() - start.getTime(); if (totalDuration <= 0) return 0; return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100); }, [activeProject, projectBounds]);
-    const projectHealth = useMemo(() => { if (!activeProject) return { label: '---', color: 'text-theme-textMuted', border: 'border-theme-card', bg: 'bg-theme-card' }; const today = new Date(); const isAnyEventLate = activeProject.scopes.some(scope => scope.events.some(ev => { const endDate = new Date(ev.endDate); return !ev.completed && today > endDate; })); if (isAnyEventLate) { return { label: 'CRÍTICO', color: 'text-theme-red', border: 'border-theme-red', bg: 'bg-theme-red/10' }; } const diff = stats.rate - progressPercentage; if (diff < 0) return { label: 'ATENÇÃO', color: 'text-yellow-500', border: 'border-yellow-500', bg: 'bg-yellow-500/10' }; return { label: 'ESTÁVEL', color: 'text-theme-green', border: 'border-theme-green', bg: 'bg-theme-green/10' }; }, [activeProject, stats.rate, progressPercentage]);
+    const projectHealth = useMemo(() => { if (!activeProject) return { label: '---', color: 'text-theme-textMuted', border: 'border-theme-card', bg: 'bg-theme-card' }; const today = new Date(); const isAnyEventLate = activeProject.scopes.some(scope => scope.events.some(ev => { const endDate = new Date(ev.endDate); return !ev.completed && today > endDate; })); if (isAnyEventLate) { return { label: 'CRÍTICO', color: 'text-theme-red', border: 'border-theme-red', bg: 'bg-theme-red/10' }; } const diff = stats.rate - progressPercentage; if (diff < 0) return { label: 'ATEN�‡�ƒO', color: 'text-yellow-500', border: 'border-yellow-500', bg: 'bg-yellow-500/10' }; return { label: 'ESTÁVEL', color: 'text-theme-green', border: 'border-theme-green', bg: 'bg-theme-green/10' }; }, [activeProject, stats.rate, progressPercentage]);
 
     // New Feature: Generate Project Report for Feed
     const generateProjectReport = async () => {
@@ -446,9 +508,9 @@ export const App = () => {
         const prompt = `Atue como um Gerente de Projetos Sênior. Gere um Relatório de Status Executivo (em pt-BR) para o projeto ENIGAMI.
         
         Use a seguinte estrutura:
-        1. 📊 RESUMO GERAL (Saúde do projeto e progresso)
-        2. ⚠️ PONTOS DE ATENÇÃO (Atrasos e riscos baseados nos dados)
-        3. 🚀 PRÓXIMOS PASSOS (Sugestões práticas para a equipe)
+        1. �Ÿ“Š RESUMO GERAL (Saúde do projeto e progresso)
+        2. �š�️ PONTOS DE ATEN�‡�ƒO (Atrasos e riscos baseados nos dados)
+        3. �Ÿš€ PR�“XIMOS PASSOS (Sugestões práticas para a equipe)
         
         Seja conciso, direto e profissional. Use emojis moderados.
         Dados do Projeto: ${JSON.stringify(summaryData)}`;
@@ -544,76 +606,123 @@ export const App = () => {
 
     const handleGalleryUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files && files.length > 0 && activeProject) {
+        if (files && files.length > 0 && activeProject && selectedGalleryFolderId) {
             Array.from(files).forEach((file: File) => {
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     const result = reader.result as string;
+                    const newImage: GalleryImage = {
+                        url: result,
+                        description: "",
+                        date: new Date().toISOString()
+                    };
                     setDb(prev => ({
                         ...prev,
                         projects: prev.projects.map(p => p.id === activeProject.id ? {
                             ...p,
-                            gallery: [...(p.gallery || []), result],
+                            galleryFolders: p.galleryFolders?.map(f => f.id === selectedGalleryFolderId ? {
+                                ...f,
+                                images: [...f.images, newImage]
+                            } : f),
                             updatedAt: new Date().toISOString()
                         } : p)
                     }));
                 };
                 reader.readAsDataURL(file);
             });
-            addLog("SISTEMA", `${files.length} MÍDIA(S) ADICIONADA(S) À GALERIA`);
         }
-        if (galleryFileRef.current) galleryFileRef.current.value = '';
     };
 
     const handleDeleteGalleryImage = (index: number) => {
-        if (!activeProject || !activeProject.gallery) return;
+        if (!activeProject || !selectedGalleryFolderId || !confirm("Tem certeza que deseja apagar esta mídia?")) return;
         setDb(prev => ({
             ...prev,
             projects: prev.projects.map(p => p.id === activeProject.id ? {
                 ...p,
-                gallery: p.gallery!.filter((_, i) => i !== index),
-                galleryDescriptions: p.galleryDescriptions ? Object.fromEntries(Object.entries(p.galleryDescriptions).filter(([k]) => parseInt(k) !== index)) : {},
+                galleryFolders: p.galleryFolders?.map(f => f.id === selectedGalleryFolderId ? {
+                    ...f,
+                    images: f.images.filter((_, i) => i !== index)
+                } : f),
                 updatedAt: new Date().toISOString()
             } : p)
         }));
-        if (currentGalleryIndex >= (activeProject.gallery.length - 1)) {
-            setCurrentGalleryIndex(Math.max(0, activeProject.gallery.length - 2));
+        if (currentGalleryIndex >= index && currentGalleryIndex > 0) {
+            setCurrentGalleryIndex(prev => prev - 1);
         }
-        addLog("SISTEMA", `MÍDIA REMOVIDA DA GALERIA`);
     };
 
     const updateGalleryDescription = (text: string) => {
-        if (!activeProject) return;
+        if (!activeProject || !selectedGalleryFolderId) return;
         setDb(prev => ({
             ...prev,
             projects: prev.projects.map(p => p.id === activeProject.id ? {
                 ...p,
-                galleryDescriptions: { ...(p.galleryDescriptions || {}), [currentGalleryIndex]: text }
+                galleryFolders: p.galleryFolders?.map(f => f.id === selectedGalleryFolderId ? {
+                    ...f,
+                    images: f.images.map((img, i) => i === currentGalleryIndex ? { ...img, description: text } : img)
+                } : f),
+                updatedAt: new Date().toISOString()
             } : p)
         }));
     };
 
     const generateGalleryAI = async () => {
-        if (!activeProject || !activeProject.gallery?.[currentGalleryIndex]) return;
-        setNotification("Analisando mídia com IA...");
-        setIsTyping(true);
-        try {
-            const prompt = `Atue como um Arquiteto Sênior especializado em documentação. 
-            Gere uma descrição técnica breve e profissional (máx 200 caracteres) para esta mídia do projeto ${activeProject.name}.
-            Considere a fase atual: ${activeProject.lod}. 
-            Foco em progresso, detalhes técnicos ou evolução da obra.`;
+        if (!activeProject || !selectedGalleryFolderId) return;
+        const currentFolder = activeProject.galleryFolders?.find(f => f.id === selectedGalleryFolderId);
+        const currentImg = currentFolder?.images[currentGalleryIndex];
+        if (!currentImg) return;
 
-            const description = await generateChatResponse(prompt, "Você é um especialista em documentação de projetos de arquitetura.");
-            updateGalleryDescription(description);
-            setNotification("Descrição Gerada!");
+        setNotification("IA analisando imagem...");
+        setIsTyping(true);
+
+        try {
+            const prompt = "Descreva esta imagem técnica de arquitetura/engenharia de forma profissional e concisa, focando em detalhes construtivos ou estéticos relevantes.";
+            const aiText = await generateChatResponse(prompt, "Você é um assistente técnico de arquitetura especializado em análise visual. Analise a imagem em anexo (representada pelo contexto) e forneça um resumo técnico.");
+            updateGalleryDescription(aiText);
+            setNotification("Descrição gerada com sucesso!");
         } catch (error) {
-            setNotification("Erro na análise de mídia.");
+            setNotification("Erro ao gerar descrição IA.");
         } finally {
             setIsTyping(false);
-            setTimeout(() => setNotification(null), 3000);
         }
     };
 
+    const handleCreateGalleryFolder = () => {
+        const name = prompt("Nome da nova pasta:");
+        if (!name || !activeProject) return;
+        const id = name.toLowerCase().replace(/\s+/g, '-');
+        const newFolder: GalleryFolder = { id, name: name.toUpperCase(), images: [] };
+
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                galleryFolders: [...(p.galleryFolders || []), newFolder],
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+    };
+
+    const handleDeleteGalleryFolder = (folderId: string) => {
+        if (!activeProject || !confirm("Tem certeza que deseja apagar esta pasta e todas as imagens nela?")) return;
+        setDb(prev => ({
+            ...prev,
+            projects: prev.projects.map(p => p.id === activeProject.id ? {
+                ...p,
+                galleryFolders: p.galleryFolders?.filter(f => f.id !== folderId),
+                updatedAt: new Date().toISOString()
+            } : p)
+        }));
+        if (selectedGalleryFolderId === folderId) {
+            setSelectedGalleryFolderId(null);
+        }
+    };
+    if (galleryFileRef.current) galleryFileRef.current.value = '';
+    setTimeout(() => setNotification(null), 3000);
+
+    const hasProject = !!activeProject;
+    const hasCompany = !!activeCompany;
+    const hasLod = !!db.activeLod;
     const onAddDataRow = () => {
         if (!activeProject) return;
         const newRow: ProjectDataRow = {
@@ -626,6 +735,7 @@ export const App = () => {
             salesArea: '',
             zoning: '',
             potential: '',
+            height: '',
             broker: '',
             resp: '',
             updatedAt: new Date().toLocaleDateString()
@@ -647,7 +757,20 @@ export const App = () => {
             ...prev,
             projects: prev.projects.map(p => p.id === activeProject.id ? {
                 ...p,
-                dataRows: p.dataRows?.map(r => r.id === id ? { ...r, [field]: value } : r),
+                dataRows: p.dataRows?.map(r => {
+                    if (r.id !== id) return r;
+                    const updatedRow = { ...r, [field]: value };
+
+                    // Automatic calculation of Potential
+                    const parseNum = (s: string) => parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+                    const bArea = parseNum(updatedRow.builtArea);
+                    const sArea = parseNum(updatedRow.salesArea);
+                    if (!isNaN(bArea) && !isNaN(sArea) && bArea > 0) {
+                        updatedRow.potential = ((sArea / bArea) * 100).toFixed(2) + '%';
+                    }
+
+                    return updatedRow;
+                }),
                 updatedAt: new Date().toISOString()
             } : p)
         }));
@@ -686,7 +809,6 @@ export const App = () => {
         }
     };
 
-    const hasLod = !!db.activeLod; const hasCompany = !!db.activeCompanyId; const hasProject = !!db.activeProjectId;
 
     return (
         <div className={`min-h-screen p-4 md:p-8 flex flex-col items-center font-sans relative pb-32 overflow-x-hidden bg-transparent text-theme-text`}>
@@ -694,15 +816,11 @@ export const App = () => {
             {/* Top Bar - Made Glassy */}
             <div className="w-full flex justify-between items-center mb-10 py-4 px-8 bg-theme-card/60 backdrop-blur-xl border border-theme-divider rounded-full shadow-sm no-print sticky top-4 z-[90]">
                 <div className="flex items-center gap-3">
-                    {/* ENIGAMI LOGO - SIMPLIFIED */}
+                    {/* ENIGAMI TEXT ONLY */}
                     <div className="flex items-center gap-3">
-                        <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain mix-blend-multiply dark:mix-blend-screen" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
-                        <span className="material-symbols-outlined text-4xl text-theme-orange hidden">architecture</span>
-                        <div className="flex flex-col">
-                            <h1 className="font-square font-black text-3xl tracking-[0.15em] text-theme-text uppercase leading-none">
-                                ENIGAMI
-                            </h1>
-                        </div>
+                        <h1 className="font-square font-black text-3xl tracking-[0.15em] text-theme-text uppercase leading-none">
+                            ENIGAMI
+                        </h1>
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
@@ -836,12 +954,12 @@ export const App = () => {
                 team={db.team}
                 onClose={() => { setShowScopeModal(false); setEditingScopeId(null); }}
                 onManage={() => { setShowScopeModal(false); setShowDisciplinesModal(true); }}
-                onSave={(name, startDate, color, status, pWeek, resp) => {
+                onSave={(name, startDate, color, status, pDate, resp) => {
                     if (!activeProject) return;
                     if (editingScopeId) {
-                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === editingScopeId ? { ...s, name, startDate, colorClass: color, status, protocolWeek: pWeek, resp } : s) } : p) }));
+                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === editingScopeId ? { ...s, name, startDate, colorClass: color, status, protocolDate: pDate, resp } : s) } : p) }));
                     } else {
-                        const newScope: Scope = { id: `sc${Date.now()}`, name, colorClass: color, startDate, resp, status, protocolWeek: pWeek, events: [] };
+                        const newScope: Scope = { id: `sc${Date.now()}`, name, colorClass: color, startDate, resp, status, protocolDate: pDate, events: [] };
                         setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: [...p.scopes, newScope] } : p) }));
                     }
                     setShowScopeModal(false);
@@ -877,7 +995,7 @@ export const App = () => {
                         // Creating new event
                         const newEvent: Event = { id: `ev${Date.now()}`, title, resp, startDate: start, endDate: end, plannedStartDate: start, plannedEndDate: end, checklist, completed: false, type: type || 'default' };
                         setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === activeProject.id ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScopeId ? { ...s, events: [...s.events, newEvent] } : s) } : p) }));
-                        addLog("SISTEMA", `NOVA AÇÃO: ${title}`);
+                        addLog("SISTEMA", `NOVA A�‡�ƒO: ${title}`);
                     }
                     setShowEventModal(false);
                     setEditingEventId(null);
@@ -976,11 +1094,11 @@ export const App = () => {
                                 <div className="mt-2 flex flex-col items-center">
                                     {db.activeLod ? (
                                         <>
-                                            <TextReveal text={db.activeLod + "_"} className="text-3xl md:text-4xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
-                                            <TextReveal text={db.lods.find(l => l.startsWith(db.activeLod))?.split('_ ')[1] || '---'} className="text-xl opacity-90 font-medium font-sans text-white mt-1" delay={0.5} />
+                                            <TextReveal text={db.activeLod + "_"} className="text-xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
+                                            <TextReveal text={db.lods.find(l => l.startsWith(db.activeLod))?.split('_ ')[1] || '---'} className="text-sm opacity-90 font-medium font-sans text-white mt-1" delay={0.5} />
                                         </>
                                     ) : (
-                                        <TextReveal text="Selecionar" className="text-3xl md:text-4xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
+                                        <TextReveal text="Selecionar" className="text-xl font-square font-black text-white leading-tight uppercase drop-shadow-md" />
                                     )}
                                 </div>
                                 {hasLod && <span className="material-symbols-outlined absolute right-4 bottom-4 text-white/40 text-3xl">check_circle</span>}
@@ -1004,7 +1122,7 @@ export const App = () => {
                         <div className={`ds-card p-8 h-[396px] flex flex-col relative overflow-hidden group transition-all duration-1000 ${!hasProject ? 'opacity-0 translate-y-4 pointer-events-none' : 'opacity-100'}`}>
                             <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full blur-[80px] opacity-10 bg-theme-purple"></div>
                             <div className="grid grid-cols-4 gap-4 mb-6 relative z-20">
-                                <button onClick={() => setActiveHealthTab('total')} className={`flex flex-col p-4 rounded-2xl border transition-all ${activeHealthTab === 'total' ? 'bg-indigo-500/10 border-indigo-200 scale-105 shadow-lg' : 'bg-theme-card border-transparent hover:bg-theme-highlight'}`}><span className="text-[9px] font-bold uppercase text-indigo-400 mb-2">Total</span><span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{stats.taskCount}</span></button>
+                                <button onClick={() => setActiveHealthTab('total')} className={`flex flex-col p-4 rounded-2xl border transition-all ${activeHealthTab === 'total' ? 'bg-indigo-500/10 border-indigo-200 scale-105 shadow-lg' : 'bg-theme-card border-transparent hover:bg-theme-highlight'}`}><span className="text-[9px] font-bold uppercase text-indigo-400 mb-2">Total</span><span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{activeProject?.scopes.length || 0}</span></button>
                                 <button onClick={() => setActiveHealthTab('progress')} className={`flex flex-col p-4 rounded-2xl border transition-all ${activeHealthTab === 'progress' ? 'bg-orange-500/10 border-orange-200 scale-105 shadow-lg' : 'bg-theme-card border-transparent hover:bg-theme-highlight'}`}><span className="text-[9px] font-bold uppercase text-orange-400 mb-2">Andamento</span><span className="text-2xl font-black text-orange-600 dark:text-orange-400">{stats.inProgress}</span></button>
                                 <button onClick={() => setActiveHealthTab('done')} className={`flex flex-col p-4 rounded-2xl border transition-all ${activeHealthTab === 'done' ? 'bg-emerald-500/10 border-emerald-200 scale-105 shadow-lg' : 'bg-theme-card border-transparent hover:bg-theme-highlight'}`}><span className="text-[9px] font-bold uppercase text-emerald-400 mb-2">Feito</span><span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.don}</span></button>
                                 <button onClick={() => setActiveHealthTab('efficiency')} className={`flex flex-col p-4 rounded-2xl border transition-all ${activeHealthTab === 'efficiency' ? 'bg-pink-500/10 border-pink-200 scale-105 shadow-lg' : 'bg-theme-card border-transparent hover:bg-theme-highlight'}`}><span className="text-[9px] font-bold uppercase text-pink-400 mb-2">Tempo</span><span className="text-xl font-black text-pink-600 dark:text-pink-400">{Math.round(stats.totalTime / 3600)}h</span></button>
@@ -1042,7 +1160,30 @@ export const App = () => {
                                         </div>
                                     </div>
                                 )}
-                                {activeHealthTab === 'total' && (<div className="animate-fadeIn"><h3 className="font-square font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-theme-textMuted">Disciplinas & Escopo</h3><p className="text-4xl font-bold text-theme-text tracking-tight">{activeProject?.scopes.length || 0} <span className="text-sm text-theme-textMuted font-medium align-middle">Áreas Ativas</span></p></div>)}
+                                {activeHealthTab === 'total' && (
+                                    <div className="animate-fadeIn">
+                                        <h3 className="font-square font-bold text-[10px] uppercase tracking-[0.3em] mb-3 text-theme-textMuted">Disciplinas &amp; Escopo</h3>
+                                        <div className="space-y-1.5 max-h-[140px] overflow-y-auto scroller pr-1">
+                                            {activeProject?.scopes.length === 0 && <p className="text-xs text-theme-textMuted">Nenhuma disciplina cadastrada.</p>}
+                                            {activeProject?.scopes.map(s => {
+                                                const statusMap: Record<string, { label: string; color: string }> = {
+                                                    stopped: { label: 'Parado', color: 'bg-red-500/20 text-red-400 border-red-500/40' },
+                                                    walking: { label: 'Em Andamento', color: 'bg-orange-500/20 text-orange-400 border-orange-500/40' },
+                                                    running: { label: 'Acelerado', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' },
+                                                    done: { label: 'Concluído', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' },
+                                                };
+                                                const st = statusMap[s.status] || statusMap['stopped'];
+                                                return (
+                                                    <div key={s.id} className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
+                                                        <span className="text-[11px] font-bold text-theme-text uppercase truncate flex-1">{s.name}</span>
+                                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${st.color} shrink-0`}>{st.label}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 {activeHealthTab === 'progress' && (<div className="animate-fadeIn"><h3 className="font-square font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-theme-textMuted">Cronograma Ativo</h3><p className="text-4xl font-bold text-orange-500 tracking-tight">{stats.inProgress} <span className="text-sm text-theme-textMuted font-medium align-middle">Tarefas Hoje</span></p></div>)}
                                 {activeHealthTab === 'done' && (<div className="animate-fadeIn"><h3 className="font-square font-bold text-[10px] uppercase tracking-[0.3em] mb-2 text-theme-textMuted">Entregas Realizadas</h3><p className="text-4xl font-bold text-emerald-500 tracking-tight">{stats.don} <span className="text-sm text-theme-textMuted font-medium align-middle">Validadas</span></p></div>)}
                                 {activeHealthTab === 'efficiency' && (
@@ -1356,6 +1497,7 @@ export const App = () => {
                                             onBarClick={(sid, eid) => { setActiveChecklistIds({ sid, eid }); setShowChecklistModal(true); }}
                                             onBarContextMenu={() => { }}
                                             onAddDependency={onAddDependency}
+                                            onDeleteEvent={onDeleteEvent}
                                         />
                                     </div>
                                 </div>
@@ -1371,6 +1513,7 @@ export const App = () => {
                                             onBarClick={(sid, eid) => { setActiveChecklistIds({ sid, eid }); setShowChecklistModal(true); }}
                                             onBarContextMenu={(sid, eid) => { setActiveScopeIdForEvent(sid); setEditingEventId(eid); setShowEventModal(true); }}
                                             onAddDependency={onAddDependency}
+                                            onDeleteEvent={onDeleteEvent}
                                         />
                                     </div>
                                 </div>
@@ -1398,7 +1541,7 @@ export const App = () => {
                             <div className="flex justify-between items-start mb-8">
                                 <div>
                                     <h2 className="text-2xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-4"><span className="material-symbols-outlined text-theme-orange text-4xl">timer</span>Controle de Prazo Global</h2>
-                                    <div className="mt-6 flex items-center gap-6"><button onClick={() => setShowTeamModal(true)} className="bg-theme-highlight border border-theme-divider hover:border-theme-orange text-theme-textMuted px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all group shadow-sm"><span className="material-symbols-outlined text-xl group-hover:text-theme-orange transition-colors">groups</span> Equipe Técnica</button><div className="h-10 w-px bg-theme-divider mx-2"></div><div className="flex items-center gap-3 overflow-x-auto scroller pb-2 max-w-[800px]"><button onClick={() => setMemberFilter(null)} className={`flex flex-col items-center px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm ${!memberFilter ? 'bg-theme-orange border-theme-orange' : 'bg-theme-card border-theme-divider hover:bg-theme-highlight'}`}><span className={`text-[10px] font-black uppercase ${!memberFilter ? 'text-white' : 'text-theme-textMuted'}`}>Todos</span></button>{db.team.map(member => { const isLeader = teamStats[member]?.leaderOf.length > 0; const actionCount = teamStats[member]?.count || 0; const isActive = memberFilter === member; return (<button key={member} onClick={() => setMemberFilter(isActive ? null : member)} className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all shrink-0 group shadow-sm ${isActive ? 'bg-theme-text border-theme-text' : 'bg-theme-card border-theme-divider hover:bg-theme-highlight'}`}><div className="flex flex-col items-start"><span className={`text-[10px] font-bold uppercase truncate max-w-[100px] ${isActive ? 'text-theme-bg' : 'text-theme-textMuted group-hover:text-theme-text'}`}>{member}</span><div className="flex gap-2 mt-0.5">{isLeader && <span className="text-[7px] font-black text-theme-orange bg-orange-500/10 px-1 rounded uppercase">LÍDER</span>}<span className="text-[7px] font-bold text-theme-textMuted">{actionCount} AÇÕES</span></div></div></button>) })}</div></div>
+                                    <div className="mt-6 flex items-center gap-6"><button onClick={() => setShowTeamModal(true)} className="bg-theme-highlight border border-theme-divider hover:border-theme-orange text-theme-textMuted px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all group shadow-sm"><span className="material-symbols-outlined text-xl group-hover:text-theme-orange transition-colors">groups</span> Equipe Técnica</button><div className="h-10 w-px bg-theme-divider mx-2"></div><div className="flex items-center gap-3 overflow-x-auto scroller pb-2 max-w-[800px]"><button onClick={() => setMemberFilter(null)} className={`flex flex-col items-center px-4 py-2 rounded-xl border transition-all shrink-0 shadow-sm ${!memberFilter ? 'bg-theme-orange border-theme-orange' : 'bg-theme-card border-theme-divider hover:bg-theme-highlight'}`}><span className={`text-[10px] font-black uppercase ${!memberFilter ? 'text-white' : 'text-theme-textMuted'}`}>Todos</span></button>{db.team.map(member => { const isLeader = teamStats[member]?.leaderOf.length > 0; const actionCount = teamStats[member]?.count || 0; const isActive = memberFilter === member; return (<button key={member} onClick={() => setMemberFilter(isActive ? null : member)} className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all shrink-0 group shadow-sm ${isActive ? 'bg-theme-text border-theme-text' : 'bg-theme-card border-theme-divider hover:bg-theme-highlight'}`}><div className="flex flex-col items-start"><span className={`text-[10px] font-bold uppercase truncate max-w-[100px] ${isActive ? 'text-theme-bg' : 'text-theme-textMuted group-hover:text-theme-text'}`}>{member}</span><div className="flex gap-2 mt-0.5">{isLeader && <span className="text-[7px] font-black text-theme-orange bg-orange-500/10 px-1 rounded uppercase">LÍDER</span>}<span className="text-[7px] font-bold text-theme-textMuted">{actionCount} A�‡�•ES</span></div></div></button>) })}</div></div>
                                 </div>
                                 <div className="flex flex-col items-end gap-3"><button onClick={() => setShowDisciplinesModal(true)} className="bg-theme-card border border-theme-divider text-theme-textMuted hover:text-theme-orange px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm hover:shadow-md"><span className="material-symbols-outlined text-base">view_list</span> Disciplinas</button><button onClick={() => setShowSettingsModal(true)} className="bg-theme-card border border-theme-divider text-theme-textMuted hover:text-theme-orange px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm hover:shadow-md"><span className="material-symbols-outlined text-base">settings</span> Ajustar Período</button></div>
                             </div>
@@ -1453,58 +1596,116 @@ export const App = () => {
                 {/* --- TAB: GALLERY VIEW --- */}
                 {activeTab === 'gallery' && hasProject && (
                     <div className="animate-fadeIn">
-                        <div className="ds-card p-8 bg-theme-card relative overflow-hidden min-h-[600px]">
-                            {activeProject.gallery && activeProject.gallery.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
-                                    <div className="relative rounded-3xl overflow-hidden shadow-2xl group border border-theme-divider bg-black aspect-video md:aspect-auto">
-                                        {isVideo(activeProject.gallery[currentGalleryIndex]) ? (
-                                            <video src={activeProject.gallery[currentGalleryIndex]} controls className="w-full h-full object-contain" />
-                                        ) : (
-                                            <img src={activeProject.gallery[currentGalleryIndex]} className="w-full h-full object-contain" />
-                                        )}
-                                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleDeleteGalleryImage(currentGalleryIndex)} className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"><span className="material-symbols-outlined">delete</span></button>
-                                        </div>
-                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/50 rounded-full backdrop-blur-md">
-                                            <button onClick={() => setCurrentGalleryIndex(prev => (prev - 1 + activeProject.gallery!.length) % activeProject.gallery!.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_left</span></button>
-                                            <span className="text-white text-xs font-mono self-center">{currentGalleryIndex + 1} / {activeProject.gallery.length}</span>
-                                            <button onClick={() => setCurrentGalleryIndex(prev => (prev + 1) % activeProject.gallery!.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_right</span></button>
-                                        </div>
+                        <div className="ds-card p-8 bg-theme-card relative overflow-hidden min-h-[600px] flex flex-col">
+                            {!selectedGalleryFolderId ? (
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex justify-between items-center mb-8 pb-4 border-b border-theme-divider">
+                                        <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text flex items-center gap-3">
+                                            <span className="material-symbols-outlined text-theme-orange">photo_library</span> Galeria do Projeto
+                                        </h3>
+                                        <button onClick={handleCreateGalleryFolder} className="bg-theme-text text-theme-bg px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-theme-textMuted transition-all shadow-lg active:scale-95">
+                                            <span className="material-symbols-outlined text-sm">create_new_folder</span> Nova Pasta
+                                        </button>
                                     </div>
-                                    <div className="flex flex-col h-full">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text">Detalhes da Mídia</h3>
-                                            <button onClick={generateGalleryAI} className="flex items-center gap-2 bg-theme-purple/10 text-theme-purple px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-theme-purple hover:text-white transition-all border border-theme-purple/20">
-                                                <span className="material-symbols-outlined text-lg">auto_awesome</span> Gerar Descrição IA
-                                            </button>
-                                        </div>
-                                        <textarea
-                                            className="flex-1 w-full bg-theme-bg border border-theme-divider rounded-2xl p-6 text-sm text-theme-text outline-none focus:border-theme-orange transition-all resize-none shadow-inner leading-relaxed"
-                                            placeholder="Adicione uma descrição técnica ou observações sobre esta imagem..."
-                                            value={activeProject.galleryDescriptions?.[currentGalleryIndex] || ""}
-                                            onChange={(e) => updateGalleryDescription(e.target.value)}
-                                        />
-                                        <div className="mt-6 grid grid-cols-4 gap-2 overflow-x-auto pb-2">
-                                            {activeProject.gallery.map((img, idx) => (
-                                                <div key={idx} onClick={() => setCurrentGalleryIndex(idx)} className={`cursor-pointer rounded-xl overflow-hidden border-2 aspect-square relative ${currentGalleryIndex === idx ? 'border-theme-orange ring-2 ring-theme-orange/30' : 'border-transparent opacity-60 hover:opacity-100'}`}>
-                                                    {isVideo(img) ? <video src={img} className="w-full h-full object-cover" /> : <img src={img} className="w-full h-full object-cover" />}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {activeProject.galleryFolders?.map(folder => (
+                                            <div key={folder.id} className="relative group cursor-pointer" onClick={() => setSelectedGalleryFolderId(folder.id)}>
+                                                <div className="ds-card p-6 bg-theme-bg border border-theme-divider hover:border-theme-orange transition-all flex flex-col items-center text-center shadow-sm hover:shadow-xl group-hover:-translate-y-1">
+                                                    <div className="w-16 h-16 rounded-2xl bg-theme-highlight flex items-center justify-center mb-4 group-hover:bg-theme-orange/10 transition-colors">
+                                                        <span className="material-symbols-outlined text-4xl text-theme-orange">folder</span>
+                                                    </div>
+                                                    <h4 className="font-square font-black text-xs text-theme-text uppercase tracking-wider mb-1">{folder.name}</h4>
+                                                    <span className="text-[10px] font-bold text-theme-textMuted uppercase">{folder.images.length} Mídias</span>
                                                 </div>
-                                            ))}
-                                            <button onClick={() => galleryFileRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-theme-divider flex flex-col items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all bg-theme-bg">
-                                                <span className="material-symbols-outlined text-2xl">add_photo_alternate</span>
-                                                <span className="text-[8px] font-bold uppercase mt-1">Upload</span>
-                                            </button>
-                                        </div>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteGalleryFolder(folder.id); }} className="absolute top-2 right-2 p-1.5 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white">
+                                                    <span className="material-symbols-outlined text-sm">delete</span>
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
+                                    {(!activeProject.galleryFolders || activeProject.galleryFolders.length === 0) && (
+                                        <div className="flex-1 flex flex-col items-center justify-center text-theme-textMuted/40 py-20">
+                                            <span className="material-symbols-outlined text-6xl mb-4">folder_off</span>
+                                            <p className="font-square font-black text-sm uppercase tracking-[0.2em]">Nenhuma pasta encontrada</p>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-theme-textMuted border-2 border-dashed border-theme-divider rounded-3xl m-4 bg-theme-bg/50">
-                                    <span className="material-symbols-outlined text-6xl mb-4 opacity-50">photo_library</span>
-                                    <h3 className="font-square font-black text-xl uppercase tracking-widest mb-2">Galeria Vazia</h3>
-                                    <p className="text-xs mb-6 max-w-md text-center">Adicione renders, fotos de obra ou referências visuais para documentar o projeto.</p>
-                                    <button onClick={() => galleryFileRef.current?.click()} className="bg-theme-orange text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-orange-600 transition-all flex items-center gap-2">
-                                        <span className="material-symbols-outlined">upload</span> Carregar Mídia
-                                    </button>
+                                <div className="flex-1 flex flex-col">
+                                    {(() => {
+                                        const folder = activeProject.galleryFolders?.find(f => f.id === selectedGalleryFolderId);
+                                        if (!folder) return null;
+                                        const images = folder.images;
+
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-center mb-8 pb-4 border-b border-theme-divider">
+                                                    <div className="flex items-center gap-4">
+                                                        <button onClick={() => setSelectedGalleryFolderId(null)} className="text-theme-textMuted hover:text-theme-orange transition-all flex items-center gap-1">
+                                                            <span className="material-symbols-outlined">arrow_back</span>
+                                                            <span className="text-[10px] font-black uppercase">Voltar</span>
+                                                        </button>
+                                                        <div className="h-4 w-px bg-theme-divider"></div>
+                                                        <h3 className="font-square font-black text-xl uppercase tracking-widest text-theme-text flex items-center gap-3">
+                                                            <span className="material-symbols-outlined text-theme-orange">folder_open</span> {folder.name}
+                                                        </h3>
+                                                    </div>
+                                                    <button onClick={() => galleryFileRef.current?.click()} className="bg-theme-orange text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-orange-600 transition-all shadow-lg active:scale-95">
+                                                        <span className="material-symbols-outlined text-sm">upload</span> Adicionar Mídia
+                                                    </button>
+                                                </div>
+
+                                                {images.length > 0 ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1">
+                                                        <div className="relative rounded-3xl overflow-hidden shadow-2xl group border border-theme-divider bg-black aspect-video md:aspect-auto">
+                                                            {isVideo(images[currentGalleryIndex]?.url || "") ? (
+                                                                <video src={images[currentGalleryIndex]?.url} controls className="w-full h-full object-contain" />
+                                                            ) : (
+                                                                <img src={images[currentGalleryIndex]?.url} className="w-full h-full object-contain" />
+                                                            )}
+                                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => handleDeleteGalleryImage(currentGalleryIndex)} className="bg-red-500 text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform"><span className="material-symbols-outlined">delete</span></button>
+                                                            </div>
+                                                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/50 rounded-full backdrop-blur-md">
+                                                                <button onClick={() => setCurrentGalleryIndex(prev => (prev - 1 + images.length) % images.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_left</span></button>
+                                                                <span className="text-white text-xs font-mono self-center">{currentGalleryIndex + 1} / {images.length}</span>
+                                                                <button onClick={() => setCurrentGalleryIndex(prev => (prev + 1) % images.length)} className="text-white hover:text-theme-orange"><span className="material-symbols-outlined">chevron_right</span></button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col h-full">
+                                                            <div className="flex justify-between items-center mb-4">
+                                                                <h3 className="font-square font-black text-sm uppercase tracking-widest text-theme-text">Detalhes Técnicos</h3>
+                                                                <button onClick={generateGalleryAI} className="flex items-center gap-2 bg-theme-purple/10 text-theme-purple px-4 py-2 rounded-xl text-[8px] font-black uppercase hover:bg-theme-purple hover:text-white transition-all border border-theme-purple/20">
+                                                                    <span className="material-symbols-outlined text-base">auto_awesome</span> Descrição IA
+                                                                </button>
+                                                            </div>
+                                                            <textarea
+                                                                className="flex-1 w-full bg-theme-bg border border-theme-divider rounded-2xl p-6 text-sm text-theme-text outline-none focus:border-theme-orange transition-all resize-none shadow-inner leading-relaxed"
+                                                                placeholder="Adicione observações técnicas..."
+                                                                value={images[currentGalleryIndex]?.description || ""}
+                                                                onChange={(e) => updateGalleryDescription(e.target.value)}
+                                                            />
+                                                            <div className="mt-6 grid grid-cols-4 gap-2 overflow-x-auto pb-2 scroller">
+                                                                {images.map((img, idx) => (
+                                                                    <div key={idx} onClick={() => setCurrentGalleryIndex(idx)} className={`cursor-pointer rounded-xl overflow-hidden border-2 aspect-square relative shrink-0 ${currentGalleryIndex === idx ? 'border-theme-orange ring-2 ring-theme-orange/30' : 'border-transparent opacity-60 hover:opacity-100 transition-all'}`}>
+                                                                        {isVideo(img.url) ? <video src={img.url} className="w-full h-full object-cover" /> : <img src={img.url} className="w-full h-full object-cover" />}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex-1 flex flex-col items-center justify-center text-theme-textMuted border-2 border-dashed border-theme-divider rounded-3xl bg-theme-bg/50 py-20">
+                                                        <span className="material-symbols-outlined text-6xl mb-4 opacity-30">add_photo_alternate</span>
+                                                        <p className="text-xs font-black uppercase tracking-widest mb-6">Nenhuma mídia nesta pasta</p>
+                                                        <button onClick={() => galleryFileRef.current?.click()} className="bg-theme-orange text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-orange-600 transition-all">
+                                                            Carregar Primeira Mídia
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
                             <input type="file" ref={galleryFileRef} className="hidden" multiple accept="image/*,video/*" onChange={handleGalleryUpload} />
@@ -1578,7 +1779,7 @@ export const App = () => {
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-theme-card sticky top-0 z-10 shadow-sm">
                                     <tr>
-                                        {['ORDEM', 'LOCAL', 'STATUS', 'ÁREA TERRENO', 'ÁREA CONSTR.', 'ÁREA VENDÁVEL', 'ZONEAMENTO', 'POTENCIAL', 'CORRETOR', 'RESP.', 'ATUALIZAÇÃO', 'AÇÕES'].map(h => (
+                                        {['ORDEM', 'LOCAL', 'STATUS', 'ÁREA TERRENO', 'ÁREA CONSTR.', 'ÁREA VENDÁVEL', 'ZONEAMENTO', 'POTENCIAL', 'ALTURA', 'CORRETOR', 'RESPONSÁVEL', 'ATUALIZAÇÃO', 'AÇÕES'].map(h => (
                                             <th key={h} className="p-4 text-[9px] font-black text-theme-textMuted uppercase tracking-widest border-b border-theme-divider whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -1614,7 +1815,8 @@ export const App = () => {
                                             <td className="p-3"><input className="bg-transparent text-xs font-mono text-theme-text w-20 outline-none" value={row.builtArea} onChange={(e) => onUpdateDataRow(row.id, 'builtArea', e.target.value)} /></td>
                                             <td className="p-3"><input className="bg-transparent text-xs font-mono text-theme-text w-20 outline-none" value={row.salesArea} onChange={(e) => onUpdateDataRow(row.id, 'salesArea', e.target.value)} /></td>
                                             <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-24 outline-none" value={row.zoning} onChange={(e) => onUpdateDataRow(row.id, 'zoning', e.target.value)} /></td>
-                                            <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-20 outline-none" value={row.potential} onChange={(e) => onUpdateDataRow(row.id, 'potential', e.target.value)} /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs font-bold text-theme-orange w-20 outline-none" value={row.potential} readOnly tabIndex={-1} placeholder="0.00%" /></td>
+                                            <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-24 outline-none placeholder:text-theme-textMuted/50" placeholder="..." value={row.height} onChange={(e) => onUpdateDataRow(row.id, 'height', e.target.value)} /></td>
                                             <td className="p-3"><input className="bg-transparent text-xs text-theme-text w-24 outline-none" value={row.broker} onChange={(e) => onUpdateDataRow(row.id, 'broker', e.target.value)} /></td>
                                             <td className="p-3"><select className="bg-transparent text-[10px] text-theme-text w-24 outline-none uppercase font-bold" value={row.resp} onChange={(e) => onUpdateDataRow(row.id, 'resp', e.target.value)}><option value="">-</option>{db.team.map(t => <option key={t} value={t}>{t}</option>)}</select></td>
                                             <td className="p-3 text-[10px] font-mono text-theme-textMuted">{row.updatedAt}</td>
@@ -1622,7 +1824,7 @@ export const App = () => {
                                         </tr>
                                     ))}
                                     {(!activeProject.dataRows || activeProject.dataRows.length === 0) && (
-                                        <tr><td colSpan={12} className="p-8 text-center text-xs text-theme-textMuted font-bold uppercase tracking-widest">Nenhum dado registrado</td></tr>
+                                        <tr><td colSpan={13} className="p-8 text-center text-xs text-theme-textMuted font-bold uppercase tracking-widest">Nenhum dado registrado</td></tr>
                                     )}
                                 </tbody>
                             </table>

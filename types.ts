@@ -26,6 +26,8 @@ export interface Event {
 export interface FileLink {
     label: string;
     path: string;
+    author?: string;
+    createdAt?: string;
 }
 
 export interface GalleryImage {
@@ -60,6 +62,18 @@ export interface Activity {
     imageUrl?: string;
 }
 
+export interface Note {
+    id: string;
+    author: string;
+    recipient: string;
+    text: string;
+    color: string;
+    createdAt: string;
+    deadline?: string;
+    imageUrl?: string;
+    status: 'pending' | 'completed';
+}
+
 export interface ProjectDataRow {
     id: string;
     order: string;
@@ -74,6 +88,31 @@ export interface ProjectDataRow {
     broker: string;
     resp: string;
     updatedAt: string;
+}
+
+export interface ProtocolRevision {
+    id: string;
+    date: string;
+    author: string;
+    text: string;
+    status: 'stopped' | 'approved' | 'needs_correction';
+}
+
+export interface ProtocolFolder {
+    id: string;
+    name: string;
+    files: FileLink[];
+}
+
+export interface ProtocolData {
+    protocolNumber: string;
+    prefecture: string;
+    prefectureUrl: string;
+    startDate: string;
+    status: 'stopped' | 'approved' | 'needs_correction';
+    revisions: ProtocolRevision[];
+    folders: ProtocolFolder[];
+    files?: FileLink[]; // legacy – kept for migration
 }
 
 export interface Project {
@@ -92,9 +131,11 @@ export interface Project {
     activities: Activity[];
     scopes: Scope[];
     dataRows?: ProjectDataRow[]; // New: Data Process Rows
+    protocolData?: ProtocolData; // New: Protocol tracking data
     powerBiUrl?: string; // New: Power BI Embed URL
     viabilityFiles?: FileLink[]; // New: Uploaded .pbix files
     timeLogs?: TimeLog[]; // New: Time Tracking History
+    notes?: Note[]; // New: Collaboration Notes
 }
 
 export interface TimeLog {

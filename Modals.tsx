@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Company, Project, Scope, Event, Discipline } from '../types';
 import Plan from './ui/agent-plan';
+import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 
 interface ModalBaseProps {
     isOpen: boolean;
@@ -629,7 +630,7 @@ export const ProjectModal: React.FC<{ isOpen: boolean; companyName: string; proj
                                     {p.logoUrl ? <img src={p.logoUrl} className="w-10 h-10 object-contain bg-white/10 rounded-lg backdrop-blur-md" /> : <div className="w-10 h-10 bg-theme-highlight rounded-lg flex items-center justify-center"><span className="material-symbols-outlined text-theme-textMuted">folder</span></div>}
                                     <div className="flex flex-col">
                                         <span className="text-xs font-black text-theme-text uppercase tracking-wider">{p.name}</span>
-                                        <span className="text-[9px] font-medium text-theme-textMuted">{new Date(p.updatedAt).toLocaleDateString()}</span>
+                                        <span className="text-[9px] font-medium text-theme-textMuted">{formatLocalDate(p.updatedAt)}</span>
                                     </div>
                                 </div>
                             </button>
@@ -685,27 +686,31 @@ export const ScopeModal: React.FC<{
     team: string[];
     onClose: () => void;
     onManage: () => void;
-    onSave: (name: string, startDate: string, color: string, status: string, pWeek: number, resp: string) => void;
+    onSave: (name: string, startDate: string, color: string, status: string, pDate: string, resp: string) => void;
 }> = ({ isOpen, scope, disciplines, team, onClose, onManage, onSave }) => {
     // ... ScopeModal implementation ...
     const [discCode, setDiscCode] = useState('');
     const [start, setStart] = useState('');
     const [status, setStatus] = useState('walking');
-    const [protocolWeek, setProtocolWeek] = useState(1);
+    const [protocolDate, setProtocolDate] = useState('');
     const [resp, setResp] = useState('');
+    const [useProtocol, setUseProtocol] = useState(false);
 
     useEffect(() => {
         if (scope) {
             setDiscCode(scope.name);
             setStart(scope.startDate);
             setStatus(scope.status);
-            setProtocolWeek(scope.protocolWeek || 1);
+            const pd = scope.protocolDate || '';
+            setProtocolDate(pd || new Date().toISOString().split('T')[0]);
+            setUseProtocol(!!pd);
             setResp(scope.resp);
         } else {
             setDiscCode(disciplines[0]?.code || '');
             setStart(new Date().toISOString().split('T')[0]);
             setStatus('walking');
-            setProtocolWeek(1);
+            setProtocolDate(new Date().toISOString().split('T')[0]);
+            setUseProtocol(false);
             setResp(team[0] || '');
         }
     }, [scope, isOpen, disciplines, team]);
@@ -714,7 +719,7 @@ export const ScopeModal: React.FC<{
         e.preventDefault();
         const selectedDisc = disciplines.find(d => d.code === discCode);
         if (discCode && start && selectedDisc && resp) {
-            onSave(discCode, start, selectedDisc.color, status, protocolWeek, resp);
+            onSave(discCode, start, selectedDisc.color, status, useProtocol ? protocolDate : '', resp);
         }
     };
 
@@ -750,7 +755,7 @@ export const ScopeModal: React.FC<{
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid gap-4 ${useProtocol ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Status Inicial</label>
                             <select value={status} onChange={e => setStatus(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
@@ -760,11 +765,27 @@ export const ScopeModal: React.FC<{
                                 <option value="done">Concluído</option>
                             </select>
                         </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Semana Protocolo</label>
-                            <input type="number" min="1" max="52" value={protocolWeek} onChange={e => setProtocolWeek(parseInt(e.target.value))} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange" />
-                        </div>
+
+                        {useProtocol ? (
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Data Protocolo</label>
+                                <input type="date" value={protocolDate} onChange={e => setProtocolDate(e.target.value)} className="bg-theme-bg border border-theme-orange ring-1 ring-theme-orange rounded-xl px-4 py-3 text-xs text-theme-text outline-none" autoFocus />
+                            </div>
+                        ) : null}
                     </div>
+
+                    {/* Protocolo toggle */}
+                    <button
+                        type="button"
+                        onClick={() => setUseProtocol(p => !p)}
+                        className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${useProtocol
+                            ? 'bg-purple-500/10 border-purple-400 text-purple-500 hover:bg-purple-500/20'
+                            : 'bg-theme-bg border-dashed border-theme-divider text-theme-textMuted hover:border-theme-orange hover:text-theme-text'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined text-base">{useProtocol ? 'remove_circle' : 'add_circle'}</span>
+                        {useProtocol ? 'Remover Data de Protocolo' : 'Adicionar Data de Protocolo'}
+                    </button>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-theme-divider flex justify-end gap-3">
@@ -809,7 +830,7 @@ export const EventModal: React.FC<{
 
             setChecklist(event.checklist?.map(i => i.text).join('\n') || '');
 
-            const diffTime = new Date(event.endDate).getTime() - new Date(pEnd).getTime();
+            const diffTime = parseLocalDate(event.endDate).getTime() - parseLocalDate(pEnd).getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             setDelay(diffDays > 0 ? diffDays : 0);
             setSelectedScopeId('');
@@ -831,7 +852,7 @@ export const EventModal: React.FC<{
         const d = parseInt(e.target.value) || 0;
         setDelay(d);
         if (plannedEndRef.current) {
-            const date = new Date(plannedEndRef.current);
+            const date = parseLocalDate(plannedEndRef.current);
             const newDate = new Date(date.getTime() + (d * 24 * 60 * 60 * 1000));
             setEnd(newDate.toISOString().split('T')[0]);
         }
@@ -841,7 +862,7 @@ export const EventModal: React.FC<{
         const newEnd = e.target.value;
         setEnd(newEnd);
         if (plannedEndRef.current && newEnd) {
-            const diffTime = new Date(newEnd).getTime() - new Date(plannedEndRef.current).getTime();
+            const diffTime = parseLocalDate(newEnd).getTime() - parseLocalDate(plannedEndRef.current).getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             setDelay(diffDays > 0 ? diffDays : 0);
         }
@@ -919,7 +940,7 @@ export const EventModal: React.FC<{
                     </div>
 
                     <button type="submit" className="w-full bg-theme-orange text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg mt-2">
-                        {event ? 'Salvar Alterações' : 'Criar Ação'}
+                        {event ? 'Salvar AlterAÇÕES' : 'Criar Ação'}
                     </button>
                 </div>
             </form>
@@ -1165,6 +1186,37 @@ export const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogi
 
                 <button onClick={onClose} className="mt-8 text-xs font-bold text-theme-textMuted hover:text-theme-text uppercase transition-colors tracking-widest">
                     Cancelar Acesso
+                </button>
+            </div>
+        </ModalBase>
+    );
+};
+
+export const UploadInstructionsModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    return (
+        <ModalBase isOpen={isOpen} onClose={onClose}>
+            <div className="p-10 flex flex-col items-center text-center">
+                <div className="w-20 h-20 bg-theme-orange/20 rounded-full flex items-center justify-center mb-6 border border-theme-orange/40 shadow-glow animate-pulse">
+                    <span className="material-symbols-outlined text-4xl text-theme-orange">plagiarism</span>
+                </div>
+
+                <h3 className="text-2xl font-square font-black text-theme-text uppercase tracking-widest mb-4">Atenção ao Formato do PDF</h3>
+                <p className="text-sm font-medium text-theme-textMuted mb-8 leading-relaxed">
+                    A disciplina foi marcada como concluída. Para garantir a rastreabilidade e organização, não se esqueça de inserir o arquivo PDF final na aba <strong className="text-theme-text">ARQUIVOS</strong> usando rigorosamente a seguinte nomenclatura:
+                </p>
+
+                <div className="bg-theme-bg border border-theme-divider p-6 rounded-2xl w-full mb-8 shadow-inner select-all">
+                    <span className="text-xs font-mono font-bold text-theme-cyan break-all">
+                        CÓD PROJETO - CÓD DISCIPLINA - CÓD FASE - NÚMERO PRANCHA - DESCRIÇÃO
+                    </span>
+                    <br />
+                    <span className="text-[10px] text-theme-textMuted mt-4 block border-t border-theme-divider pt-4">
+                        Exemplo: <strong>RES01 - ARQ - EP - 01 - PLANTA BAIXA TÉRREO.pdf</strong>
+                    </span>
+                </div>
+
+                <button onClick={onClose} className="w-full bg-theme-orange text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95">
+                    Ciente, fechar aviso
                 </button>
             </div>
         </ModalBase>

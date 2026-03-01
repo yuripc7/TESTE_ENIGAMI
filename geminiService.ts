@@ -25,9 +25,9 @@ export const generateChatResponse = async (
 
         const genAI = new GoogleGenerativeAI(API_KEY);
 
-        // Using 'gemini-1.5-flash-latest' which is more stable across API versions
+        // Using 'gemini-1.5-flash'
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash-latest",
+            model: "gemini-2.0-flash",
             systemInstruction: systemInstruction,
         });
 

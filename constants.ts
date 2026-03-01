@@ -1,4 +1,4 @@
-import { DB } from './types';
+﻿import { DB } from './types';
 
 const DEFAULT_DISCIPLINES = [
     { code: 'EST', name: 'Estrutura', color: '#9D9DFF' },
@@ -15,7 +15,7 @@ const DEFAULT_DISCIPLINES = [
     { code: 'PL', name: 'Projeto Legal', color: '#804000' },
     { code: 'PSG', name: 'Paisagismo', color: '#7EA431' },
     { code: 'EPR', name: 'Escada Pressurizada', color: '#800080' },
-    { code: 'ALV', name: 'Alvenarias e Vedações', color: '#9B3200' },
+    { code: 'ALV', name: 'Alvenarias e VedAÇÕES', color: '#9B3200' },
     { code: 'SPD', name: 'Sist. de Prev. Descargas Atmosféricas', color: '#006C6C' },
     { code: 'TOP', name: 'Topografia', color: '#CD853F' },
 ];

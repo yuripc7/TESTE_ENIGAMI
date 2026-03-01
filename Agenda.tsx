@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Project, Event } from '../types';
+import { parseLocalDate } from '../utils/dateUtils';
 
 interface AgendaProps {
     project: Project | null;
@@ -20,19 +21,39 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
         if (!project) return [];
         return project.scopes.flatMap(s =>
             s.events.filter(e => {
-                const start = new Date(e.startDate);
-                const end = new Date(e.endDate);
+                const start = parseLocalDate(e.startDate);
+                const end = parseLocalDate(e.endDate);
                 const check = new Date(date).setHours(0, 0, 0, 0);
-                const sTime = new Date(start).setHours(0, 0, 0, 0);
-                const eTime = new Date(end).setHours(23, 59, 59, 999);
+                const sTime = start.setHours(0, 0, 0, 0);
+                const eTime = end.setHours(23, 59, 59, 999);
                 return check >= sTime && check <= eTime;
             }).map(e => ({ ...e, scopeColor: s.colorClass, scopeName: s.name, scopeId: s.id }))
         );
     };
 
+    // Returns scopes whose protocolDate matches this calendar day
+    const getProtocolsForDate = (date: Date) => {
+        if (!project) return [];
+        const check = new Date(date).setHours(0, 0, 0, 0);
+        return project.scopes.filter(s => {
+            if (!s.protocolDate) return false;
+            const pd = parseLocalDate(s.protocolDate).setHours(0, 0, 0, 0);
+            return pd === check;
+        });
+    };
+
+    const getNotesForDate = (date: Date) => {
+        if (!project || !project.notes) return [];
+        const check = new Date(date).setHours(0, 0, 0, 0);
+        return project.notes.filter(n => {
+            if (!n.deadline || n.status === 'completed') return false;
+            const pd = parseLocalDate(n.deadline).setHours(0, 0, 0, 0);
+            return pd === check;
+        });
+    };
+
     const getEventsForTimeSlot = (date: Date, hour: number) => {
         if (!project) return [];
-        // Determine the time window for this slot
         const slotStart = new Date(date);
         slotStart.setHours(hour, 0, 0, 0);
         const slotEnd = new Date(date);
@@ -40,11 +61,8 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
 
         return project.scopes.flatMap(s =>
             s.events.filter(e => {
-                const start = new Date(e.startDate);
-                const end = new Date(e.endDate);
-
-                // Detailed check: Does the event overlap with this hour?
-                // Overlap logic: Start < SlotEnd AND End > SlotStart
+                const start = parseLocalDate(e.startDate);
+                const end = parseLocalDate(e.endDate);
                 return start < slotEnd && end > slotStart;
             }).map(e => ({ ...e, scopeColor: s.colorClass, scopeName: s.name, scopeId: s.id }))
         );
@@ -117,6 +135,8 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
             <div className="grid grid-cols-7 grid-rows-6 flex-1 bg-theme-bg">
                 {monthDates.map((cell, idx) => {
                     const cellEvents = getEventsForDate(cell.date);
+                    const cellProtocols = getProtocolsForDate(cell.date);
+                    const cellNotes = getNotesForDate(cell.date);
                     const isToday = cell.date.toDateString() === new Date().toDateString();
                     return (
                         <div
@@ -129,7 +149,31 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                 {cellEvents.length > 0 && <span className="text-[8px] font-bold text-theme-textMuted">{cellEvents.length}</span>}
                             </div>
                             <div className="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto scroller overflow-x-hidden">
-                                {cellEvents.slice(0, 4).map((ev, i) => (
+                                {/* Protocol date notes */}
+                                {cellProtocols.map((s, i) => (
+                                    <div
+                                        key={`proto-${i}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-2 py-1.5 rounded-md text-[9px] font-bold truncate border-l-2 border-purple-500 bg-purple-500/20 text-purple-300 shadow-sm pointer-events-none"
+                                        title={`Protocolo: ${s.name}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[8px] mr-1 align-middle">gavel</span>
+                                        {s.name}
+                                    </div>
+                                ))}
+                                {cellNotes.map((n, i) => (
+                                    <div
+                                        key={`note-${i}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-2 py-1.5 rounded-md text-[9px] font-bold truncate border-l-2 shadow-sm pointer-events-none text-black/80"
+                                        style={{ backgroundColor: n.color, borderLeftColor: '#ff9f43' }}
+                                        title={`De: ${n.author} Para: ${n.recipient}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[8px] mr-1 align-middle">sticky_note_2</span>
+                                        {n.text}
+                                    </div>
+                                ))}
+                                {cellEvents.slice(0, 3).map((ev, i) => (
                                     <div
                                         key={i}
                                         onClick={(e) => { e.stopPropagation(); onEditEvent && onEditEvent(ev.scopeId, ev.id); }}
@@ -141,7 +185,7 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                         {ev.title}
                                     </div>
                                 ))}
-                                {cellEvents.length > 4 && <div className="text-[8px] font-bold text-theme-textMuted text-center hover:text-theme-orange cursor-pointer">+ {cellEvents.length - 4} mais</div>}
+                                {cellEvents.length > 3 && <div className="text-[8px] font-bold text-theme-textMuted text-center hover:text-theme-orange cursor-pointer">+ {cellEvents.length - 3} mais</div>}
                             </div>
                         </div>
                     );
@@ -172,35 +216,50 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                         ))}
                     </div>
                     {/* Days Columns */}
-                    {weekDates.map((d, colIndex) => (
-                        <div key={colIndex} className="col-span-1 border-r border-theme-divider bg-theme-bg relative group">
-                            {/* Background Grid Lines matched to hours */}
-                            {Array.from({ length: 24 }).map((_, h) => (
-                                <div
-                                    key={h}
-                                    className="h-20 border-b border-theme-divider hover:bg-theme-highlight/50 transition-colors cursor-cell"
-                                    onClick={() => {
-                                        const dateWithTime = new Date(d);
-                                        dateWithTime.setHours(h);
-                                        onAddEvent && onAddEvent(dateWithTime);
-                                    }}
-                                >
-                                    {/* Events for this specific slot */}
-                                    {getEventsForTimeSlot(d, h).map((ev, i) => (
-                                        <div
-                                            key={i}
-                                            onClick={(e) => { e.stopPropagation(); onEditEvent && onEditEvent(ev.scopeId, ev.id); }}
-                                            className={`mx-1 mt-1 p-1.5 rounded-md text-[8px] font-bold border-l-2 shadow-sm cursor-pointer hover:min-h-fit hover:absolute hover:z-20 hover:w-[150%] ${ev.type === 'protocol' ? 'border-purple-500 bg-purple-500/20 text-purple-300' : ''}`}
-                                            style={ev.type !== 'protocol' ? { backgroundColor: ev.scopeColor + '20', borderLeftColor: ev.scopeColor, color: ev.scopeColor } : {}}
-                                        >
-                                            {ev.type === 'protocol' && <span className="material-symbols-outlined text-[8px] mr-1 align-middle">gavel</span>}
-                                            {ev.title}
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+                    {weekDates.map((d, colIndex) => {
+                        const dayProtocols = getProtocolsForDate(d);
+                        const dayNotes = getNotesForDate(d);
+                        return (
+                            <div key={colIndex} className="col-span-1 border-r border-theme-divider bg-theme-bg relative group">
+                                {/* Protocol notes banner at top of day column */}
+                                {dayProtocols.map((s, i) => (
+                                    <div key={`wp-${i}`} className="mx-1 mt-1 px-2 py-1 rounded-md text-[8px] font-bold border-l-2 border-purple-500 bg-purple-500/20 text-purple-300 truncate" title={`Protocolo: ${s.name}`}>
+                                        <span className="material-symbols-outlined text-[8px] mr-0.5 align-middle">gavel</span>{s.name}
+                                    </div>
+                                ))}
+                                {dayNotes.map((n, i) => (
+                                    <div key={`wn-${i}`} className="mx-1 mt-1 px-2 py-1 rounded-md text-[8px] font-bold border-l-2 text-black/80 truncate shadow-sm" style={{ backgroundColor: n.color, borderLeftColor: '#ff9f43' }} title={`De: ${n.author}`}>
+                                        <span className="material-symbols-outlined text-[8px] mr-0.5 align-middle">sticky_note_2</span>{n.text}
+                                    </div>
+                                ))}
+                                {/* Background Grid Lines matched to hours */}
+                                {Array.from({ length: 24 }).map((_, h) => (
+                                    <div
+                                        key={h}
+                                        className="h-20 border-b border-theme-divider hover:bg-theme-highlight/50 transition-colors cursor-cell"
+                                        onClick={() => {
+                                            const dateWithTime = new Date(d);
+                                            dateWithTime.setHours(h);
+                                            onAddEvent && onAddEvent(dateWithTime);
+                                        }}
+                                    >
+                                        {/* Events for this specific slot */}
+                                        {getEventsForTimeSlot(d, h).map((ev, i) => (
+                                            <div
+                                                key={i}
+                                                onClick={(e) => { e.stopPropagation(); onEditEvent && onEditEvent(ev.scopeId, ev.id); }}
+                                                className={`mx-1 mt-1 p-1.5 rounded-md text-[8px] font-bold border-l-2 shadow-sm cursor-pointer hover:min-h-fit hover:absolute hover:z-20 hover:w-[150%] ${ev.type === 'protocol' ? 'border-purple-500 bg-purple-500/20 text-purple-300' : ''}`}
+                                                style={ev.type !== 'protocol' ? { backgroundColor: ev.scopeColor + '20', borderLeftColor: ev.scopeColor, color: ev.scopeColor } : {}}
+                                            >
+                                                {ev.type === 'protocol' && <span className="material-symbols-outlined text-[8px] mr-1 align-middle">gavel</span>}
+                                                {ev.title}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -208,9 +267,22 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
 
     const renderDayView = () => (
         <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-theme-divider bg-theme-card flex flex-col items-center">
+            <div className="p-4 border-b border-theme-divider bg-theme-card flex flex-col items-center gap-2">
                 <div className="text-[10px] font-bold text-theme-textMuted uppercase">{WEEKDAYS[currentDate.getDay()]}</div>
                 <div className="text-4xl font-black text-theme-orange">{currentDate.getDate()}</div>
+                {/* Protocol notes for this day */}
+                {getProtocolsForDate(currentDate).map((s, i) => (
+                    <div key={i} className="flex items-center gap-1 px-3 py-1 rounded-full border border-purple-500 bg-purple-500/10 text-purple-300 text-[9px] font-bold">
+                        <span className="material-symbols-outlined text-[10px]">gavel</span>
+                        Protocolo: {s.name}
+                    </div>
+                ))}
+                {getNotesForDate(currentDate).map((n, i) => (
+                    <div key={`dn-${i}`} className="flex items-center gap-1 px-3 py-1 rounded-full border text-black/80 text-[9px] font-bold shadow-sm" style={{ backgroundColor: n.color, borderColor: '#ff9f43' }}>
+                        <span className="material-symbols-outlined text-[10px]">sticky_note_2</span>
+                        Nota para {n.recipient}: {n.text.substring(0, 20)}...
+                    </div>
+                ))}
             </div>
             <div className="flex-1 overflow-y-auto scroller">
                 <div className="relative">
@@ -250,35 +322,36 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
     return (
         <div className="flex flex-col h-[800px] bg-theme-bg rounded-[30px] shadow-neuro overflow-hidden border border-theme-divider">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-theme-divider bg-theme-card">
-                <div className="flex items-center gap-6">
-                    <h2 className="text-3xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-2">
-                        {selectedView === 'month' && MONTHS[currentDate.getMonth()]}
-                        {selectedView !== 'month' && <span className="text-xl">{MONTHS[currentDate.getMonth()]}</span>}
-                        <span className="text-theme-textMuted font-light">{currentDate.getFullYear()}</span>
-                    </h2>
-                    <div className="flex items-center gap-2 bg-theme-bg rounded-full p-1 border border-theme-divider shadow-inner">
-                        <button onClick={prev} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-highlight text-theme-text transition-colors"><span className="material-symbols-outlined text-sm">chevron_left</span></button>
-                        <button onClick={today} className="px-4 py-1 text-[10px] font-bold uppercase text-theme-textMuted hover:text-theme-orange transition-colors">Hoje</button>
-                        <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-highlight text-theme-text transition-colors"><span className="material-symbols-outlined text-sm">chevron_right</span></button>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-theme-divider bg-theme-card">
+                {/* Left: title + navigation */}
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
+                        <span className="material-symbols-outlined text-base text-theme-orange">calendar_month</span>
+                        <h2 className="font-square font-black text-xs uppercase tracking-widest text-theme-text">
+                            {MONTHS[currentDate.getMonth()]} <span className="text-theme-textMuted font-medium">{currentDate.getFullYear()}</span>
+                        </h2>
+                    </div>
+                    <div className="flex items-center gap-1 bg-theme-bg rounded-full p-1 border border-theme-divider shadow-inner">
+                        <button onClick={prev} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-theme-highlight text-theme-text transition-colors"><span className="material-symbols-outlined text-sm">chevron_left</span></button>
+                        <button onClick={today} className="px-3 py-1 text-[10px] font-black uppercase text-theme-textMuted hover:text-theme-text transition-colors">Hoje</button>
+                        <button onClick={next} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-theme-highlight text-theme-text transition-colors"><span className="material-symbols-outlined text-sm">chevron_right</span></button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    {/* Google Sync Placeholder */}
+                {/* Right: sync + view switcher + add */}
+                <div className="flex items-center gap-3">
                     <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-theme-divider bg-theme-bg hover:bg-white hover:text-black transition-all group" title="Sincronizar com Google Agenda (Em Breve)">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" className="w-4 h-4 grayscale group-hover:grayscale-0 transition-all" />
                         <span className="text-[9px] font-bold uppercase text-theme-textMuted group-hover:text-black">Sincronizar</span>
                     </button>
-
                     <div className="flex bg-theme-bg rounded-lg p-1 border border-theme-divider">
-                        <button onClick={() => setSelectedView('month')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'month' ? 'bg-theme-card shadow-sm text-theme-text' : 'text-theme-textMuted hover:text-theme-text'}`}>Mês</button>
-                        <button onClick={() => setSelectedView('week')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'week' ? 'bg-theme-card shadow-sm text-theme-text' : 'text-theme-textMuted hover:text-theme-text'}`}>Semana</button>
-                        <button onClick={() => setSelectedView('day')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'day' ? 'bg-theme-card shadow-sm text-theme-text' : 'text-theme-textMuted hover:text-theme-text'}`}>Dia</button>
+                        <button onClick={() => setSelectedView('month')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'month' ? 'bg-[#E8E9F0] text-black shadow-sm' : 'text-theme-textMuted hover:text-theme-text'}`}>Mês</button>
+                        <button onClick={() => setSelectedView('week')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'week' ? 'bg-[#E8E9F0] text-black shadow-sm' : 'text-theme-textMuted hover:text-theme-text'}`}>Semana</button>
+                        <button onClick={() => setSelectedView('day')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${selectedView === 'day' ? 'bg-[#E8E9F0] text-black shadow-sm' : 'text-theme-textMuted hover:text-theme-text'}`}>Dia</button>
                     </div>
-
                     <button onClick={() => onAddEvent && onAddEvent(new Date())} className="bg-theme-orange text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
-                        <span className="material-symbols-outlined text-lg">add</span>
+                        <span className="material-symbols-outlined text-base">add</span>
                     </button>
                 </div>
             </div>
@@ -289,3 +362,4 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
         </div>
     );
 };
+

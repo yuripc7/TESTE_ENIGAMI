@@ -1,0 +1,24 @@
+node_modules
+dist
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+Thumbs.db
+.claude
+
+# Old git artifacts from migration
+HEAD
+config
+description
+hooks/
+info/
+objects/
+refs/
+index
+metadata.json
+deploy.yml
+workflows/
+electron-main.js
+ui/

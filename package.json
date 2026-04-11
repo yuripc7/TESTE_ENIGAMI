@@ -1,9 +1,9 @@
 {
-  "name": "teste-enigami",
+  "name": "app-project-coordinate",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://yuripc7.github.io/TESTE_ENIGAMI/",
+  "homepage": "",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

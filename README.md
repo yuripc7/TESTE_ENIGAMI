@@ -22,7 +22,7 @@ A high-performance project management dashboard built for technical teams. This 
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yuripc7/TESTE_ENIGAMI.git
+   git clone https://github.com/yuripc7/app-project-coordinate.git
    ```
 
 2. **Install dependencies**:

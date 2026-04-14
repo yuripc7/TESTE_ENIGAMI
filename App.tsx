@@ -1989,13 +1989,7 @@ export const App = () => {
 
 
 
-            {/* Floating Buttons */}
-
-            <div className="fixed bottom-8 right-8 z-[110] flex flex-col gap-4 no-print">
-
-                <button onClick={() => setShowAdminModal(true)} className="w-16 h-16 bg-theme-card rounded-full shadow-neuro flex items-center justify-center group hover:scale-110 transition-transform"><span className="material-symbols-outlined text-3xl text-theme-orange group-hover:rotate-90 transition-transform duration-500">settings</span></button>
-
-            </div>
+            {/* Floating Buttons moved to bottom of file */}
 
 
 
@@ -2420,19 +2414,19 @@ export const App = () => {
 
 
 
-            <div className="flex flex-col gap-10 w-full max-w-[1600px] mx-auto flex-1 overflow-y-auto scroller">
+            <div className="flex flex-col gap-10 w-full max-w-[1920px] mx-auto flex-1 overflow-y-auto scroller px-4 2xl:px-10">
 
                 {/* Header Cards */}
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 no-print lg:h-[850px]">
+                <div className={`${hasProject ? 'grid grid-cols-1 lg:grid-cols-12 gap-8 2xl:gap-10 lg:h-[850px]' : 'flex justify-center'} no-print`}>
 
-                    <div className="lg:col-span-4 flex flex-col gap-8 h-full overflow-y-auto scroller pr-2">
+                    <div className={`${hasProject ? 'lg:col-span-5 2xl:col-span-4 h-full overflow-y-auto scroller pr-2' : 'w-full max-w-3xl'} flex flex-col gap-8`}>
 
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-2 gap-4 lg:gap-6 2xl:gap-8">
 
                             {/* 1. Cliente - Vibrant Orange */}
 
-                            <div className={`ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center text-center h-56 transition-all relative cursor-pointer hover:-translate-y-2 hover:shadow-2xl`} onClick={() => setShowCompanyModal(true)}>
+                            <div className={`ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center text-center h-48 lg:h-56 2xl:h-64 transition-all relative cursor-pointer hover:-translate-y-2 hover:shadow-2xl`} onClick={() => setShowCompanyModal(true)}>
 
                                 <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest mb-4 flex items-center gap-1 border border-white/30 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm">1. Cliente <span className="material-symbols-outlined text-xs">chevron_right</span></span>
 
@@ -2450,7 +2444,7 @@ export const App = () => {
 
 
 
-                            <div className={`grid grid-rows-2 gap-4 h-56 transition-all`}>
+                            <div className={`grid grid-rows-2 gap-4 h-48 lg:h-56 2xl:h-64 transition-all`}>
 
                                 <div className={`ds-card p-3 flex justify-center items-center gap-4 ${!hasProject ? 'opacity-50 blur-[1px]' : ''}`}>
                                     <div className="flex flex-col items-center">
@@ -2476,7 +2470,7 @@ export const App = () => {
 
                             {/* 2. Projeto - Vibrant Cyan */}
 
-                            <div className={`ds-card-accent gradient-cyan p-6 flex flex-col items-center justify-center h-56 transition-all relative group overflow-hidden ${!hasCompany ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-2 hover:shadow-2xl'}`} onClick={() => hasCompany && setShowProjectModal(true)}>
+                            <div className={`ds-card-accent gradient-cyan p-6 flex flex-col items-center justify-center h-48 lg:h-56 2xl:h-64 transition-all relative group overflow-hidden ${!hasCompany ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:-translate-y-2 hover:shadow-2xl'}`} onClick={() => hasCompany && setShowProjectModal(true)}>
 
                                 {activeProject?.coverUrl && (<div className="absolute inset-0 bg-cover bg-center opacity-30 transition-all duration-500 z-0 mix-blend-multiply" style={{ backgroundImage: `url(${activeProject.coverUrl})` }} />)}
 
@@ -2500,7 +2494,7 @@ export const App = () => {
 
                             {/* 3. Fase - Vibrant Purple */}
 
-                            <div className={`ds-card-accent gradient-purple cursor-pointer p-6 flex flex-col justify-center items-center text-center h-56 transition-all relative group overflow-hidden ${!hasCompany || !hasProject ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:-translate-y-2 hover:shadow-2xl'}`} onClick={() => hasCompany && hasProject && setShowLodModal(true)}>
+                            <div className={`ds-card-accent gradient-purple cursor-pointer p-6 flex flex-col justify-center items-center text-center h-48 lg:h-56 2xl:h-64 transition-all relative group overflow-hidden ${!hasCompany || !hasProject ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:-translate-y-2 hover:shadow-2xl'}`} onClick={() => hasCompany && hasProject && setShowLodModal(true)}>
 
                                 <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest mb-2 flex items-center gap-1 border border-white/30 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm">3. Fase <span className="material-symbols-outlined text-xs">chevron_right</span></span>
 
@@ -2697,7 +2691,7 @@ export const App = () => {
 
                     {/* --- CENTER COLUMN (Activity Log) --- */}
 
-                    {hasProject && (<div className="lg:col-span-4 flex flex-col gap-8 transition-all duration-700 opacity-100 lg:h-[850px] overflow-y-auto">
+                    {hasProject && (<div className="lg:col-span-4 2xl:col-span-3 flex flex-col gap-8 transition-all duration-700 opacity-100 lg:h-[850px] overflow-y-auto">
 
                         <div className="ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center h-32 relative overflow-hidden shadow-lg">
 
@@ -2835,7 +2829,7 @@ export const App = () => {
 
 
 
-                    {hasProject && (<div className="lg:col-span-4 flex flex-col gap-8 transition-all duration-1000 opacity-100 h-full overflow-hidden">
+                    {hasProject && (<div className="lg:col-span-4 2xl:col-span-3 flex flex-col gap-8 transition-all duration-1000 opacity-100 h-full overflow-hidden">
 
 
                         {/* List */}
@@ -3226,7 +3220,7 @@ export const App = () => {
 
                     {activeTab === 'timeline' && hasProject && (
 
-                        <div className={`transition-all duration-1000 flex flex-col gap-12 animate-fadeIn max-w-[1600px] mx-auto w-full`}>
+                        <div className={`transition-all duration-1000 flex flex-col gap-12 animate-fadeIn max-w-[1920px] mx-auto w-full`}>
 
                             <div className={`self-center bg-theme-card rounded-full p-2 flex gap-4 items-center no-print shadow-neuro px-6`}>
 
@@ -3540,7 +3534,7 @@ export const App = () => {
 
                     {activeTab === 'gallery' && hasProject && (
 
-                        <div className="animate-fadeIn max-w-[1600px] mx-auto w-full">
+                        <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
 
                             <div className="ds-card p-8 bg-theme-card relative overflow-hidden min-h-[600px] flex flex-col">
 
@@ -3727,7 +3721,7 @@ export const App = () => {
 
                     {activeTab === 'files' && hasProject && (
 
-                        <div className="animate-fadeIn w-full flex flex-col gap-8 pb-20 max-w-[1600px] mx-auto">
+                        <div className="animate-fadeIn w-full flex flex-col gap-8 pb-20 max-w-[1920px] mx-auto">
 
                             {/* Header and Filter */}
 
@@ -4068,7 +4062,7 @@ export const App = () => {
 
                         return (
 
-                            <div className="animate-fadeIn ds-card p-0 bg-theme-card flex flex-col max-w-[1600px] mx-auto w-full mb-10 min-h-[600px]">
+                            <div className="animate-fadeIn ds-card p-0 bg-theme-card flex flex-col max-w-[1920px] mx-auto w-full mb-10 min-h-[600px]">
 
                                 {/* Sub-Tab Header */}
 
@@ -4999,7 +4993,7 @@ export const App = () => {
 
                         activeTab === 'viabilidade' && hasProject && (
 
-                            <div className="animate-fadeIn flex flex-col gap-8 max-w-[1600px] mx-auto w-full pb-20">
+                            <div className="animate-fadeIn flex flex-col gap-8 max-w-[1920px] mx-auto w-full pb-20">
                                 {/* Power BI Section Card */}
                                 <div className="ds-card p-0 bg-theme-card flex flex-col overflow-hidden w-full">
 
@@ -5178,7 +5172,7 @@ export const App = () => {
 
                         activeTab === 'notas' && hasProject && (
 
-                            <div className="max-w-[1600px] mx-auto w-full">
+                            <div className="max-w-[1920px] mx-auto w-full">
                                 <NotesTab
 
                                     project={activeProject}
@@ -5208,7 +5202,7 @@ export const App = () => {
 
                         activeTab === 'colaborador' && hasProject && (
 
-                            <div className="max-w-[1600px] mx-auto w-full">
+                            <div className="max-w-[1920px] mx-auto w-full">
                                 <ColaboradorTab
 
                                     project={activeProject}
@@ -5230,7 +5224,7 @@ export const App = () => {
 
             {/* Floating Buttons: Settings & Chat */}
 
-            <div className="fixed bottom-8 right-8 z-[150] flex flex-col items-end gap-4 pointer-events-none">
+            <div className="fixed bottom-8 right-8 z-[150] flex flex-col items-end gap-6 pointer-events-none">
 
                 {/* Settings Button */}
 

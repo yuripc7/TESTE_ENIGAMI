@@ -1260,49 +1260,153 @@ export const DisciplinesManagerModal: React.FC<{
 };
 
 export const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (name: string) => void; }> = ({ isOpen, onClose, onLogin }) => {
-    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [remember, setRemember] = useState(false);
+
+    if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const name = email.split('@')[0] || email;
         if (name.trim()) {
             onLogin(name);
-            setName('');
+            setEmail('');
+            setPassword('');
         }
     };
 
     return (
-        <ModalBase isOpen={isOpen} onClose={onClose}>
-            <div className="p-12 flex flex-col items-center text-center">
-                <div className="w-24 h-24 bg-gradient-to-tr from-theme-orange to-theme-purple rounded-full flex items-center justify-center mb-8 shadow-glow animate-pulse">
-                    <span className="material-symbols-outlined text-5xl text-white">person</span>
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center no-print"
+            style={{ background: 'linear-gradient(135deg, #f5f0ee 0%, #ede8e6 100%)' }}
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div
+                className="w-full max-w-sm mx-4 rounded-[28px] p-8 animate-scaleIn"
+                style={{
+                    background: '#f0ebe8',
+                    boxShadow: '12px 12px 28px #d4cfcd, -12px -12px 28px #ffffff',
+                }}
+            >
+                {/* Logo */}
+                <div className="flex flex-col items-center mb-7">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #f4846a 0%, #e8604a 100%)', boxShadow: '0 4px 12px rgba(232,96,74,0.35)' }}
+                        >
+                            <span className="material-symbols-outlined text-white text-lg">graphic_eq</span>
+                        </div>
+                        <span className="text-2xl font-black tracking-widest text-gray-800 uppercase">ENIGAMI</span>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ color: '#e8604a' }}>
+                        Project · Coordinate
+                    </span>
                 </div>
 
-                <h3 className="text-3xl font-square font-black text-theme-text uppercase tracking-widest mb-3">Bem-vindo</h3>
-                <p className="text-sm font-bold text-theme-textMuted uppercase mb-10">Acesse seu painel de projetos</p>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Email */}
+                    <div>
+                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1 block mb-1">E-mail</label>
+                        <div
+                            className="flex items-center gap-3 rounded-2xl px-4 py-3"
+                            style={{ background: '#ece7e4', boxShadow: 'inset 4px 4px 8px #d4cfcd, inset -4px -4px 8px #ffffff' }}
+                        >
+                            <span className="material-symbols-outlined text-gray-400 text-[18px]">mail</span>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="yuri@enigami.com.br"
+                                className="flex-1 bg-transparent text-sm text-gray-600 outline-none placeholder:text-gray-400"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
 
-                <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6">
-                    <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="DIGITE SEU NOME..."
-                        className="w-full bg-theme-bg border-2 border-theme-divider rounded-2xl px-6 py-5 text-base font-bold text-theme-text text-center outline-none focus:border-theme-orange transition-all placeholder:text-theme-textMuted/50"
-                        autoFocus
-                    />
+                    {/* Senha */}
+                    <div>
+                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-1 block mb-1">Senha</label>
+                        <div
+                            className="flex items-center gap-3 rounded-2xl px-4 py-3"
+                            style={{ background: '#ece7e4', boxShadow: 'inset 4px 4px 8px #d4cfcd, inset -4px -4px 8px #ffffff' }}
+                        >
+                            <span className="material-symbols-outlined text-gray-400 text-[18px]">lock</span>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••••"
+                                className="flex-1 bg-transparent text-sm text-gray-600 outline-none placeholder:text-gray-400"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Lembrar / Esqueci */}
+                    <div className="flex items-center justify-between px-1">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <div
+                                className="w-4 h-4 rounded flex items-center justify-center cursor-pointer"
+                                style={{ background: '#ece7e4', boxShadow: 'inset 2px 2px 4px #d4cfcd, inset -2px -2px 4px #ffffff' }}
+                                onClick={() => setRemember(!remember)}
+                            >
+                                {remember && <span className="material-symbols-outlined text-[12px]" style={{ color: '#e8604a' }}>check</span>}
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Lembrar de mim</span>
+                        </label>
+                        <button type="button" className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#e8604a' }}>
+                            Esqueci a senha
+                        </button>
+                    </div>
+
+                    {/* Botão principal */}
                     <button
                         type="submit"
-                        disabled={!name.trim()}
-                        className="w-full bg-theme-text text-theme-bg py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl"
+                        disabled={!email.trim()}
+                        className="w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: 'linear-gradient(135deg, #f4846a 0%, #e8604a 100%)', boxShadow: '0 6px 20px rgba(232,96,74,0.4)' }}
                     >
-                        Entrar na Plataforma
+                        Entrar no Projeto
                     </button>
                 </form>
 
-                <button onClick={onClose} className="mt-8 text-xs font-bold text-theme-textMuted hover:text-theme-text uppercase transition-colors tracking-widest">
-                    Cancelar Acesso
-                </button>
+                {/* Divisor */}
+                <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px bg-gray-300/60"></div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">ou</span>
+                    <div className="flex-1 h-px bg-gray-300/60"></div>
+                </div>
+
+                {/* Botões secundários */}
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        className="flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-gray-500 transition-all active:scale-95"
+                        style={{ background: '#ece7e4', boxShadow: '4px 4px 8px #d4cfcd, -4px -4px 8px #ffffff' }}
+                    >
+                        <span className="material-symbols-outlined text-[15px]">language</span>
+                        Google
+                    </button>
+                    <button
+                        type="button"
+                        className="flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider text-gray-500 transition-all active:scale-95"
+                        style={{ background: '#ece7e4', boxShadow: '4px 4px 8px #d4cfcd, -4px -4px 8px #ffffff' }}
+                    >
+                        <span className="material-symbols-outlined text-[15px]">corporate_fare</span>
+                        SSO
+                    </button>
+                </div>
+
+                {/* Solicitar acesso */}
+                <p className="text-center text-[10px] text-gray-400 mt-5">
+                    Novo por aqui?{' '}
+                    <button type="button" className="font-bold" style={{ color: '#e8604a' }}>
+                        Solicitar acesso
+                    </button>
+                </p>
             </div>
-        </ModalBase>
+        </div>
     );
 };
 

@@ -15,12 +15,13 @@ export const generateChatResponse = async (
 ): Promise<string> => {
     try {
         // Fallback for missing or placeholder API Key
-        if (!API_KEY || API_KEY === 'PLACEHOLDER_API_KEY') {
+        if (!API_KEY || API_KEY === 'PLACEHOLDER_API_KEY' || API_KEY === 'COLE_SUA_CHAVE_AQUI') {
             console.warn("API Key missing or invalid. Using mock response.");
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-            return `🤖 [MODO DEMO] A I.A. ENIGAMI está em modo demonstração. 
-            Sua pergunta foi: "${query}". 
-            (Para respostas reais, configure uma API Key válida no arquivo .env.local).`;
+            await new Promise(resolve => setTimeout(resolve, 800));
+            const userQuestion = query.includes('[PERGUNTA]:')
+                ? query.split('[PERGUNTA]:').pop()?.trim() ?? query
+                : query;
+            return `⚠️ **Modo Demo** — A IA não está conectada.\n\nSua pergunta: _"${userQuestion}"_\n\nPara ativar respostas reais:\n1. Acesse aistudio.google.com e gere uma API Key gratuita\n2. Abra o arquivo **.env.local** na raiz do projeto\n3. Substitua \`COLE_SUA_CHAVE_AQUI\` pela sua chave\n4. Reinicie o servidor (\`npm run dev\`)`;
         }
 
         const genAI = new GoogleGenerativeAI(API_KEY);

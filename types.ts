@@ -34,7 +34,7 @@ export interface GalleryImage {
     url: string;
     description?: string;
     date?: string;
-    type?: 'image' | 'video' | 'flipbook';
+    type?: 'image' | 'video' | 'flipbook' | 'panorama';
 }
 
 export interface GalleryFolder {

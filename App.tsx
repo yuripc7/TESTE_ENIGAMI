@@ -154,6 +154,10 @@ export const App = () => {
     const [reportText, setReportText] = useState('');
     const [isPolishingReport, setIsPolishingReport] = useState(false);
 
+    // Banco de Horas modal
+    const [showHorasModal, setShowHorasModal] = useState(false);
+    const [horasFilterMember, setHorasFilterMember] = useState<string>('todos');
+
 
 
     // Selection IDs
@@ -2284,7 +2288,11 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
 
-                    const checklist = checklistStr.split('\n').filter(t => t.trim()).map(t => ({ text: t, done: false }));
+                    const checklist = checklistStr
+                        .split('\n')
+                        .map(t => t.replace(/^[\s\-\*•]+(\[[\sx]\]\s*)?/i, '').trim()) // strip [ ], - [ ], *, •, - prefixes
+                        .filter(t => t.length > 0)
+                        .map(t => ({ text: t, done: false }));
 
 
 
@@ -2367,6 +2375,31 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 onToggleLink={(targetId) => onAddDependency(activeChecklistIds!.eid, targetId, 'FS')}
 
                 onChangeType={(targetId) => onChangeDependencyType(activeChecklistIds!.sid, activeChecklistIds!.eid, targetId)}
+
+                onAddItem={(text) => {
+                    if (!activeProject || !activeChecklistIds) return;
+                    const projectId = activeProject.id;
+                    const cleanText = text.replace(/^[\s\-\*•]+(\[[\sx]\]\s*)?/i, '').trim() || text;
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? {
+                        ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? {
+                            ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? {
+                                ...e, checklist: [...(e.checklist || []), { text: cleanText, done: false }]
+                            } : e)
+                        } : s)
+                    } : p) }));
+                }}
+
+                onDeleteItem={(idx) => {
+                    if (!activeProject || !activeChecklistIds) return;
+                    const projectId = activeProject.id;
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? {
+                        ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? {
+                            ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? {
+                                ...e, checklist: e.checklist.filter((_, i) => i !== idx)
+                            } : e)
+                        } : s)
+                    } : p) }));
+                }}
 
             />
 
@@ -2969,10 +3002,19 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                     </h4>
 
-                                    <div className="text-2xl font-mono font-black text-theme-text tracking-widest">
-
-                                        {formatTime(elapsedTime)}
-
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-2xl font-mono font-black text-theme-text tracking-widest">
+                                            {formatTime(elapsedTime)}
+                                        </div>
+                                        {activeProject?.timeLogs && activeProject.timeLogs.length > 0 && (
+                                            <button
+                                                onClick={() => setShowHorasModal(true)}
+                                                title="Banco de Horas"
+                                                className="w-7 h-7 rounded-lg bg-theme-highlight border border-theme-divider hover:border-theme-orange text-theme-textMuted hover:text-theme-orange flex items-center justify-center transition-all"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">bar_chart</span>
+                                            </button>
+                                        )}
                                     </div>
 
                                 </div>
@@ -5367,6 +5409,201 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 </div>
             </div>
         )}
+        {/* ── Banco de Horas Modal ── */}
+        {showHorasModal && activeProject && (() => {
+            const logs = activeProject.timeLogs || [];
+            const allMembers = Array.from(new Set(logs.map(l => l.userId))).sort();
+            const filteredLogs = horasFilterMember === 'todos' ? logs : logs.filter(l => l.userId === horasFilterMember);
+
+            // Per-member totals
+            const memberTotals: Record<string, number> = {};
+            logs.forEach(l => { memberTotals[l.userId] = (memberTotals[l.userId] || 0) + l.duration; });
+
+            // Discipline breakdown for filtered logs
+            const disciplineBreakdown: Record<string, Record<string, number>> = {};
+            filteredLogs.forEach(l => {
+                const memberKey = l.userId;
+                const scopeName = l.scopeId ? (activeProject.scopes.find(s => s.id === l.scopeId)?.name || 'Sem disciplina') : 'Sem disciplina';
+                if (!disciplineBreakdown[memberKey]) disciplineBreakdown[memberKey] = {};
+                disciplineBreakdown[memberKey][scopeName] = (disciplineBreakdown[memberKey][scopeName] || 0) + l.duration;
+            });
+
+            // Activity breakdown for filtered logs (top 10 by duration)
+            const activityMap: Record<string, { activity: string; scope: string; member: string; duration: number; date: string }[]> = {};
+            filteredLogs.forEach(l => {
+                const scopeName = l.scopeId ? (activeProject.scopes.find(s => s.id === l.scopeId)?.name || '—') : '—';
+                if (!activityMap[l.userId]) activityMap[l.userId] = [];
+                activityMap[l.userId].push({ activity: l.activity, scope: scopeName, member: l.userId, duration: l.duration, date: new Date(l.startTime).toLocaleDateString('pt-BR') });
+            });
+
+            const totalFiltrado = filteredLogs.reduce((a, l) => a + l.duration, 0);
+            const fmtH = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}min`;
+
+            const copyReport = () => {
+                let text = `BANCO DE HORAS — ${activeProject.name}\n`;
+                text += `Gerado em: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+                text += `RESUMO POR MEMBRO\n`;
+                allMembers.forEach(m => { text += `  ${m}: ${fmtH(memberTotals[m] || 0)}\n`; });
+                text += `\nDETALHE POR DISCIPLINA\n`;
+                Object.entries(disciplineBreakdown).forEach(([member, scopes]) => {
+                    text += `\n  ${member}:\n`;
+                    Object.entries(scopes).sort(([,a],[,b]) => b - a).forEach(([scope, dur]) => { text += `    ${scope}: ${fmtH(dur)}\n`; });
+                });
+                navigator.clipboard.writeText(text).then(() => setNotification('Copiado!'));
+            };
+
+            return (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}>
+                    <div className="bg-theme-card border border-theme-divider rounded-3xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden animate-scaleIn">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-theme-divider">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-theme-highlight flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-theme-orange">bar_chart</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-black text-theme-text uppercase tracking-widest">Banco de Horas</h2>
+                                    <p className="text-[10px] text-theme-textMuted">{activeProject.name} · {logs.length} registros</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={copyReport} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-theme-divider hover:border-theme-orange text-[10px] font-bold text-theme-text transition-all">
+                                    <span className="material-symbols-outlined text-xs">content_copy</span> Copiar
+                                </button>
+                                <button onClick={() => setShowHorasModal(false)} className="w-8 h-8 rounded-full bg-theme-bg border border-theme-divider flex items-center justify-center hover:border-theme-orange transition-all">
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Member Filter Tabs */}
+                        <div className="flex items-center gap-1.5 px-6 py-3 border-b border-theme-divider overflow-x-auto">
+                            <button
+                                onClick={() => setHorasFilterMember('todos')}
+                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${horasFilterMember === 'todos' ? 'bg-theme-orange text-white' : 'bg-theme-highlight text-theme-textMuted hover:text-theme-text border border-theme-divider'}`}
+                            >
+                                Todos
+                            </button>
+                            {allMembers.map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setHorasFilterMember(m)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all whitespace-nowrap ${horasFilterMember === m ? 'bg-theme-orange text-white' : 'bg-theme-highlight text-theme-textMuted hover:text-theme-text border border-theme-divider'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="overflow-y-auto scroller flex-1 p-6 space-y-6">
+
+                            {/* Overview cards */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <div className="bg-theme-bg border border-theme-divider rounded-2xl p-4 text-center">
+                                    <div className="text-2xl font-black text-theme-orange">{fmtH(totalFiltrado)}</div>
+                                    <div className="text-[9px] text-theme-textMuted uppercase tracking-widest mt-1">Total de horas</div>
+                                </div>
+                                <div className="bg-theme-bg border border-theme-divider rounded-2xl p-4 text-center">
+                                    <div className="text-2xl font-black text-theme-text">{filteredLogs.length}</div>
+                                    <div className="text-[9px] text-theme-textMuted uppercase tracking-widest mt-1">Sessões</div>
+                                </div>
+                                <div className="bg-theme-bg border border-theme-divider rounded-2xl p-4 text-center col-span-2 sm:col-span-1">
+                                    <div className="text-2xl font-black text-theme-text">{horasFilterMember === 'todos' ? allMembers.length : 1}</div>
+                                    <div className="text-[9px] text-theme-textMuted uppercase tracking-widest mt-1">Membros</div>
+                                </div>
+                            </div>
+
+                            {/* Per member summary (only shown when "todos") */}
+                            {horasFilterMember === 'todos' && allMembers.length > 0 && (
+                                <div>
+                                    <h3 className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">group</span> Horas por Membro
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {allMembers.sort((a, b) => (memberTotals[b] || 0) - (memberTotals[a] || 0)).map(member => {
+                                            const dur = memberTotals[member] || 0;
+                                            const pct = totalFiltrado > 0 ? (dur / totalFiltrado) * 100 : 0;
+                                            return (
+                                                <div key={member} className="bg-theme-bg border border-theme-divider rounded-xl p-3">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-xs font-bold text-theme-text">{member}</span>
+                                                        <span className="text-xs font-mono font-black text-theme-orange">{fmtH(dur)}</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-theme-highlight rounded-full overflow-hidden">
+                                                        <div className="h-full bg-theme-orange rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                    <div className="text-[9px] text-theme-textMuted mt-1">{pct.toFixed(0)}% do total</div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Discipline breakdown */}
+                            {Object.entries(disciplineBreakdown).map(([member, scopes]) => {
+                                const memberTotal = Object.values(scopes).reduce((a, b) => a + b, 0);
+                                return (
+                                    <div key={member}>
+                                        <h3 className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-sm">category</span>
+                                            {horasFilterMember === 'todos' ? `${member} — Disciplinas` : 'Horas por Disciplina'}
+                                        </h3>
+                                        <div className="space-y-1.5">
+                                            {Object.entries(scopes).sort(([,a],[,b]) => b - a).map(([scope, dur]) => {
+                                                const pct = memberTotal > 0 ? (dur / memberTotal) * 100 : 0;
+                                                return (
+                                                    <div key={scope} className="flex items-center gap-3 bg-theme-bg border border-theme-divider rounded-xl px-3 py-2">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="text-[10px] font-bold text-theme-text truncate">{scope}</span>
+                                                                <span className="text-[10px] font-mono font-black text-theme-orange ml-2 shrink-0">{fmtH(dur)}</span>
+                                                            </div>
+                                                            <div className="h-1 bg-theme-highlight rounded-full overflow-hidden">
+                                                                <div className="h-full bg-pink-500 rounded-full" style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Activity log */}
+                            {Object.entries(activityMap).map(([member, activities]) => (
+                                <div key={member}>
+                                    <h3 className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">task_alt</span>
+                                        {horasFilterMember === 'todos' ? `${member} — Atividades` : 'Atividades'}
+                                    </h3>
+                                    <div className="space-y-1">
+                                        {activities.sort((a, b) => b.duration - a.duration).slice(0, 15).map((act, i) => (
+                                            <div key={i} className="flex items-center justify-between gap-2 bg-theme-bg border border-theme-divider rounded-xl px-3 py-2 hover:border-theme-orange/30 transition-colors">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[10px] font-bold text-theme-text truncate">{act.activity || '—'}</p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        {act.scope !== '—' && <span className="text-[8px] px-1.5 py-0.5 rounded bg-theme-highlight text-theme-textMuted uppercase">{act.scope}</span>}
+                                                        <span className="text-[9px] text-theme-textMuted">{act.date}</span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-[10px] font-mono font-black text-theme-textMuted shrink-0">{fmtH(act.duration)}</span>
+                                            </div>
+                                        ))}
+                                        {activities.length > 15 && (
+                                            <div className="text-[9px] text-theme-textMuted text-center pt-1">+{activities.length - 15} atividades adicionais</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+
+                        </div>
+                    </div>
+                </div>
+            );
+        })()}
+
         </>
     );
 };

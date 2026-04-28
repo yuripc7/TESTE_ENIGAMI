@@ -174,9 +174,13 @@ export const ChecklistModal: React.FC<{
     onToggleCheck: (idx: number) => void; onComplete: () => void;
     onToggleLink: (targetId: string) => void; onChangeType: (targetId: string) => void;
     onEdit: () => void;
-}> = ({ isOpen, event, project, onClose, onToggleCheck, onComplete, onToggleLink, onChangeType, onEdit }) => {
+    onAddItem?: (text: string) => void;
+    onDeleteItem?: (idx: number) => void;
+}> = ({ isOpen, event, project, onClose, onToggleCheck, onComplete, onToggleLink, onChangeType, onEdit, onAddItem, onDeleteItem }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showAgentPlan, setShowAgentPlan] = useState(false);
+    const [newItemText, setNewItemText] = useState('');
+    const newItemRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!isOpen) setShowAgentPlan(false);
@@ -256,21 +260,76 @@ export const ChecklistModal: React.FC<{
                 ) : (
                     <div className="flex-1 overflow-y-auto scroller">
                         <div className="mb-6">
-                            <label className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest mb-2 block">Checklist</label>
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                                {event.checklist && event.checklist.length > 0 ? event.checklist.map((it, i) => (
-                                    <div key={i} className={`flex items-center gap-3 p-3 bg-theme-bg rounded-xl border cursor-pointer transition-all ${it.done ? 'border-theme-green bg-green-900/10' : 'border-theme-divider hover:border-theme-textMuted'}`} onClick={() => onToggleCheck(i)}>
-                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${it.done ? 'bg-theme-green border-theme-green' : 'bg-transparent border-zinc-600'}`}>
-                                            {it.done && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest">
+                                    Checklist
+                                    {event.checklist && event.checklist.length > 0 && (
+                                        <span className="ml-2 text-theme-orange">{event.checklist.filter(i => i.done).length}/{event.checklist.length}</span>
+                                    )}
+                                </label>
+                            </div>
+                            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 mb-3">
+                                {event.checklist && event.checklist.length > 0 ? event.checklist.map((it, i) => {
+                                    // Strip [ ], - [ ], * etc. prefixes added by AI
+                                    const cleanText = it.text.replace(/^[\s\-\*•]+(\[[\sx]\]\s*)?/i, '').trim() || it.text;
+                                    return (
+                                        <div key={i} className={`flex items-center gap-2 p-2.5 bg-theme-bg rounded-xl border group transition-all ${it.done ? 'border-theme-green/40 bg-green-900/5' : 'border-theme-divider hover:border-theme-textMuted/40'}`}>
+                                            <div
+                                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${it.done ? 'bg-theme-green border-theme-green' : 'bg-transparent border-zinc-600 hover:border-theme-orange'}`}
+                                                onClick={() => onToggleCheck(i)}
+                                            >
+                                                {it.done && <span className="material-symbols-outlined text-white text-[14px]">check</span>}
+                                            </div>
+                                            <span className={`text-xs flex-1 leading-snug ${it.done ? 'text-theme-textMuted line-through' : 'text-theme-text'}`}>{cleanText}</span>
+                                            {onDeleteItem && (
+                                                <button
+                                                    onClick={() => onDeleteItem(i)}
+                                                    className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-theme-textMuted hover:text-red-400 transition-all"
+                                                    title="Remover item"
+                                                >
+                                                    <span className="material-symbols-outlined text-xs">close</span>
+                                                </button>
+                                            )}
                                         </div>
-                                        <span className={`text-xs font-medium ${it.done ? 'text-theme-textMuted line-through' : 'text-theme-text'}`}>{it.text}</span>
-                                    </div>
-                                )) : (
+                                    );
+                                }) : (
                                     <div className="p-4 border border-dashed border-theme-divider rounded-xl text-center">
-                                        <span className="text-[10px] font-bold text-theme-textMuted uppercase">Sem itens vinculados</span>
+                                        <span className="text-[10px] font-bold text-theme-textMuted uppercase">Sem itens — adicione abaixo</span>
                                     </div>
                                 )}
                             </div>
+                            {/* Add item inline */}
+                            {onAddItem && (
+                                <div className="flex gap-2">
+                                    <input
+                                        ref={newItemRef}
+                                        type="text"
+                                        value={newItemText}
+                                        onChange={e => setNewItemText(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && newItemText.trim()) {
+                                                onAddItem(newItemText.trim());
+                                                setNewItemText('');
+                                                newItemRef.current?.focus();
+                                            }
+                                        }}
+                                        placeholder="Adicionar item... (Enter para confirmar)"
+                                        className="flex-1 bg-theme-bg border border-theme-divider rounded-xl px-3 py-2 text-xs text-theme-text outline-none focus:border-theme-orange transition-all placeholder:text-theme-textMuted/50"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            if (newItemText.trim()) {
+                                                onAddItem(newItemText.trim());
+                                                setNewItemText('');
+                                                newItemRef.current?.focus();
+                                            }
+                                        }}
+                                        className="w-8 h-8 rounded-xl bg-theme-orange text-white flex items-center justify-center hover:bg-orange-600 transition-all flex-shrink-0"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">add</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="mb-6 border-t border-theme-divider pt-6">

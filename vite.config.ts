@@ -5,13 +5,13 @@ import react from '@vitejs/plugin-react';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
     server: {
       port: 3000,
       host: '0.0.0.0',
     },
-    base: '/TESTE_ENIGAMI/',
+    base: command === 'build' ? '/TESTE_ENIGAMI/' : '/',
     plugins: [react()],
     resolve: {
       alias: {

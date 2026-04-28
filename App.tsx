@@ -2455,9 +2455,9 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                 {/* Header Cards */}
 
-                <div className={`${hasProject ? 'grid grid-cols-1 lg:grid-cols-12 gap-8 2xl:gap-10 lg:h-[850px]' : 'flex justify-center'} no-print`}>
+                <div className={`${hasProject ? 'grid grid-cols-1 lg:grid-cols-12 gap-6 2xl:gap-8 lg:h-[calc(100vh-120px)]' : 'flex justify-center'} no-print`}>
 
-                    <div className={`${hasProject ? 'lg:col-span-5 2xl:col-span-4 h-full overflow-y-auto scroller pr-2' : 'w-full max-w-3xl'} flex flex-col gap-8`}>
+                    <div className={`${hasProject ? 'lg:col-span-4 h-full overflow-y-auto scroller pr-2' : 'w-full max-w-3xl'} flex flex-col gap-8`}>
 
                         <div className="grid grid-cols-2 gap-4 lg:gap-6 2xl:gap-8">
 
@@ -2724,7 +2724,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                     {/* --- CENTER COLUMN (Activity Log) --- */}
 
-                    {hasProject && (<div className="lg:col-span-4 2xl:col-span-3 flex flex-col gap-8 transition-all duration-700 opacity-100 lg:h-[850px] overflow-y-auto">
+                    {hasProject && (<div className="lg:col-span-4 flex flex-col gap-8 transition-all duration-700 opacity-100 h-full overflow-y-auto">
 
                         <div className="ds-card-accent gradient-orange p-6 flex flex-col items-center justify-center h-32 relative overflow-hidden shadow-lg">
 
@@ -2862,7 +2862,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
 
 
-                    {hasProject && (<div className="lg:col-span-4 2xl:col-span-3 flex flex-col gap-8 transition-all duration-1000 opacity-100 h-full overflow-hidden">
+                    {hasProject && (<div className="lg:col-span-4 flex flex-col gap-8 transition-all duration-1000 opacity-100 h-full overflow-hidden">
 
 
                         {/* List */}

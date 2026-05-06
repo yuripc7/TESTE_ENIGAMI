@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
 import { DB, Project, Company } from '../types';
 import { INITIAL_DB, STORAGE_KEY, THEME_KEY, DEBOUNCE_SAVE_MS, NOTIFICATION_TIMEOUT_MS } from '../constants';
 import { readFileAsText } from '../utils/fileReaderUtils';
@@ -60,7 +61,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const savedDb = localStorage.getItem(STORAGE_KEY);
       return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
     } catch (error) {
-      console.error("Erro ao carregar dados locais, resetando para padrão:", error);
+      console.error("Erro ao carregar dados locais, resetando para padrÃ£o:", error);
       return INITIAL_DB;
     }
   });
@@ -93,7 +94,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
-    setNotification('Sessão encerrada.');
+    setNotification('SessÃ£o encerrada.');
   }, [setCurrentUser, setNotification]);
 
   // Track last saved JSON to skip redundant writes
@@ -122,9 +123,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       } catch (error) {
         console.error("Erro ao salvar dados:", error);
         if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-          setNotification("ERRO CRÍTICO: Limite de armazenamento excedido! Exporte um backup e remova imagens/arquivos antigos para continuar salvando.");
+          setNotification("ERRO CRÃTICO: Limite de armazenamento excedido! Exporte um backup e remova imagens/arquivos antigos para continuar salvando.");
         } else {
-          setNotification("Erro crítico ao salvar! Verifique o console (F12).");
+          setNotification("Erro crÃ­tico ao salvar! Verifique o console (F12).");
         }
       }
     }, DEBOUNCE_SAVE_MS); // debounce for safety
@@ -224,7 +225,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       const text = await readFileAsText(file);
       const rawData = JSON.parse(text);
-      if (!rawData || typeof rawData !== 'object') throw new Error("Formato inválido.");
+      if (!rawData || typeof rawData !== 'object') throw new Error("Formato invÃ¡lido.");
 
       // Deep Patching Function
       const patchProject = (p: any): Project => ({
@@ -276,7 +277,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const projectExists = importedData.projects.some(p => p.id === importedData.activeProjectId);
       if (!projectExists) importedData.activeProjectId = importedData.projects[0]?.id || null;
 
-      if (await requestConfirm({ message: "Isso substituirá todos os dados atuais. Deseja continuar?", variant: 'warning', title: 'Importar Backup' })) {
+      if (await requestConfirm({ message: "Isso substituirÃ¡ todos os dados atuais. Deseja continuar?", variant: 'warning', title: 'Importar Backup' })) {
         // Inject log directly into the new state
         const activeP = importedData.projects.find(p => p.id === importedData.activeProjectId);
         if (activeP) {
@@ -291,7 +292,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     } catch (err) {
       console.error("Erro ao importar JSON:", err);
-      showAlert("Erro crítico ao ler o backup. Verifique a estrutura do arquivo.");
+      showAlert("Erro crÃ­tico ao ler o backup. Verifique a estrutura do arquivo.");
     }
     e.target.value = '';
   };

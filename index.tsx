@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
+import App from './App';
 import { AppProvider } from './contexts/AppContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ConfirmProvider } from './components/ConfirmDialog';
@@ -35,11 +35,13 @@ const Root = () => {
 
   if (!session) return <AuthGate />;
 
+  const userId = session.user?.id || 'anonymous';
+
   return (
     <React.StrictMode>
       <ErrorBoundary>
         <ConfirmProvider>
-          <AppProvider>
+          <AppProvider userId={userId}>
             <App />
           </AppProvider>
         </ConfirmProvider>

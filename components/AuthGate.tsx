@@ -1,87 +1,139 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Globe, Grid, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'register' | 'forgot' | 'email-sent';
 
+const neu = {
+  page: {
+    minHeight: '100vh' as const,
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    background: '#ede8e3',
+    padding: '24px',
+  },
+  card: {
+    background: '#ede8e3',
+    borderRadius: '24px',
+    boxShadow: '14px 14px 28px #c9c4bf, -14px -14px 28px #ffffff',
+    padding: '40px 36px',
+    maxWidth: '380px',
+    width: '100%',
+  },
+  input: {
+    background: '#ede8e3',
+    border: 'none',
+    borderRadius: '14px',
+    boxShadow: 'inset 4px 4px 8px #c9c4bf, inset -4px -4px 8px #ffffff',
+    padding: '14px 16px 14px 44px',
+    outline: 'none',
+    width: '100%',
+    fontSize: '14px',
+    color: '#333',
+    boxSizing: 'border-box' as const,
+  },
+  btnPrimary: {
+    background: 'linear-gradient(135deg, #e8826a, #d96b52)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '14px',
+    padding: '15px',
+    width: '100%',
+    fontSize: '13px',
+    fontWeight: '700' as const,
+    letterSpacing: '1.5px',
+    cursor: 'pointer',
+    boxShadow: '4px 4px 10px #c9c4bf, -2px -2px 6px #ffffff',
+  },
+  btnSecondary: {
+    background: '#ede8e3',
+    border: 'none',
+    borderRadius: '14px',
+    padding: '13px',
+    fontSize: '13px',
+    fontWeight: '700' as const,
+    cursor: 'pointer',
+    boxShadow: '4px 4px 8px #c9c4bf, -4px -4px 8px #ffffff',
+    color: '#666',
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: '8px',
+    flex: 1,
+    letterSpacing: '1px',
+  },
+};
+
 export const AuthGate: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
-  const [email, setEmail]       = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm]   = useState('');
-  const [showPw, setShowPw]     = useState(false);
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [confirm, setConfirm] = useState('');
+  const [remember, setRemember] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const REDIRECT = 'https://yuripc7.github.io/TESTE_ENIGAMI/';
-
-  const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : 3;
-  const strengthLabel = ['', 'Fraca', 'Media', 'Forte'];
-  const strengthColor = ['', '#ef4444', '#f59e0b', '#22c55e'];
+  const REDIRECT = 'https://teste-enigami.vercel.app/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email || (mode !== 'forgot' && !password)) {
-      setError('Preencha todos os campos.');
-      return;
-    }
-    if (mode === 'register' && password !== confirm) {
-      setError('As senhas nao coincidem.');
-      return;
-    }
-    if (mode === 'register' && password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.');
-      return;
-    }
+    if (!email || (mode !== 'forgot' && !password)) { setError('Preencha todos os campos.'); return; }
+    if (mode === 'register' && password !== confirm) { setError('As senhas nao coincidem.'); return; }
     setLoading(true);
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else if (mode === 'register') {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: REDIRECT }
-        });
+        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: REDIRECT } });
         if (error) throw error;
         setMode('email-sent');
       } else if (mode === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: REDIRECT
-        });
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: REDIRECT });
         if (error) throw error;
         setMode('email-sent');
       }
     } catch (err: any) {
       const msg = err?.message || 'Erro ao autenticar.';
       if (msg.includes('Invalid login credentials')) setError('E-mail ou senha incorretos.');
-      else if (msg.includes('Email not confirmed')) setError('Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.');
-      else if (msg.includes('User already registered')) setError('Este e-mail ja esta cadastrado. Faca login.');
+      else if (msg.includes('Email not confirmed')) setError('Confirme seu e-mail antes de entrar.');
+      else if (msg.includes('User already registered')) setError('Este e-mail ja esta cadastrado.');
       else setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
+  };
+
+  const handleForgot = async () => {
+    if (!email) { setError('Digite seu e-mail primeiro.'); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: REDIRECT });
+      if (error) throw error;
+      setMode('email-sent');
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao enviar e-mail.');
+    } finally { setLoading(false); }
+  };
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: REDIRECT } });
   };
 
   if (mode === 'email-sent') {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0f0f10 0%, #1a1a1e 100%)' }}>
-        <div className="w-full max-w-sm text-center">
-          <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="text-green-400" size={32} />
+      <div style={neu.page}>
+        <div style={{ ...neu.card, textAlign: 'center' }}>
+          <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #e8826a, #d96b52)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '4px 4px 10px #c9c4bf' }}>
+            <CheckCircle2 size={32} color="white" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-3">Verifique seu e-mail</h2>
-          <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            Enviamos um link para <span className="text-white font-medium">{email}</span>.
-            Clique no link para {mode === 'forgot' ? 'redefinir sua senha' : 'confirmar sua conta'} e entrar.
+          <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a1a', marginBottom: '8px' }}>Verifique seu e-mail</h2>
+          <p style={{ color: '#888', fontSize: '14px', lineHeight: '1.6', marginBottom: '28px' }}>
+            Enviamos um link para <strong style={{ color: '#333' }}>{email}</strong>. Clique nele para continuar.
           </p>
-          <button
-            onClick={() => { setMode('login'); setEmail(''); setPassword(''); setConfirm(''); }}
-            className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all flex items-center justify-center gap-2"
-          >
-            <RefreshCw size={14} /> Voltar ao login
+          <button style={neu.btnPrimary} onClick={() => { setMode('login'); setEmail(''); setPassword(''); setConfirm(''); }}>
+            VOLTAR AO LOGIN
           </button>
         </div>
       </div>
@@ -89,139 +141,95 @@ export const AuthGate: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0f0f10 0%, #1a1a1e 100%)' }}>
-      <div className="w-full max-w-sm">
-
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f5f0ee] to-[#ede8e6] flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-2xl font-black text-gray-900">E</span>
+    <div style={neu.page}>
+      <div style={neu.card}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ width: '60px', height: '60px', background: 'linear-gradient(135deg, #e8826a, #d96b52)', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', boxShadow: '4px 4px 12px #c9c4bf, -2px -2px 6px #ffffff' }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M9 9v6M12 4v16M15 9v6M6 11v2M18 11v2" />
+            </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">ENIGAMI</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {mode === 'login' ? 'Bem-vindo de volta' : mode === 'register' ? 'Crie sua conta' : 'Recuperar acesso'}
-          </p>
+          <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#1a1a1a', letterSpacing: '3px', margin: '0 0 4px' }}>ENIGAMI</h1>
+          <p style={{ fontSize: '11px', fontWeight: '700', color: '#e8826a', letterSpacing: '3px', margin: 0 }}>PROJECT · COORDINATE</p>
         </div>
-
-        {/* Card */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-
-          {/* Mode tabs (login/register) */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '18px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '700', color: '#aaa', letterSpacing: '1.5px', display: 'block', marginBottom: '8px' }}>E-MAIL</label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} color="#bbb" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="yuri@enigami.com.br" style={neu.input} />
+            </div>
+          </div>
           {mode !== 'forgot' && (
-            <div className="grid grid-cols-2 bg-black/30 rounded-xl p-1 mb-6">
-              {(['login', 'register'] as const).map((m, i) => (
-                <button
-                  key={m}
-                  onClick={() => { setMode(m); setError(''); }}
-                  className={'py-2 rounded-lg text-sm font-semibold transition-all ' + (mode === m ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300')}
-                >
-                  {['Entrar', 'Criar conta'][i]}
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: '#aaa', letterSpacing: '1.5px', display: 'block', marginBottom: '8px' }}>SENHA</label>
+              <div style={{ position: 'relative' }}>
+                <Lock size={16} color="#bbb" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••" style={{ ...neu.input, paddingRight: '44px' }} />
+                <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  {showPw ? <EyeOff size={16} color="#bbb" /> : <Eye size={16} color="#bbb" />}
                 </button>
-              ))}
-            </div>
-          )}
-
-          {mode === 'forgot' && (
-            <div className="mb-5">
-              <button onClick={() => { setMode('login'); setError(''); }} className="text-gray-500 hover:text-white text-xs flex items-center gap-1 transition-colors mb-4">
-                &larr; Voltar ao login
-              </button>
-              <h3 className="text-white font-semibold">Recuperar senha</h3>
-              <p className="text-gray-500 text-xs mt-1">Enviaremos um link para seu e-mail.</p>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5">
-              <AlertCircle size={15} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <span className="text-red-300 text-xs leading-relaxed">{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-xs text-gray-400 font-medium mb-1.5 block uppercase tracking-wider">E-mail</label>
-              <div className="relative">
-                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="seu@email.com" autoComplete="email"
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 pl-10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-all"
-                />
               </div>
             </div>
-
-            {/* Password */}
-            {mode !== 'forgot' && (
-              <div>
-                <label className="text-xs text-gray-400 font-medium mb-1.5 block uppercase tracking-wider">Senha</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="Minimo 6 caracteres" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 pl-10 pr-10 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 transition-all"
-                  />
-                  <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                    {showPw ? <EyeOff size={15}/> : <Eye size={15}/>}
-                  </button>
-                </div>
-                {mode === 'register' && password.length > 0 && (
-                  <div className="flex items-center gap-2 mt-2">
-                    {[1,2,3].map(i => (
-                      <div key={i} style={{ flex:1, height:3, borderRadius:999, background: strength >= i ? strengthColor[strength] : 'rgba(255,255,255,0.1)', transition: 'background .3s' }}/>
-                    ))}
-                    <span style={{ fontSize:10, color: strengthColor[strength], marginLeft:4, fontWeight:600, minWidth:28 }}>{strengthLabel[strength]}</span>
-                  </div>
-                )}
+          )}
+          {mode === 'register' && (
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '700', color: '#aaa', letterSpacing: '1.5px', display: 'block', marginBottom: '8px' }}>CONFIRMAR SENHA</label>
+              <div style={{ position: 'relative' }}>
+                <Lock size={16} color="#bbb" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input type={showPw ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••••" style={neu.input} />
               </div>
-            )}
-
-            {/* Confirm password */}
-            {mode === 'register' && (
-              <div>
-                <label className="text-xs text-gray-400 font-medium mb-1.5 block uppercase tracking-wider">Confirmar senha</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                    placeholder="Repita a senha" autoComplete="new-password"
-                    className={'w-full bg-black/30 border rounded-xl px-4 py-3 pl-10 text-sm text-white placeholder:text-gray-600 focus:outline-none transition-all ' + (confirm && confirm !== password ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/30')}
-                  />
-                </div>
-                {confirm && confirm !== password && <p className="text-red-400 text-xs mt-1">As senhas nao coincidem</p>}
-              </div>
-            )}
-
-            <button
-              type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #f5f0ee, #ddd8d4)', color: '#111' }}
-            >
-              {loading ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <>
-                  {mode === 'login' ? 'Entrar' : mode === 'register' ? 'Criar minha conta' : 'Enviar link de recuperacao'}
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Forgot link */}
+            </div>
+          )}
           {mode === 'login' && (
-            <button onClick={() => { setMode('forgot'); setError(''); }} className="mt-4 text-xs text-gray-500 hover:text-gray-300 w-full text-center transition-colors">
-              Esqueci minha senha
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ accentColor: '#e8826a', width: '14px', height: '14px' }} />
+                <span style={{ fontSize: '11px', color: '#aaa', fontWeight: '700', letterSpacing: '0.5px' }}>LEMBRAR DE MIM</span>
+              </label>
+              <button type="button" onClick={handleForgot} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: '800', color: '#e8826a', letterSpacing: '0.5px' }}>
+                ESQUECI A SENHA
+              </button>
+            </div>
+          )}
+          {error && (
+            <div style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', marginBottom: '16px' }}>
+              {error}
+            </div>
+          )}
+          <button type="submit" style={neu.btnPrimary} disabled={loading}>
+            {loading ? <Loader2 size={18} /> : mode === 'login' ? 'ENTRAR NO PROJETO' : mode === 'register' ? 'CRIAR ACESSO' : 'ENVIAR LINK'}
+          </button>
+        </form>
+        {mode === 'login' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '22px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: '#d5cfc9' }} />
+              <span style={{ fontSize: '12px', color: '#bbb', fontWeight: '700' }}>OU</span>
+              <div style={{ flex: 1, height: '1px', background: '#d5cfc9' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '22px' }}>
+              <button style={neu.btnSecondary} onClick={handleGoogle} type="button">
+                <Globe size={16} color="#e8826a" />
+                GOOGLE
+              </button>
+              <button style={neu.btnSecondary} type="button">
+                <Grid size={16} color="#999" />
+                SSO
+              </button>
+            </div>
+          </>
+        )}
+        <div style={{ textAlign: 'center' }}>
+          {mode === 'login' ? (
+            <>
+              <span style={{ fontSize: '13px', color: '#aaa' }}>Novo por aqui? </span>
+              <button type="button" onClick={() => { setMode('register'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#e8826a' }}>Solicitar acesso</button>
+            </>
+          ) : (
+            <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#e8826a' }}>Voltar ao login</button>
           )}
         </div>
-
-        <p className="text-center text-gray-600 text-xs mt-6">
-          Acesso restrito &mdash; Plataforma ENIGAMI
-        </p>
       </div>
     </div>
   );

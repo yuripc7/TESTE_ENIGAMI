@@ -1,301 +1,650 @@
-import React, { useState, useRef } from 'react';
-import { Viability, ViabilityVersion, FileLink } from '../types';
-import { useApp } from '../contexts/AppContext';
-import { formatLocalDate } from '../utils/dateUtils';
-import { validateFileSize } from '../utils/validation';
-import { readFileAsDataURL } from '../utils/fileReaderUtils';
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  ViabilidadesPanel.tsx — Kanban completo com upload de PDFs     ║
+// ║  Integrado com useApp() · Substitui o painel anterior           ║
+// ╚══════════════════════════════════════════════════════════════════╝
 
-interface ViabilidadesPanelProps {
-    isOpen: boolean;
-    onClose: () => void;
-    viabilities: Viability[];
-    companyId: number;
-    companyName: string;
-    onAdd: (v: Omit<Viability, 'id' | 'createdAt' | 'versions'>) => void;
-    onDelete: (id: string) => void;
-    onAddVersion: (viabilityId: string, version: Omit<ViabilityVersion, 'id' | 'version'>) => void;
-    onUpdateStatus: (id: string, status: Viability['status']) => void;
+import React, { useState, useRef, useCallback } from 'react';
+import { FileLink } from '../types';
+import { useApp } from '../contexts/AppContext';
+import { readFileAsDataURL } from '../utils/fileReaderUtils';
+import { validateFileSize } from '../utils/validation';
+
+// ── Colunas do Kanban ──────────────────────────────────────────────────────
+const COLS = [
+  { id: 'em_aberto',           label: 'Em Aberto',                tw: 'text-gray-400',    border: 'border-l-gray-400',    headerBorder: 'border-b-gray-400/60',    dot: 'bg-gray-400'    },
+  { id: 'a_fazer',             label: 'A Fazer',                  tw: 'text-blue-400',    border: 'border-l-blue-400',    headerBorder: 'border-b-blue-400/60',    dot: 'bg-blue-400'    },
+  { id: 'estudos_finalizados', label: 'Estudos Finalizados',      tw: 'text-emerald-400', border: 'border-l-emerald-400', headerBorder: 'border-b-emerald-400/60', dot: 'bg-emerald-400' },
+  { id: 'dados_permuta',       label: 'Dados Intenção Permuta',   tw: 'text-amber-400',   border: 'border-l-amber-400',   headerBorder: 'border-b-amber-400/60',   dot: 'bg-amber-400'   },
+  { id: 'contratos',           label: 'Contratos',                tw: 'text-pink-400',    border: 'border-l-pink-400',    headerBorder: 'border-b-pink-400/60',    dot: 'bg-pink-400'    },
+  { id: 'contratos_assinados', label: 'Contratos Assinados',      tw: 'text-green-400',   border: 'border-l-green-400',   headerBorder: 'border-b-green-400/60',   dot: 'bg-green-400'   },
+] as const;
+
+type KanbanStatus = typeof COLS[number]['id'];
+
+// ── Tipo Estendido de Viabilidade ──────────────────────────────────────────
+// Adicione estes campos à interface Viability em types.ts:
+//   titulo?: string;
+//   responsavel?: string;
+//   kanbanStatus?: KanbanStatus;
+//   pdfConsultaPrefeitura?: FileLink;  // Obrigatório ao criar
+//   pdfLocalizacao?: FileLink;          // Obrigatório ao criar
+//   pdfEstudoTerceiro?: FileLink;       // Opcional
+//   obs?: string;
+interface ExtViab {
+  id: string;
+  companyId: number;
+  address: string;
+  titulo?: string;
+  responsavel?: string;
+  date: string;
+  status: 'VIÁVEL' | 'STAND BY' | 'EM ANÁLISE' | 'NÃO INICIADO';
+  kanbanStatus?: KanbanStatus;
+  pdfConsultaPrefeitura?: FileLink;
+  pdfLocalizacao?: FileLink;
+  pdfEstudoTerceiro?: FileLink;
+  pdfSummary?: FileLink;
+  obs?: string;
+  versions: { id: string; version: number; date: string; notes?: string; pdfAttachment?: FileLink }[];
+  createdAt: string;
 }
 
-const STATUS_CONFIG = {
-    'VIÁVEL': { color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20', icon: 'check_circle' },
-    'STAND BY': { color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/20', icon: 'pause_circle' },
-    'EM ANÁLISE': { color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20', icon: 'pending' },
-    'NÃO INICIADO': { color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20', icon: 'schedule' },
+const EMPTY_FORM = {
+  titulo: '',
+  address: '',
+  responsavel: '',
+  date: new Date().toISOString().slice(0, 10),
+  kanbanStatus: 'em_aberto' as KanbanStatus,
+  pdfConsultaPrefeitura: null as FileLink | null,
+  pdfLocalizacao: null as FileLink | null,
+  pdfEstudoTerceiro: null as FileLink | null,
+  obs: '',
 };
 
-const STATUS_OPTIONS: Viability['status'][] = ['NÃO INICIADO', 'EM ANÁLISE', 'STAND BY', 'VIÁVEL'];
+// ── Props ──────────────────────────────────────────────────────────────────
+interface ViabilidadesPanelProps {
+  companyId: number;
+  companyName: string;
+  // Props legadas abaixo — mantidas para compatibilidade com App.tsx atual
+  // Podem ser removidas quando App.tsx for atualizado
+  isOpen?: boolean;
+  onClose?: () => void;
+  viabilities?: ExtViab[];
+  onAdd?: (v: any) => void;
+  onDelete?: (id: string) => void;
+  onAddVersion?: (viabilityId: string, version: any) => void;
+  onUpdateStatus?: (id: string, status: ExtViab['status']) => void;
+}
 
+// ══════════════════════════════════════════════════════════════════════════
 export const ViabilidadesPanel: React.FC<ViabilidadesPanelProps> = ({
-    isOpen, onClose, viabilities, companyId, companyName,
-    onAdd, onDelete, onAddVersion, onUpdateStatus
+  companyId,
+  companyName,
 }) => {
-    const { setNotification } = useApp();
-    const [showForm, setShowForm] = useState(false);
-    const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [showVersionForm, setShowVersionForm] = useState<string | null>(null);
+  const { db, setDb, currentUser, setNotification, addLog } = useApp();
 
-    // Form state
-    const [address, setAddress] = useState('');
-    const [date, setDate] = useState('');
-    const [status, setStatus] = useState<Viability['status']>('NÃO INICIADO');
-    const [pendingPdf, setPendingPdf] = useState<FileLink | null>(null);
-    const pdfRef = useRef<HTMLInputElement>(null);
+  // Viabilidades desta empresa
+  const viabs = ((db as any).viabilities || []).filter(
+    (v: ExtViab) => v.companyId === companyId
+  ) as ExtViab[];
 
-    // Version form state
-    const [versionNotes, setVersionNotes] = useState('');
-    const [versionDate, setVersionDate] = useState('');
-    const [versionPdf, setVersionPdf] = useState<FileLink | null>(null);
-    const versionPdfRef = useRef<HTMLInputElement>(null);
+  const [showNew, setShowNew]     = useState(false);
+  const [detail, setDetail]       = useState<ExtViab | null>(null);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [errs, setErrs]           = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+  const [dragId, setDragId]       = useState<string | null>(null);
+  const [dragOver, setDragOver]   = useState<string | null>(null);
+  const [search, setSearch]       = useState('');
 
-    const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (f: FileLink | null) => void) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (!validateFileSize(file)) {
-            setNotification('Arquivo muito grande (max 5MB).');
-            return;
-        }
-        try {
-            const dataUrl = await readFileAsDataURL(file);
-            setter({ label: file.name, path: dataUrl, createdAt: new Date().toISOString() });
-        } catch (err) {
-            console.error('Erro ao ler PDF:', err);
-        }
-        e.target.value = '';
+  const refConsulta = useRef<HTMLInputElement>(null);
+  const refLoc      = useRef<HTMLInputElement>(null);
+  const refEstudo   = useRef<HTMLInputElement>(null);
+
+  // Helpers
+  const col    = (id?: string) => COLS.find(c => c.id === id) || COLS[0];
+  const byCol  = (colId: string) =>
+    viabs.filter(v => {
+      const matchCol = (v.kanbanStatus || 'em_aberto') === colId;
+      const matchSearch = !search ||
+        (v.titulo || v.address).toLowerCase().includes(search.toLowerCase()) ||
+        (v.responsavel || '').toLowerCase().includes(search.toLowerCase());
+      return matchCol && matchSearch;
+    });
+
+  // ── Upload de arquivo ────────────────────────────────────────────────────
+  const uploadFile = useCallback(async (
+    field: 'pdfConsultaPrefeitura' | 'pdfLocalizacao' | 'pdfEstudoTerceiro',
+    file: File
+  ) => {
+    const err = validateFileSize(file, 10);
+    if (err) { setNotification(err); return; }
+    try {
+      setUploading(true);
+      const path = await readFileAsDataURL(file);
+      const fl: FileLink = {
+        label: file.name,
+        path,
+        author: currentUser?.name,
+        createdAt: new Date().toISOString(),
+      };
+      setForm(f => ({ ...f, [field]: fl }));
+    } catch {
+      setNotification('Erro ao carregar arquivo. Tente novamente.');
+    } finally {
+      setUploading(false);
+    }
+  }, [currentUser, setNotification]);
+
+  // ── Validação ────────────────────────────────────────────────────────────
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.titulo.trim())              e.titulo    = 'Obrigatório';
+    if (!form.address.trim())             e.address   = 'Obrigatório';
+    if (!form.pdfConsultaPrefeitura)      e.consulta  = 'Arquivo obrigatório';
+    if (!form.pdfLocalizacao)             e.localizacao = 'Arquivo obrigatório';
+    return e;
+  };
+
+  // ── Salvar nova viabilidade ──────────────────────────────────────────────
+  const handleSave = () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrs(e); return; }
+
+    const nova: ExtViab = {
+      id: `via-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      companyId,
+      address: form.address,
+      titulo: form.titulo,
+      responsavel: form.responsavel || undefined,
+      date: form.date,
+      status: 'NÃO INICIADO',
+      kanbanStatus: form.kanbanStatus,
+      pdfConsultaPrefeitura: form.pdfConsultaPrefeitura || undefined,
+      pdfLocalizacao: form.pdfLocalizacao || undefined,
+      pdfEstudoTerceiro: form.pdfEstudoTerceiro || undefined,
+      obs: form.obs || undefined,
+      versions: [],
+      createdAt: new Date().toISOString(),
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!address.trim() || !date) {
-            setNotification('Preencha endereço e data.');
-            return;
-        }
-        onAdd({
-            companyId,
-            address: address.trim(),
-            date,
-            status,
-            pdfSummary: pendingPdf || undefined,
-        });
-        resetForm();
-    };
+    setDb(prev => ({
+      ...prev,
+      viabilities: [...((prev as any).viabilities || []), nova],
+    }));
 
-    const handleSubmitVersion = (viabilityId: string) => {
-        if (!versionDate) {
-            setNotification('Preencha a data da versão.');
-            return;
-        }
-        onAddVersion(viabilityId, {
-            date: versionDate,
-            notes: versionNotes.trim() || undefined,
-            pdfAttachment: versionPdf || undefined,
-        });
-        setVersionNotes('');
-        setVersionDate('');
-        setVersionPdf(null);
-        setShowVersionForm(null);
-    };
+    addLog(currentUser?.name || 'SISTEMA', `VIABILIDADE CRIADA: ${form.titulo}`);
+    setNotification('Viabilidade criada com sucesso!');
+    setShowNew(false);
+    setForm(EMPTY_FORM);
+    setErrs({});
+  };
 
-    const resetForm = () => {
-        setAddress('');
-        setDate('');
-        setStatus('NÃO INICIADO');
-        setPendingPdf(null);
-        setShowForm(false);
-    };
+  // ── Mover coluna ─────────────────────────────────────────────────────────
+  const move = (id: string, to: KanbanStatus) => {
+    setDb(prev => ({
+      ...prev,
+      viabilities: ((prev as any).viabilities || []).map((v: ExtViab) =>
+        v.id === id ? { ...v, kanbanStatus: to } : v
+      ),
+    }));
+    setDetail(d => d ? { ...d, kanbanStatus: to } : null);
+    addLog(currentUser?.name || 'SISTEMA', `VIABILIDADE MOVIDA: ${col(to).label.toUpperCase()}`);
+  };
 
-    const downloadFile = (file: FileLink) => {
-        const link = document.createElement('a');
-        link.href = file.path;
-        link.download = file.label;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+  // ── Excluir ──────────────────────────────────────────────────────────────
+  const del = (id: string) => {
+    setDb(prev => ({
+      ...prev,
+      viabilities: ((prev as any).viabilities || []).filter((v: ExtViab) => v.id !== id),
+    }));
+    setDetail(null);
+    addLog(currentUser?.name || 'SISTEMA', 'VIABILIDADE EXCLUÍDA');
+    setNotification('Viabilidade excluída.');
+  };
 
-    if (!isOpen) return null;
+  // ── Zona de Upload (componente interno) ───────────────────────────────────
+  const UploadZone = ({
+    label, field, refEl, required, file, error,
+  }: {
+    label: string;
+    field: 'pdfConsultaPrefeitura' | 'pdfLocalizacao' | 'pdfEstudoTerceiro';
+    refEl: React.RefObject<HTMLInputElement>;
+    required?: boolean;
+    file: FileLink | null;
+    error?: string;
+  }) => (
+    <div>
+      <p className="text-xs font-semibold text-theme-textMuted uppercase tracking-wide mb-1">
+        {label}
+        {required ? <span className="text-red-400 ml-1">*</span> : (
+          <span className="text-theme-textMuted font-normal normal-case tracking-normal ml-1">(opcional)</span>
+        )}
+      </p>
+      <input
+        ref={refEl} type="file" accept=".pdf,.png,.jpg,.jpeg,.kml"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(field, f); e.target.value = ''; }}
+      />
+      <div
+        onClick={() => refEl.current?.click()}
+        className={[
+          'border border-dashed rounded-lg p-3 text-center cursor-pointer transition-all select-none',
+          file
+            ? 'border-emerald-500/50 bg-emerald-500/5'
+            : error
+              ? 'border-red-500/50 bg-red-500/5'
+              : 'border-theme-border hover:border-theme-textMuted/60 bg-theme-card/50',
+        ].join(' ')}
+      >
+        {file
+          ? <p className="text-sm text-emerald-400 font-medium truncate">✓ {file.label}</p>
+          : <p className="text-sm text-theme-textMuted">📄 Clique para selecionar</p>}
+      </div>
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+    </div>
+  );
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn p-4 no-print">
-            <div className="bg-theme-card w-full max-w-[700px] max-h-[85vh] rounded-[30px] border border-theme-divider shadow-neuro animate-scaleIn relative overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="p-6 pb-4 border-b border-theme-divider">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-2">
-                                <span className="material-symbols-outlined text-emerald-500">analytics</span>
-                                Viabilidades
-                            </h3>
-                            <p className="text-xs text-theme-textMuted mt-1">{companyName} &middot; {viabilities.length} registro(s)</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setShowForm(!showForm)} className="px-3 py-1.5 bg-emerald-500 text-white rounded-full text-[9px] font-bold uppercase hover:bg-emerald-600 transition-colors">
-                                {showForm ? 'Cancelar' : '+ Nova'}
-                            </button>
-                            <button onClick={onClose} className="text-theme-textMuted hover:text-theme-text">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* New viability form */}
-                    {showForm && (
-                        <form onSubmit={handleSubmit} className="mt-4 space-y-3 p-4 bg-theme-bg rounded-xl border border-theme-divider">
-                            <input type="text" placeholder="Endereço / Localização" value={address} onChange={e => setAddress(e.target.value)}
-                                className="w-full px-3 py-2 bg-theme-card border border-theme-divider rounded-lg text-theme-text text-sm" autoFocus />
-                            <div className="grid grid-cols-2 gap-3">
-                                <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                                    className="w-full px-3 py-2 bg-theme-card border border-theme-divider rounded-lg text-theme-text text-sm" />
-                                <select value={status} onChange={e => setStatus(e.target.value as Viability['status'])}
-                                    className="w-full px-3 py-2 bg-theme-card border border-theme-divider rounded-lg text-theme-text text-sm">
-                                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <input ref={pdfRef} type="file" accept=".pdf" onChange={e => handlePdfUpload(e, setPendingPdf)} className="hidden" />
-                                <button type="button" onClick={() => pdfRef.current?.click()}
-                                    className="flex items-center gap-1 px-3 py-2 bg-theme-card border border-theme-divider rounded-lg text-theme-textMuted text-xs hover:text-theme-text transition-colors">
-                                    <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
-                                    {pendingPdf ? pendingPdf.label : 'Anexar PDF'}
-                                </button>
-                                {pendingPdf && <button type="button" onClick={() => setPendingPdf(null)} className="text-red-500 text-xs">Remover</button>}
-                            </div>
-                            <button type="submit" className="w-full py-2 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-colors">
-                                CADASTRAR VIABILIDADE
-                            </button>
-                        </form>
-                    )}
-                </div>
-
-                {/* List */}
-                <div className="flex-1 overflow-y-auto scroller p-6 space-y-3">
-                    {viabilities.length === 0 && !showForm && (
-                        <div className="flex flex-col items-center justify-center py-12 text-theme-textMuted">
-                            <span className="material-symbols-outlined text-5xl mb-3 opacity-30">analytics</span>
-                            <p className="text-sm">Nenhuma viabilidade cadastrada.</p>
-                            <p className="text-xs mt-1">Clique em "+ Nova" para começar.</p>
-                        </div>
-                    )}
-
-                    {viabilities.map(v => {
-                        const config = STATUS_CONFIG[v.status];
-                        const isExpanded = expandedId === v.id;
-
-                        return (
-                            <div key={v.id} className={`rounded-xl border transition-all ${isExpanded ? 'border-theme-orange shadow-lg' : 'border-theme-divider hover:border-theme-orange/50'}`}>
-                                {/* Main row */}
-                                <div className="p-4 flex items-center gap-3 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : v.id)}>
-                                    <span className={`material-symbols-outlined ${config.color}`}>{config.icon}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-theme-text truncate">{v.address}</p>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] text-theme-textMuted font-mono">{formatLocalDate(v.date)}</span>
-                                            <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${config.bg} ${config.color}`}>{v.status}</span>
-                                            {v.versions.length > 0 && (
-                                                <span className="text-[9px] text-theme-textMuted">v{v.versions.length}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {v.pdfSummary && (
-                                        <button onClick={(e) => { e.stopPropagation(); downloadFile(v.pdfSummary!); }}
-                                            className="text-red-500 hover:text-red-400 transition-colors" title="Baixar PDF">
-                                            <span className="material-symbols-outlined">picture_as_pdf</span>
-                                        </button>
-                                    )}
-                                    <span className={`material-symbols-outlined text-theme-textMuted transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
-                                </div>
-
-                                {/* Expanded content */}
-                                {isExpanded && (
-                                    <div className="px-4 pb-4 border-t border-theme-divider pt-3 space-y-3 animate-fadeIn">
-                                        {/* Status change */}
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-[9px] font-bold text-theme-textMuted uppercase">Status:</span>
-                                            {STATUS_OPTIONS.map(s => (
-                                                <button key={s} onClick={() => onUpdateStatus(v.id, s)}
-                                                    className={`text-[9px] font-bold px-2 py-1 rounded-full border transition-all ${v.status === s ? `${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].color}` : 'border-theme-divider text-theme-textMuted hover:text-theme-text'}`}>
-                                                    {s}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Versions timeline */}
-                                        <div>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-[10px] font-bold text-theme-textMuted uppercase tracking-widest">Versões ({v.versions.length})</span>
-                                                <button onClick={() => setShowVersionForm(showVersionForm === v.id ? null : v.id)}
-                                                    className="text-[9px] font-bold text-emerald-500 hover:text-emerald-400 uppercase">
-                                                    {showVersionForm === v.id ? 'Cancelar' : '+ Versão'}
-                                                </button>
-                                            </div>
-
-                                            {/* Version form */}
-                                            {showVersionForm === v.id && (
-                                                <div className="mb-3 p-3 bg-theme-bg rounded-lg border border-theme-divider space-y-2">
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <input type="date" value={versionDate} onChange={e => setVersionDate(e.target.value)}
-                                                            className="px-2 py-1.5 bg-theme-card border border-theme-divider rounded-lg text-theme-text text-xs" />
-                                                        <div className="flex items-center gap-1">
-                                                            <input ref={versionPdfRef} type="file" accept=".pdf" onChange={e => handlePdfUpload(e, setVersionPdf)} className="hidden" />
-                                                            <button type="button" onClick={() => versionPdfRef.current?.click()}
-                                                                className="flex-1 flex items-center gap-1 px-2 py-1.5 bg-theme-card border border-theme-divider rounded-lg text-theme-textMuted text-xs hover:text-theme-text">
-                                                                <span className="material-symbols-outlined text-xs">picture_as_pdf</span>
-                                                                {versionPdf ? versionPdf.label.slice(0, 15) + '...' : 'PDF'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <input type="text" placeholder="Observações (opcional)" value={versionNotes} onChange={e => setVersionNotes(e.target.value)}
-                                                        className="w-full px-2 py-1.5 bg-theme-card border border-theme-divider rounded-lg text-theme-text text-xs" />
-                                                    <button onClick={() => handleSubmitVersion(v.id)}
-                                                        className="w-full py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600">
-                                                        Salvar Versão
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {/* Versions list */}
-                                            {v.versions.length > 0 ? (
-                                                <div className="space-y-1">
-                                                    {v.versions.slice().reverse().map((ver, idx) => (
-                                                        <div key={ver.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-theme-bg transition-colors">
-                                                            <div className="flex flex-col items-center w-5 shrink-0">
-                                                                <div className={`w-2.5 h-2.5 rounded-full ${idx === 0 ? 'bg-emerald-500' : 'bg-theme-divider'}`} />
-                                                                {idx < v.versions.length - 1 && <div className="w-0.5 h-4 bg-theme-divider mt-0.5" />}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xs font-bold text-theme-text">v{ver.version}</span>
-                                                                    <span className="text-[10px] font-mono text-theme-textMuted">{formatLocalDate(ver.date)}</span>
-                                                                </div>
-                                                                {ver.notes && <p className="text-[10px] text-theme-textMuted mt-0.5 truncate">{ver.notes}</p>}
-                                                            </div>
-                                                            {ver.pdfAttachment && (
-                                                                <button onClick={() => downloadFile(ver.pdfAttachment!)}
-                                                                    className="text-red-500 hover:text-red-400 text-sm">
-                                                                    <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-[10px] text-theme-textMuted italic">Sem versões registradas.</p>
-                                            )}
-                                        </div>
-
-                                        {/* Delete */}
-                                        <div className="flex justify-end pt-2 border-t border-theme-divider">
-                                            <button onClick={() => onDelete(v.id)} className="text-[9px] font-bold text-red-500 hover:text-red-400 uppercase flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm">delete</span> Excluir
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+  // ════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ════════════════════════════════════════════════════════════════════════
+  return (
+    <div className="flex flex-col h-full">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border shrink-0">
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-theme-text leading-none">Viabilidades</h2>
+            <p className="text-xs text-theme-textMuted mt-0.5">{companyName} · {viabs.length} registro(s)</p>
+          </div>
         </div>
-    );
+
+        <div className="flex items-center gap-2">
+          {/* Busca */}
+          <div className="relative">
+            <span className="material-icons absolute left-2 top-1/2 -translate-y-1/2 text-theme-textMuted text-base">search</span>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="pl-7 pr-3 py-1.5 text-xs bg-theme-card border border-theme-border rounded-lg text-theme-text outline-none focus:border-emerald-500 w-40"
+            />
+          </div>
+          {/* Botão nova */}
+          <button
+            onClick={() => { setForm(EMPTY_FORM); setErrs({}); setShowNew(true); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors"
+          >
+            <span className="material-icons text-base">add</span>
+            Nova Viabilidade
+          </button>
+        </div>
+      </div>
+
+      {/* ── Stats rápidas ────────────────────────────────────────────────── */}
+      <div className="flex gap-2 px-5 py-2 border-b border-theme-border shrink-0 overflow-x-auto">
+        {COLS.map(c => {
+          const n = byCol(c.id).length;
+          return (
+            <div key={c.id} className="flex items-center gap-1.5 shrink-0">
+              <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+              <span className="text-xs text-theme-textMuted">{c.label}</span>
+              <span className={`text-xs font-semibold ${c.tw}`}>{n}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Kanban Board ─────────────────────────────────────────────────── */}
+      <div className="flex gap-3 p-4 overflow-x-auto flex-1 items-start">
+        {COLS.map(c => {
+          const cards = byCol(c.id);
+          return (
+            <div
+              key={c.id}
+              className={`flex-none w-[220px] rounded-xl border border-theme-border bg-theme-card transition-colors ${dragOver === c.id ? 'ring-1 ring-emerald-500/30' : ''}`}
+              onDragOver={e => { e.preventDefault(); setDragOver(c.id); }}
+              onDragLeave={() => setDragOver(null)}
+              onDrop={() => { if (dragId) { move(dragId, c.id); setDragId(null); setDragOver(null); } }}
+            >
+              {/* Cabeçalho da coluna */}
+              <div className={`flex items-center justify-between px-3 py-2.5 border-b-2 ${c.headerBorder}`}>
+                <span className={`text-[10px] font-bold uppercase tracking-wider leading-tight ${c.tw}`}>
+                  {c.label}
+                </span>
+                <span className="text-xs bg-theme-bg px-1.5 py-0.5 rounded text-theme-textMuted font-medium">
+                  {cards.length}
+                </span>
+              </div>
+
+              {/* Cards */}
+              <div className="flex flex-col gap-2 p-2">
+                {cards.length === 0 && (
+                  <p className="text-xs text-center text-theme-textMuted py-4 opacity-50">Vazio</p>
+                )}
+                {cards.map(v => (
+                  <div
+                    key={v.id}
+                    draggable
+                    onDragStart={() => setDragId(v.id)}
+                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    onClick={() => setDetail(v)}
+                    className={`bg-theme-bg border border-l-[3px] border-theme-border rounded-lg p-2.5 cursor-pointer hover:border-theme-textMuted/40 transition-all group ${c.border}`}
+                  >
+                    <p className="text-xs font-semibold text-theme-text leading-snug mb-0.5">
+                      {v.titulo || v.address}
+                    </p>
+                    {v.titulo && (
+                      <p className="text-[11px] text-theme-textMuted mb-1.5 truncate">
+                        📍 {v.address}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1 mb-1">
+                      {v.pdfConsultaPrefeitura && (
+                        <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-400/20 rounded px-1 py-0.5 leading-none">
+                          Consulta
+                        </span>
+                      )}
+                      {v.pdfLocalizacao && (
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 rounded px-1 py-0.5 leading-none">
+                          Mapa
+                        </span>
+                      )}
+                      {v.pdfEstudoTerceiro && (
+                        <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-400/20 rounded px-1 py-0.5 leading-none">
+                          Estudo
+                        </span>
+                      )}
+                    </div>
+                    {v.responsavel && (
+                      <p className="text-[11px] text-theme-textMuted">👤 {v.responsavel}</p>
+                    )}
+                    {v.obs && (
+                      <p className="text-[11px] text-theme-textMuted/70 italic mt-0.5 truncate">
+                        "{v.obs}"
+                      </p>
+                    )}
+                    {/* Data */}
+                    <p className="text-[10px] text-theme-textMuted/50 mt-1">
+                      {new Date(v.createdAt).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                ))}
+
+                {/* Botão adicionar nesta coluna */}
+                <button
+                  onClick={() => { setForm({ ...EMPTY_FORM, kanbanStatus: c.id }); setErrs({}); setShowNew(true); }}
+                  className="w-full border border-dashed border-theme-border rounded-lg py-1.5 text-[11px] text-theme-textMuted hover:text-theme-text hover:border-theme-textMuted/40 transition-all"
+                >
+                  + Adicionar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nova Viabilidade
+      ════════════════════════════════════════════════════════════════════ */}
+      {showNew && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowNew(false); }}
+        >
+          <div className="bg-theme-card border border-theme-border rounded-xl p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            {/* Header modal */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-theme-text">Nova Viabilidade</h3>
+              <button onClick={() => setShowNew(false)} className="text-theme-textMuted hover:text-theme-text text-xl leading-none">×</button>
+            </div>
+
+            <div className="flex flex-col gap-3.5">
+              {/* Nome do estudo */}
+              <div>
+                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">
+                  Nome do Estudo <span className="text-red-400">*</span>
+                </label>
+                <input
+                  className={`w-full bg-theme-bg border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 transition-colors ${errs.titulo ? 'border-red-500' : 'border-theme-border'}`}
+                  value={form.titulo}
+                  placeholder="Ex: Área São José — Rua das Flores"
+                  onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
+                />
+                {errs.titulo && <p className="text-[11px] text-red-400 mt-1">{errs.titulo}</p>}
+              </div>
+
+              {/* Localização */}
+              <div>
+                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">
+                  Localização / Endereço <span className="text-red-400">*</span>
+                </label>
+                <input
+                  className={`w-full bg-theme-bg border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 transition-colors ${errs.address ? 'border-red-500' : 'border-theme-border'}`}
+                  value={form.address}
+                  placeholder="Rua, Bairro, Cidade — UF"
+                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                />
+                {errs.address && <p className="text-[11px] text-red-400 mt-1">{errs.address}</p>}
+              </div>
+
+              {/* ── PDFs ── */}
+              <div className="border border-theme-border rounded-lg p-3 flex flex-col gap-3">
+                <p className="text-[11px] font-bold text-theme-textMuted uppercase tracking-wider">Documentos</p>
+
+                {/* Consulta da Prefeitura (OBRIGATÓRIO) */}
+                <UploadZone
+                  label="PDF — Consulta de Viabilidade da Prefeitura"
+                  field="pdfConsultaPrefeitura"
+                  refEl={refConsulta}
+                  required
+                  file={form.pdfConsultaPrefeitura}
+                  error={errs.consulta}
+                />
+
+                {/* Localização do Terreno (OBRIGATÓRIO) */}
+                <UploadZone
+                  label="Arquivo — Localização do Terreno"
+                  field="pdfLocalizacao"
+                  refEl={refLoc}
+                  required
+                  file={form.pdfLocalizacao}
+                  error={errs.localizacao}
+                />
+
+                {/* Estudo outra construtora (OPCIONAL) */}
+                <UploadZone
+                  label="PDF — Estudo de Outra Construtora"
+                  field="pdfEstudoTerceiro"
+                  refEl={refEstudo}
+                  file={form.pdfEstudoTerceiro}
+                />
+              </div>
+
+              {/* Responsável + Coluna inicial */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Responsável</label>
+                  <input
+                    className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500"
+                    value={form.responsavel}
+                    placeholder="Nome"
+                    onChange={e => setForm(f => ({ ...f, responsavel: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Coluna Inicial</label>
+                  <select
+                    className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500"
+                    value={form.kanbanStatus}
+                    onChange={e => setForm(f => ({ ...f, kanbanStatus: e.target.value as KanbanStatus }))}
+                  >
+                    {COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Observações</label>
+                <textarea
+                  className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 resize-none"
+                  value={form.obs}
+                  placeholder="Notas, reuniões agendadas, status atual..."
+                  rows={2}
+                  onChange={e => setForm(f => ({ ...f, obs: e.target.value }))}
+                />
+              </div>
+
+              {uploading && (
+                <p className="text-xs text-amber-400 text-center animate-pulse">Carregando arquivo...</p>
+              )}
+
+              {/* Ações */}
+              <div className="flex gap-2 justify-end pt-2 border-t border-theme-border">
+                <button
+                  onClick={() => setShowNew(false)}
+                  className="px-4 py-2 text-sm text-theme-textMuted hover:text-theme-text border border-theme-border rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={uploading}
+                  className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
+                >
+                  Salvar Viabilidade
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Detalhe da Viabilidade
+      ════════════════════════════════════════════════════════════════════ */}
+      {detail && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4"
+          onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}
+        >
+          <div className="bg-theme-card border border-theme-border rounded-xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`w-2 h-2 rounded-full flex-none ${col(detail.kanbanStatus).dot}`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${col(detail.kanbanStatus).tw}`}>
+                    {col(detail.kanbanStatus).label}
+                  </span>
+                </div>
+                <h3 className="text-sm font-semibold text-theme-text leading-snug">
+                  {detail.titulo || detail.address}
+                </h3>
+              </div>
+              <button onClick={() => setDetail(null)} className="text-theme-textMuted hover:text-theme-text text-xl leading-none ml-3 shrink-0">×</button>
+            </div>
+
+            <div className="flex flex-col gap-3 text-sm">
+              {/* Info */}
+              <div className="flex flex-col gap-2">
+                <div>
+                  <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Endereço</p>
+                  <p className="text-theme-text text-xs">📍 {detail.address}</p>
+                </div>
+                {detail.responsavel && (
+                  <div>
+                    <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Responsável</p>
+                    <p className="text-theme-text text-xs">👤 {detail.responsavel}</p>
+                  </div>
+                )}
+                {detail.obs && (
+                  <div>
+                    <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Observações</p>
+                    <p className="text-theme-text text-xs italic">{detail.obs}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Criado em</p>
+                  <p className="text-theme-text text-xs">{new Date(detail.createdAt).toLocaleDateString('pt-BR')}</p>
+                </div>
+              </div>
+
+              {/* Documentos */}
+              <div className="border-t border-theme-border pt-3">
+                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Documentos</p>
+                {[
+                  { fl: detail.pdfConsultaPrefeitura, label: 'Consulta de Viabilidade', req: true,  colorClass: 'blue'    },
+                  { fl: detail.pdfLocalizacao,        label: 'Localização do Terreno',   req: true,  colorClass: 'emerald' },
+                  { fl: detail.pdfEstudoTerceiro,     label: 'Estudo de Outra Construtora', req: false, colorClass: 'amber' },
+                ].map(({ fl, label, req, colorClass }) => (
+                  <div
+                    key={label}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border mb-1.5 ${
+                      fl
+                        ? `bg-${colorClass}-500/5 border-${colorClass}-500/20`
+                        : 'bg-theme-bg border-theme-border opacity-40'
+                    }`}
+                  >
+                    <span className="text-base flex-none">📄</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[11px] font-medium ${fl ? `text-${colorClass}-400` : 'text-theme-textMuted'}`}>
+                        {label}
+                      </p>
+                      {fl ? (
+                        <a
+                          href={fl.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-theme-textMuted hover:text-theme-text truncate block"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {fl.label}
+                        </a>
+                      ) : (
+                        <p className="text-[10px] text-theme-textMuted">Não anexado</p>
+                      )}
+                    </div>
+                    <span className={`text-[10px] shrink-0 px-1.5 py-0.5 rounded border ${
+                      req
+                        ? 'bg-red-500/10 text-red-400 border-red-400/20'
+                        : 'bg-theme-bg text-theme-textMuted border-theme-border'
+                    }`}>
+                      {req ? 'Obrig.' : 'Opcional'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mover para */}
+              <div className="border-t border-theme-border pt-3">
+                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Mover para</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {COLS.filter(c => c.id !== detail.kanbanStatus).map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => move(detail.id, c.id)}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border ${c.border.replace('border-l-', 'border-')} ${c.tw} hover:opacity-70 transition-opacity`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Excluir */}
+              <div className="border-t border-theme-border pt-3 flex justify-end">
+                <button
+                  onClick={() => del(detail.id)}
+                  className="text-xs text-red-400 border border-red-400/30 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors"
+                >
+                  Excluir viabilidade
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };

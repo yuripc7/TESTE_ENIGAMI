@@ -95,5 +95,6 @@ export const INITIAL_DB: DB = {
         "Arq. Isabela",
         "Mkt Gisele",
         "Gugu (guzinho)"
-    ]
+    ],
+    viabilities: [],
 };

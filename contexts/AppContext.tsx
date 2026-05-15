@@ -8,6 +8,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 const USER_KEY = 'enigami_user_v1';
 
 interface User {
+  id?: string;
   name: string;
   avatar?: string;
 }
@@ -82,6 +83,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   });
   const [notification, setNotification] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Sincroniza currentUser com o perfil do Supabase Auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) loadProfile(session.user.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session?.user) { await loadProfile(session.user.id); }
+        else { setCurrentUser(null); }
+      }
+    );
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadProfile(userId: string) {
+    const { data } = await supabase.from('profiles').select('id, name, avatar_url').eq('id', userId).single();
+    if (data) {
+      setCurrentUser({ id: data.id, name: data.name, avatar: data.avatar_url ?? buildAvatar(data.name) });
+    } else {
+      const { data: ud } = await supabase.auth.getUser();
+      if (ud?.user) setCurrentUser({ id: ud.user.id, name: ud.user.email?.split('@')[0] ?? 'Usuário', avatar: ud.user.user_metadata?.avatar_url });
+    }
+  }
 
   // Persist user to localStorage
   const setCurrentUser = useCallback((user: User | null) => {

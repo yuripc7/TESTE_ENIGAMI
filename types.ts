@@ -252,6 +252,13 @@ export interface Viability {
     pdfSummary?: FileLink;
     versions: ViabilityVersion[];
     createdAt: string;
+      titulo?: string;
+      responsavel?: string;
+      kanbanStatus?: 'em_aberto' | 'a_fazer' | 'estudos_finalizados' | 'dados_permuta' | 'contratos' | 'contratos_assinados';
+      pdfConsultaPrefeitura?: FileLink;
+      pdfLocalizacao?: FileLink;
+      pdfEstudoTerceiro?: FileLink;
+      obs?: string;
 }
 
 export interface DB {

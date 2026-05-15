@@ -2174,17 +2174,12 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
             />
 
+            {showViabilidadesModal && (
             <ViabilidadesPanel
-                isOpen={showViabilidadesModal}
-                onClose={() => setShowViabilidadesModal(false)}
-                viabilities={companyViabilities}
-                companyId={db.activeCompanyId || 0}
-                companyName={activeCompany?.name || ''}
-                onAdd={onAddViability}
-                onDelete={onDeleteViability}
-                onAddVersion={onAddViabilityVersion}
-                onUpdateStatus={onUpdateViabilityStatus}
+              companyId={db.activeCompanyId || 0}
+              companyName={activeCompany?.name || ''}
             />
+          )}
 
             {/* Link Add Dialog */}
             {pendingLinkScopeId && (
@@ -5107,9 +5102,14 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                         activeTab === 'viabilidade' && hasProject && (
 
                             <div className="animate-fadeIn flex flex-col gap-8 max-w-[1920px] mx-auto w-full pb-20">
-                                {/* Power BI Section Card */}
-                                {/* Contracts Section Card */}
-                                <div className="ds-card bg-theme-card overflow-hidden w-full">
+                                {/* Viabilidades Kanban */}
+            <div className="bg-theme-card rounded-2xl border border-theme-border overflow-hidden w-full" style={{minHeight:'70vh'}}>
+              <ViabilidadesPanel
+                companyId={db.activeCompanyId || 0}
+                companyName={activeCompany?.name || ''}
+              />
+            </div>
+            {/* Contracts Section Card */}                                <div className="ds-card bg-theme-card overflow-hidden w-full">
                                     <ContractsManager
                                         project={activeProject}
                                         db={db}

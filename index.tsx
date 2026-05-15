@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase';
 import './index.css';
 
 const Root = () => {
-  const [session, setSession] = useState<any>(undefined);
+  const [session, setSession] = useState<any>(null); // Login aparece imediatamente
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,17 +21,7 @@ const Root = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (session === undefined) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, #f5f0ee 0%, #ede8e6 100%)' }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-[3px] border-[#e8604a] border-t-transparent animate-spin" />
-          <span className="text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Carregando...</span>
-        </div>
-      </div>
-    );
-  }
+
 
   if (!session) return <AuthGate />;
 

@@ -5124,16 +5124,23 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                   <FinanceiroTab project={activeProject} db={db} />
                 </Suspense>
               )}
-                                </div>
-                            </div>
+                                </div>       ← fecha ds-card
+                            </div>       ← fecha animate-fadeIn
                         )
 
-                    }
+                    }            ← fecha bloco viabilidade
+
+          ← aqui entra o FinanceiroTab
+{/* Aba Financeiro – EVR */}
+{activeTab === 'financeiro' && hasProject && (
+  <Suspense fallback={...}>
+    <FinanceiroTab project={activeProject} db={db} />
+  </Suspense>
+)}
 
 
 
-                    {/* --- TAB: NOTAS VIEW --- */}
-
+                  {/* --- TAB: NOTAS VIEW --- */}
                     {
 
                         activeTab === 'notas' && hasProject && (

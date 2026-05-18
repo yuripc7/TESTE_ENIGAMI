@@ -752,6 +752,8 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
 
 
 
+                        {/* Presença em tempo real */}
+                        <MembersPresence projectId={project.id ?? null} className="mt-4" />
                                                 </div>
 
                                             );
@@ -760,8 +762,6 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
 
                                     </div>
 
-                        {/* Presença em tempo real */}
-                        <MembersPresence projectId={project.id ?? null} className="mt-4" />
 
                                 ) : (
 

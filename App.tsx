@@ -26,13 +26,14 @@ const Timeline = React.lazy(() => import('./components/Timeline'));
 const Agenda = React.lazy(() => import('./components/Agenda').then(m => ({ default: m.Agenda })));
 const NotesTab = React.lazy(() => import('./components/NotesTab').then(m => ({ default: m.NotesTab })));
 const ColaboradorTab = React.lazy(() => import('./components/ColaboradorTab').then(m => ({ default: m.ColaboradorTab })));
+const FinanceiroTab = React.lazy(() => import('./components/FinanceiroTab').then(m => ({ default: m.FinanceiroTab })));
 const ContractsManager = React.lazy(() => import('./components/ContractsManager').then(m => ({ default: m.ContractsManager })));
 const FlipBook = React.lazy(() => import('./components/FlipBook').then(m => ({ default: m.FlipBook })));
 const Panorama360 = React.lazy(() => import('./components/Panorama360').then(m => ({ default: m.Panorama360 })));
 
 
 
-type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'notas' | 'colaborador';
+type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'notas' | 'colaborador';
 
 
 
@@ -1894,6 +1895,7 @@ Quando os dados do projeto estiverem disponÃ­veis, baseie suas respostas neles â
                                 { id: 'files', label: 'Arquivos' },
                                 { id: 'data', label: 'Dados' },
                                 { id: 'viabilidade', label: 'Contratos' },
+                { id: 'financeiro', label: 'Financeiro' },
                                 { id: 'notas', label: 'Notas' },
                                 { id: 'colaborador', label: 'Colaborador' },
                             ].map(tab => (
@@ -5113,6 +5115,13 @@ Quando os dados do projeto estiverem disponÃ­veis, baseie suas respostas neles â
                                         onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
                                         currentUser={currentUser}
                                     />
+
+              {/* Aba Financeiro â€” EVR */}
+              {activeTab === 'financeiro' && hasProject && (
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
+                  <FinanceiroTab project={activeProject} db={db} />
+                </Suspense>
+              )}
                                 </div>
                             </div>
                         )

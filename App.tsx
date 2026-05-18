@@ -5118,25 +5118,17 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                     />
                                     </Suspense>
 
-              {/* Aba Financeiro — EVR */}
-              {activeTab === 'financeiro' && hasProject && (
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
-                  <FinanceiroTab project={activeProject} db={db} />
-                </Suspense>
-              )}
+            
                                 </div>       ← fecha ds-card
                             </div>       ← fecha animate-fadeIn
                         )
 
-                    }            ← fecha bloco viabilidade
-
-          ← aqui entra o FinanceiroTab
-{/* Aba Financeiro – EVR */}
-{activeTab === 'financeiro' && hasProject && (
-  <Suspense fallback={...}>
-    <FinanceiroTab project={activeProject} db={db} />
-  </Suspense>
-)}
+               {/* Aba Financeiro — EVR */}
+                    {activeTab === 'financeiro' && hasProject && (
+                        <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
+                            <FinanceiroTab project={activeProject} db={db} />
+                        </Suspense>
+                    )}
 
 
 

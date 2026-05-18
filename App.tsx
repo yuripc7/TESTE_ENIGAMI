@@ -2178,6 +2178,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
             <ViabilidadesPanel
               companyId={db.activeCompanyId || 0}
               companyName={activeCompany?.name || ''}
+              onClose={() => setShowViabilidadesModal(false)}
             />
           )}
 

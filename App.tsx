@@ -5109,12 +5109,14 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
             <div className="bg-theme-card rounded-2xl border border-theme-border overflow-hidden w-full" style={{minHeight:'70vh'}}>
                           </div>
             {/* Contracts Section Card */}                                <div className="ds-card bg-theme-card overflow-hidden w-full">
-                                    <ContractsManager
+                                    <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando contratos...</div>}>
+                                      <ContractsManager
                                         project={activeProject}
                                         db={db}
                                         onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
                                         currentUser={currentUser}
                                     />
+                                    </Suspense>
 
               {/* Aba Financeiro — EVR */}
               {activeTab === 'financeiro' && hasProject && (

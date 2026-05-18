@@ -11,8 +11,8 @@ export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => 
 
   // Pega dados da aba Dados linkados a este projeto
   const dataRows = useMemo(() => {
-    return (db.projectDataRows || []).filter((r: any) => r.projectId === project.id);
-  }, [db.projectDataRows, project.id]);
+        return project.dataRows || [];
+  }, [project.dataRows]);
 
   const findVal = (keywords: string[]): number => {
     for (const kw of keywords) {

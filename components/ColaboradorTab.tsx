@@ -20,17 +20,17 @@ interface ColaboradorTabProps {
 
 export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) => {
 
-    const { theme } = useApp();
+    const { theme, currentUser } = useApp();
 
     const isDark = theme === 'dark';
 
     // Presença em tempo real
     const { onlineUsers } = usePresence({
-        projectId: project.id ?? null,
-        currentUserId: (useApp() as any)?.currentUser?.id ?? null,
-        currentName: '',
-        currentAvatar: '',
-    });
+    projectId: project.id ?? null,
+    currentUserId: currentUser?.id ?? null,
+    currentName: currentUser?.name || '',
+    currentAvatar: '',
+  });
 
 
 
@@ -752,8 +752,6 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
 
 
 
-                        {/* Presença em tempo real */}
-                        <MembersPresence projectId={project.id ?? null} className="mt-4" />
                                                 </div>
 
                                             );

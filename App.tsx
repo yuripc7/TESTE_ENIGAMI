@@ -1889,11 +1889,11 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     <div className="flex-1 flex justify-center">
                         <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider">
                             {[
-                                { id: 'timeline', label: 'Timeline' },
-                                { id: 'gallery', label: 'Gallery' },
-                                { id: 'files', label: 'Files' },
-                                { id: 'data', label: 'Data' },
-                                { id: 'viabilidade', label: 'Financeiro' },
+                                { id: 'timeline', label: 'Cronograma' },
+                                { id: 'gallery', label: 'Galeria' },
+                                { id: 'files', label: 'Arquivos' },
+                                { id: 'data', label: 'Dados' },
+                                { id: 'viabilidade', label: 'Contratos' },
                                 { id: 'notas', label: 'Notas' },
                                 { id: 'colaborador', label: 'Colaborador' },
                             ].map(tab => (
@@ -5104,11 +5104,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                             <div className="animate-fadeIn flex flex-col gap-8 max-w-[1920px] mx-auto w-full pb-20">
                                 {/* Viabilidades Kanban */}
             <div className="bg-theme-card rounded-2xl border border-theme-border overflow-hidden w-full" style={{minHeight:'70vh'}}>
-              <ViabilidadesPanel
-                companyId={db.activeCompanyId || 0}
-                companyName={activeCompany?.name || ''}
-              />
-            </div>
+                          </div>
             {/* Contracts Section Card */}                                <div className="ds-card bg-theme-card overflow-hidden w-full">
                                     <ContractsManager
                                         project={activeProject}

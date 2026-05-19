@@ -194,7 +194,60 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  // Sincroniza o usuário logado com a lista da equipe técnica
+  // Sincroniza em tempo real todos os perfis registrados no Supabase com a lista da equipe (db.team)
+  useEffect(() => {
+    async function syncProfilesToTeam() {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('name');
+        
+        if (error) {
+          console.warn('Erro ao carregar perfis do Supabase:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const profileNames = data.map((p: any) => p.name).filter(Boolean);
+          
+          setDb(prev => {
+            // Remove duplicados e une a equipe local com todos os perfis cadastrados no Supabase
+            const combined = Array.from(new Set([...(prev.team || []), ...profileNames]));
+            
+            // Verifica se a lista realmente mudou para evitar loops
+            const isDifferent = prev.team.length !== combined.length || 
+                                prev.team.some((val, i) => val !== combined[i]);
+            
+            if (isDifferent) {
+              return {
+                ...prev,
+                team: combined
+              };
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error('Erro na sincronização de perfis:', err);
+      }
+    }
+
+    syncProfilesToTeam();
+
+    // Cria canal de escuta em tempo real para novos cadastros ou alterações na tabela profiles
+    const channel = supabase
+      .channel('profiles-realtime-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        syncProfilesToTeam();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Garante que o próprio usuário ativo esteja sempre adicionado à equipe local imediatamente
   useEffect(() => {
     if (currentUser?.name && currentUser.profileCompleted) {
       setDb(prev => {

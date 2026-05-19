@@ -18,44 +18,33 @@ export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => 
     const details = project.details || {};
     const rows = project.dataRows || [];
     const pavements = details.pavements || [];
-
     const areaTerreno = toNum(details.landArea) || toNum(rows[0]?.landArea) || 0;
     const caBasico    = toNum(rows[0]?.potential) || 0;
     const cidade      = (details.location || rows[0]?.location || '').split(',').pop()?.trim() || '';
-
     const categoryToTipo = (cat: string): 'Torre' | 'Embasamento' | 'Telhado' => {
       if (cat === 'Garagem' || cat === 'Lazer Interno') return 'Embasamento';
       if (cat === 'Lazer Externo') return 'Telhado';
       return 'Torre';
     };
-
     const categoryToCoef = (cat: string): number => {
       if (cat === 'Garagem') return 0.5;
       if (cat === 'Lazer Interno') return 0.8;
       if (cat === 'Lazer Externo') return 0.3;
       return 1.0;
     };
-
     const areas = pavements.map((p: any) => ({
-      nome: p.type, tipo: categoryToTipo(p.category),
-      qtd: p.count, comp: p.areaPerPavement, cob: p.areaPerPavement,
-      desc: 0, total: p.areaPerPavement, coef: categoryToCoef(p.category),
+      nome: p.type, tipo: categoryToTipo(p.category), qtd: p.count,
+      comp: p.areaPerPavement, cob: p.areaPerPavement, desc: 0,
+      total: p.areaPerPavement, coef: categoryToCoef(p.category),
     }));
-
     const units = pavements
       .filter((p: any) => p.category === 'Habitacional' || p.category === 'Garagem')
       .map((p: any) => ({
-        nome: p.type,
-        tipo: p.category === 'Garagem' ? 'Estacionamento' : 'Residencial',
-        qtd:  p.count * p.unitsPerPavement,
-        area: p.unitArea, pm2: 0, permuta: 0,
+        nome: p.type, tipo: p.category === 'Garagem' ? 'Estacionamento' : 'Residencial',
+        qtd: p.count * p.unitsPerPavement, area: p.unitArea, pm2: 0, permuta: 0,
       }));
-
-    return {
-      nome: project.name || '', cidade, areaTerreno, caBasico,
-      areas: areas.length > 0 ? areas : null,
-      units: units.length > 0 ? units : null,
-    };
+    return { nome: project.name || '', cidade, areaTerreno, caBasico,
+      areas: areas.length > 0 ? areas : null, units: units.length > 0 ? units : null };
   }, [project]);
 
   useEffect(() => {
@@ -69,14 +58,13 @@ export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => 
   }, [enigamiConfig]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-[#F0F2F5]">
-      <iframe
-        ref={iframeRef}
-        src="/evr.html"
-        className="flex-1 w-full border-0"
-        title="EVR — Estudo Financeiro"
-      />
-    </div>
+    <iframe
+      ref={iframeRef}
+      src="/evr.html"
+      className="w-full border-0 block"
+      style={{ height: 'calc(100vh - 56px)' }}
+      title="EVR — Estudo Financeiro"
+    />
   );
 };
 

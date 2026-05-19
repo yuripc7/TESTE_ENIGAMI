@@ -73,13 +73,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     return savedTheme || 'light';
   });
 
-  const [currentUser, setCurrentUserState] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem(USER_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+  const [currentUser, setCurrentUserState] = useState<User | null>(null);
   });
   const [notification, setNotification] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);

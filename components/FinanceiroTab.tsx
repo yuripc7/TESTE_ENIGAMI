@@ -69,12 +69,14 @@ export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => 
   }, [enigamiConfig]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      src="/evr.html"
-      className="w-full h-full border-0 block"
-      title="Estudo de Viabilidade e Retorno"
-    />
+    <div className="flex flex-col h-full overflow-hidden bg-[#F0F2F5]">
+      <iframe
+        ref={iframeRef}
+        src="/evr.html"
+        className="flex-1 w-full border-0"
+        title="EVR — Estudo Financeiro"
+      />
+    </div>
   );
 };
 

@@ -1,4 +1,4 @@
-﻿import { DB } from './types';
+import { DB } from './types';
 
 // === Application Constants ===
 export const STORAGE_KEY = 'design_board_db_v1';
@@ -69,13 +69,13 @@ export const INITIAL_DB: DB = {
                     name: "ARQ",
                     colorClass: "#FF8000",
                     startDate: "2026-02-06",
-                    resp: "Arq. Isabela",
+                    resp: "Sem Líder",
                     status: 'walking',
                     events: [
                         {
                             id: "ev1770419256185",
                             title: "ARQ",
-                            resp: "Arq. Isabela",
+                            resp: "Sem Resp.",
                             startDate: "2026-02-06",
                             endDate: "2026-02-25", // Extended to show red bar (planned was 19)
                             plannedStartDate: "2026-02-06",
@@ -88,13 +88,6 @@ export const INITIAL_DB: DB = {
             ]
         }
     ],
-    team: [
-        "Arq. Yuri",
-        "Arq. Lourraine",
-        "Eng. Lucas",
-        "Arq. Isabela",
-        "Mkt Gisele",
-        "Gugu (guzinho)"
-    ],
+    team: [],
     viabilities: [],
 };

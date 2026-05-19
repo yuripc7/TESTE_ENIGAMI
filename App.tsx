@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
 
 import { INITIAL_DB, MAX_CHAT_HISTORY } from './constants';
 
@@ -13,6 +13,8 @@ import {
     ChecklistModal, TeamModal, TimelineSettingsModal, AdminSettingsModal, DisciplinesManagerModal, LoginModal, UploadInstructionsModal
 
 } from './components/Modals';
+
+import { ProfileCompletionModal } from './components/ProfileCompletionModal';
 
 import { TextReveal } from './components/ui/TextReveal';
 
@@ -30,6 +32,7 @@ const FinanceiroTab = React.lazy(() => import('./components/FinanceiroTab').then
 const ContractsManager = React.lazy(() => import('./components/ContractsManager').then(m => ({ default: m.ContractsManager })));
 const FlipBook = React.lazy(() => import('./components/FlipBook').then(m => ({ default: m.FlipBook })));
 const Panorama360 = React.lazy(() => import('./components/Panorama360').then(m => ({ default: m.Panorama360 })));
+const GalleryTab = React.lazy(() => import('./components/GalleryTab').then(m => ({ default: m.GalleryTab })));
 
 
 
@@ -130,6 +133,16 @@ export const App = () => {
     const [showLoginModal, setShowLoginModal] = useState(false);
 
     const [showUploadInstructionsModal, setShowUploadInstructionsModal] = useState(false);
+
+    const [showProfileModal, setShowProfileModal] = useState(() => {
+        return localStorage.getItem('enigami_profile_completed') !== 'true';
+    });
+
+    useEffect(() => {
+        if (currentUser && !currentUser.profileCompleted) {
+            setShowProfileModal(true);
+        }
+    }, [currentUser]);
 
     const [newEventDate, setNewEventDate] = useState<string | undefined>(undefined); // New State for Agenda
 
@@ -521,6 +534,37 @@ export const App = () => {
 
         }
 
+    };
+
+    const handleProfileComplete = (profile: { name: string; role: string; avatarUrl: string }) => {
+        if (currentUser) {
+            setCurrentUser({
+                ...currentUser,
+                name: profile.name,
+                avatar: profile.avatarUrl,
+                role: profile.role,
+                profileCompleted: true
+            });
+        } else {
+            setCurrentUser({
+                id: 'demo_user',
+                name: profile.name,
+                avatar: profile.avatarUrl,
+                role: profile.role,
+                profileCompleted: true
+            });
+        }
+
+        if (!db.team.includes(profile.name)) {
+            setDb(prev => ({
+                ...prev,
+                team: [...prev.team, profile.name]
+            }));
+        }
+
+        localStorage.setItem('enigami_profile_completed', 'true');
+        setShowProfileModal(false);
+        setNotification(`Perfil atualizado e ${profile.name} adicionado à equipe técnica!`);
     };
 
 
@@ -1859,6 +1903,27 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
 
+    // Robust auto-scroll when tab changes
+    useEffect(() => {
+        if (hasProject && activeTab !== 'timeline') {
+            const attemptScroll = () => {
+                const scroller = document.getElementById('main-scroller');
+                const target = document.getElementById('tab-content-area');
+                if (scroller && target) {
+                    scroller.scrollTo({
+                        top: target.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+                }
+            };
+            
+            // Multiple attempts to ensure it catches the layout after lazy load
+            requestAnimationFrame(attemptScroll);
+            setTimeout(attemptScroll, 100);
+            setTimeout(attemptScroll, 300);
+            setTimeout(attemptScroll, 600);
+        }
+    }, [activeTab, hasProject]);
 
 
     return (
@@ -2164,6 +2229,13 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onLogin={handleLoginSubmit}
 
+            />
+
+            <ProfileCompletionModal
+                isOpen={showProfileModal}
+                userId={currentUser?.id || 'demo_user'}
+                currentEmail={currentUser?.name}
+                onSubmit={handleProfileComplete}
             />
 
 
@@ -2482,10 +2554,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
 
-            <div className="flex flex-col gap-10 w-full max-w-[1920px] mx-auto flex-1 overflow-y-auto scroller px-4 2xl:px-10 pt-6">
+            <div id="main-scroller" className="flex flex-col gap-10 w-full max-w-[1920px] mx-auto flex-1 min-h-0 relative overflow-y-auto scroller px-4 2xl:px-10 pt-6">
 
                 {/* Header Cards */}
-
+                {activeTab !== 'financeiro' && activeTab !== 'viabilidade' && activeTab !== 'gallery' && (
                 <div className={`${hasProject ? 'grid grid-cols-1 lg:grid-cols-12 gap-6 2xl:gap-8 lg:h-[calc(100vh-120px)]' : 'flex justify-center'} no-print`}>
 
                     <div className={`${hasProject ? 'lg:col-span-4 h-full overflow-y-auto scroller pr-2' : 'w-full max-w-3xl'} flex flex-col gap-8`}>
@@ -3226,9 +3298,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                     </div>)}
 
                 </div>
+                )}
 
                 {/* --- MAIN CONTENT AREA --- */}
-
+                <div id="tab-content-area" className="w-full h-1"></div>
 
 
 
@@ -3529,299 +3602,26 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                             <>
 
-                                                <div className="h-4 w-full bg-theme-bg rounded-full relative overflow-hidden border border-theme-divider shadow-inner"><div className="h-full bg-gradient-to-r from-theme-orange to-red-500 transition-all duration-1000 ease-out shadow-glow" style={{ width: `${p}%` }} /><div className="absolute top-0 bottom-0 w-[4px] bg-theme-card shadow-[0_0_15px_rgba(0,0,0,0.2)] z-10 transition-all duration-1000 ease-out" style={{ left: `${p}%` }} /></div><div className="flex justify-between mt-4"><div className="flex flex-col items-start"><span className="text-[9px] font-black text-theme-cyan uppercase tracking-widest mb-1">START {memberFilter ? `(${memberFilter})` : ''}</span><div className="bg-theme-highlight border border-theme-divider px-3 py-1 rounded-lg text-xs font-bold text-theme-textMuted shadow-sm">{dynamicStart.toLocaleDateString()}</div></div><div className="flex flex-col items-end"><span className="text-[9px] font-black text-theme-green uppercase tracking-widest mb-1">ENTREGA {memberFilter ? `(${memberFilter})` : ''}</span><div className="bg-theme-highlight border border-theme-divider px-3 py-1 rounded-lg text-xs font-bold text-theme-textMuted shadow-sm">{dynamicEnd.toLocaleDateString()}</div></div></div>
-
+                                                <div className="h-4 w-full bg-theme-bg rounded-full relative overflow-hidden border border-theme-divider shadow-inner"><div className="h-full bg-gradient-to-r from-theme-orange to-red-500 transition-all duration-1000 ease-out shadow-glow" style={{ width: `${p}%` }} /><div className="absolute top-0 bottom-0 w-[4px] bg-theme-card shadow-[0_0_15px_rgba(0,0,0,0.2)] z-10 transition-all duration-1000 ease-out" style={{ left: `${p}%` }} /></div><div className="flex justify-between mt-4"><div className="flex flex-col items-start"><span className="text-[9px] font-black text-theme-cyan uppercase tracking-widest mb-1">START {memberFilter ? `(${memberFilter})` : ''}</span><div className="bg-theme-highlight border border-theme-divider px-3 py-1 rounded-lg text-xs font-bold text-theme-textMuted shadow-sm">{dynamicStart.toLocaleDateString()}</div></div><div className="flex flex-col items-end"><span className="text-[9px] font-black text-[#00b87c] uppercase tracking-widest mb-1">ENTREGA {memberFilter ? `(${memberFilter})` : ''}</span><div className="bg-theme-highlight border border-theme-divider px-3 py-1 rounded-lg text-xs font-bold text-theme-textMuted shadow-sm">{dynamicEnd.toLocaleDateString()}</div></div></div>
                                             </>
-
                                         );
-
                                     })()}
-
                                 </div>
-
                             </div>
-
                         </div>
-
                     )}
 
-
-
-                    {/* --- TAB: GALLERY VIEW --- */}
+                                                     {/* --- TAB: GALLERY VIEW --- */}
                     {activeTab === 'gallery' && hasProject && (
-                        <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
-                            <div className="ds-card bg-theme-card relative overflow-hidden min-h-[600px] flex flex-col">
-
-                                {/* ── Header ── */}
-                                <div className="flex justify-between items-center px-6 py-4 border-b border-theme-divider">
-                                    <div className="flex items-center gap-4">
-                                        {selectedGalleryFolderId && (
-                                            <button onClick={() => { setSelectedGalleryFolderId(null); setCurrentGalleryIndex(-1); }} className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
-                                                <span className="material-symbols-outlined text-base">arrow_back</span>
-                                            </button>
-                                        )}
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
-                                            <span className="material-symbols-outlined text-base text-theme-orange">{gallerySubTab === 'ebook' ? 'auto_stories' : 'photo_library'}</span>
-                                            <h3 className="font-square font-black text-xs uppercase tracking-widest text-theme-text">
-                                                {selectedGalleryFolderId
-                                                    ? activeProject.galleryFolders?.find(f => f.id === selectedGalleryFolderId)?.name
-                                                    : 'Galeria do Projeto'}
-                                            </h3>
-                                        </div>
-                                        {/* Sub-tabs */}
-                                        {!selectedGalleryFolderId && (
-                                            <div className="flex items-center gap-1 bg-theme-bg p-1 rounded-xl border border-theme-divider">
-                                                {([
-                                                    { id: 'midia', label: 'Galeria',   icon: 'image' },
-                                                    { id: 'ebook', label: 'Ebook',     icon: 'menu_book' },
-                                                    { id: '360',   label: '360°',      icon: '360' },
-                                                ] as const).map(t => (
-                                                    <button key={t.id}
-                                                        onClick={() => { setGallerySubTab(t.id); setCurrentGalleryIndex(-1); setSelectedGalleryFolderId(null); }}
-                                                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${gallerySubTab === t.id ? 'bg-theme-orange text-white shadow-md' : 'text-theme-textMuted hover:text-theme-text'}`}>
-                                                        <span className="material-symbols-outlined text-xs">{t.icon}</span>{t.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {selectedGalleryFolderId && (
-                                            <button onClick={() => galleryFileRef.current?.click()}
-                                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-theme-orange text-white text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-sm">
-                                                <span className="material-symbols-outlined text-sm">upload</span>
-                                                {gallerySubTab === 'ebook' ? 'Adicionar PDF' : gallerySubTab === '360' ? 'Adicionar 360°' : 'Adicionar Mídia'}
-                                            </button>
-                                        )}
-                                        {!selectedGalleryFolderId && (
-                                            <button onClick={handleCreateGalleryFolder}
-                                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-theme-divider bg-theme-bg text-theme-textMuted hover:text-theme-text hover:border-theme-orange text-[10px] font-black uppercase tracking-widest transition-all">
-                                                <span className="material-symbols-outlined text-sm">create_new_folder</span> Nova Pasta
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* ── Folder list ── */}
-                                {!selectedGalleryFolderId && (
-                                    <div className="flex-1 p-6">
-                                        {(!activeProject.galleryFolders || activeProject.galleryFolders.length === 0) ? (
-                                            <div className="flex-1 flex flex-col items-center justify-center text-theme-textMuted/40 py-24">
-                                                <span className="material-symbols-outlined text-6xl mb-4">folder_off</span>
-                                                <p className="font-square font-black text-sm uppercase tracking-[0.2em]">Nenhuma pasta encontrada</p>
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                                                {activeProject.galleryFolders.map(folder => {
-                                                    const items = (folder.images ?? []).filter(img =>
-                                                        gallerySubTab === 'ebook' ? img.type === 'flipbook' : gallerySubTab === '360' ? img.type === 'panorama' : (img.type !== 'flipbook' && img.type !== 'panorama')
-                                                    );
-                                                    const cover = items.find(i => i.type !== 'flipbook')?.url;
-                                                    return (
-                                                        <div key={folder.id} className="relative group cursor-pointer"
-                                                            onClick={() => { setSelectedGalleryFolderId(folder.id); setCurrentGalleryIndex(-1); }}>
-                                                            <div className="rounded-2xl overflow-hidden border border-theme-divider hover:border-theme-orange transition-all hover:shadow-xl hover:-translate-y-1 bg-theme-bg">
-                                                                {/* Cover preview */}
-                                                                <div className="aspect-[4/3] w-full overflow-hidden relative">
-                                                                    {cover ? (
-                                                                        <img src={cover} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center bg-theme-highlight">
-                                                                            <span className="material-symbols-outlined text-5xl text-theme-orange/40">
-                                                                                {gallerySubTab === 'ebook' ? 'auto_stories' : 'photo_library'}
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
-                                                                    {items.length > 1 && (
-                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-3">
-                                                                            <span className="text-white text-[10px] font-black uppercase tracking-wider">
-                                                                                {items.length} {gallerySubTab === 'ebook' ? 'ebooks' : 'fotos'}
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="px-3 py-2.5">
-                                                                    <h4 className="font-square font-black text-[11px] text-theme-text uppercase tracking-wider truncate">{folder.name}</h4>
-                                                                    <span className="text-[9px] font-bold text-theme-textMuted">{items.length} {gallerySubTab === 'ebook' ? 'documentos' : 'mídias'}</span>
-                                                                </div>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteGalleryFolder(folder.id); }}
-                                                                className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 flex items-center justify-center shadow-lg">
-                                                                <span className="material-symbols-outlined text-sm">delete</span>
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* ── Inside folder ── */}
-                                {selectedGalleryFolderId && (() => {
-                                    const folder = activeProject.galleryFolders?.find(f => f.id === selectedGalleryFolderId);
-                                    if (!folder) return null;
-                                    const images = (folder.images ?? []).filter(img =>
-                                        gallerySubTab === 'ebook' ? img.type === 'flipbook' : gallerySubTab === '360' ? img.type === 'panorama' : (img.type !== 'flipbook' && img.type !== 'panorama')
-                                    );
-
-                                    if (images.length === 0) return (
-                                        <div className="flex-1 flex flex-col items-center justify-center text-theme-textMuted border-2 border-dashed border-theme-divider m-6 rounded-3xl bg-theme-bg/50 py-20">
-                                            <span className="material-symbols-outlined text-6xl mb-4 opacity-30">{gallerySubTab === 'ebook' ? 'menu_book' : 'add_photo_alternate'}</span>
-                                            <p className="text-xs font-black uppercase tracking-widest mb-6">Nenhuma mídia nesta pasta</p>
-                                            <button onClick={() => galleryFileRef.current?.click()} className="bg-theme-orange text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-orange-600 transition-all">
-                                                {gallerySubTab === 'ebook' ? 'Carregar PDF' : 'Carregar Primeira Mídia'}
-                                            </button>
-                                        </div>
-                                    );
-
-                                    /* ── EBOOK: flipbook reader or list ── */
-                                    if (gallerySubTab === 'ebook') {
-                                        if (currentGalleryIndex >= 0 && images[currentGalleryIndex]) {
-                                            return (
-                                                <div className="flex-1 flex flex-col" style={{ minHeight: 600 }}>
-                                                    <div className="flex items-center gap-3 px-6 py-2 border-b border-theme-divider bg-theme-bg/50">
-                                                        <button onClick={() => setCurrentGalleryIndex(-1)} className="flex items-center gap-1 text-[10px] font-black uppercase text-theme-textMuted hover:text-theme-orange transition-colors">
-                                                            <span className="material-symbols-outlined text-sm">arrow_back</span> Voltar à lista
-                                                        </button>
-                                                        <div className="h-4 w-px bg-theme-divider mx-1"></div>
-                                                        <span className="text-[10px] font-black uppercase text-theme-text truncate">{images[currentGalleryIndex].description || `Documento ${currentGalleryIndex + 1}`}</span>
-                                                    </div>
-                                                    <div className="flex-1" style={{ minHeight: 560 }}>
-                                                        <Suspense fallback={
-                                                            <div className="flex flex-col items-center gap-4 py-20 text-center">
-                                                                <div className="w-12 h-12 border-4 border-theme-orange border-t-transparent rounded-full animate-spin"></div>
-                                                                <span className="text-xs font-black uppercase tracking-widest text-theme-textMuted">Carregando leitor...</span>
-                                                            </div>}>
-                                                            <FlipBook url={images[currentGalleryIndex].url} />
-                                                        </Suspense>
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <div className="flex-1 p-6">
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                                    {images.map((img, idx) => (
-                                                        <div key={idx} className="relative group cursor-pointer" onClick={() => setCurrentGalleryIndex(idx)}>
-                                                            <div className="rounded-2xl overflow-hidden border border-theme-divider hover:border-theme-orange transition-all hover:shadow-xl hover:-translate-y-1 bg-theme-bg">
-                                                                <div className="aspect-[3/4] w-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 relative overflow-hidden">
-                                                                    <span className="material-symbols-outlined text-6xl text-red-400 opacity-80">picture_as_pdf</span>
-                                                                    <div className="absolute bottom-0 left-0 right-0 h-2" style={{ background: '#E85028' }}></div>
-                                                                </div>
-                                                                <div className="px-3 py-2.5">
-                                                                    <p className="text-[11px] font-black text-theme-text uppercase tracking-wide truncate">{img.description || `Documento ${idx + 1}`}</p>
-                                                                    <p className="text-[9px] text-theme-textMuted mt-0.5 flex items-center gap-1">
-                                                                        <span className="material-symbols-outlined text-[10px]">menu_book</span> Clique para ler
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteGalleryImage(idx); }}
-                                                                className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg">
-                                                                <span className="material-symbols-outlined text-sm">delete</span>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-
-                                    /* ── 360°: panorama viewer ── */
-                                    if (gallerySubTab === '360') {
-                                        const active360 = currentGalleryIndex >= 0 && images[currentGalleryIndex];
-                                        if (active360) {
-                                            return (
-                                                <div className="flex-1 flex flex-col">
-                                                    <div className="flex items-center gap-3 px-6 py-2 border-b border-theme-divider bg-theme-bg/50">
-                                                        <button onClick={() => setCurrentGalleryIndex(-1)} className="flex items-center gap-1 text-[10px] font-black uppercase text-theme-textMuted hover:text-theme-orange transition-colors">
-                                                            <span className="material-symbols-outlined text-sm">arrow_back</span> Voltar
-                                                        </button>
-                                                        <div className="h-4 w-px bg-theme-divider mx-1"></div>
-                                                        <span className="material-symbols-outlined text-sm text-theme-orange">360</span>
-                                                        <span className="text-[10px] font-black uppercase text-theme-text truncate">{images[currentGalleryIndex].description || 'Vista 360°'}</span>
-                                                        <span className="text-[8px] text-theme-textMuted ml-2">← Arraste para explorar →</span>
-                                                    </div>
-                                                    <Suspense fallback={
-                                                        <div className="flex flex-col items-center gap-4 py-20 text-center">
-                                                            <div className="w-12 h-12 border-4 border-theme-orange border-t-transparent rounded-full animate-spin"></div>
-                                                            <span className="text-xs font-black uppercase tracking-widest text-white/40">Carregando 360°...</span>
-                                                        </div>}>
-                                                        <Panorama360 url={images[currentGalleryIndex].url} />
-                                                    </Suspense>
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <div className="flex-1 p-6">
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                                    {images.map((img, idx) => (
-                                                        <div key={idx} className="relative group cursor-pointer" onClick={() => setCurrentGalleryIndex(idx)}>
-                                                            <div className="rounded-2xl overflow-hidden border border-theme-divider hover:border-theme-orange transition-all hover:shadow-xl hover:-translate-y-1">
-                                                                <div className="relative aspect-video overflow-hidden">
-                                                                    <img src={img.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                                                                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                            <span className="material-symbols-outlined text-white text-2xl">360</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 flex items-center gap-1">
-                                                                        <span className="material-symbols-outlined text-white text-[12px]">360</span>
-                                                                        <span className="text-[8px] font-black text-white uppercase">360°</span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="px-3 py-2.5">
-                                                                    <p className="text-[11px] font-black text-theme-text uppercase tracking-wide truncate">{img.description || `Vista ${idx + 1}`}</p>
-                                                                    <p className="text-[9px] text-theme-textMuted mt-0.5">Clique para explorar</p>
-                                                                </div>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteGalleryImage(idx); }}
-                                                                className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg">
-                                                                <span className="material-symbols-outlined text-sm">delete</span>
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-
-                                    /* ── MÍDIA: masonry grid + lightbox ── */
-                                    return (
-                                        <div className="flex-1 p-6">
-                                            <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 space-y-3">
-                                                {images.map((img, idx) => (
-                                                    <div key={idx} className="break-inside-avoid relative group cursor-pointer rounded-xl overflow-hidden border border-theme-divider hover:border-theme-orange transition-all hover:shadow-xl"
-                                                        onClick={() => setViewingImage(img.url)}>
-                                                        {isVideo(img.url) ? (
-                                                            <video src={img.url} className="w-full object-cover" />
-                                                        ) : (
-                                                            <img src={img.url} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                        )}
-                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                                                            <span className="material-symbols-outlined text-white text-3xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">open_in_full</span>
-                                                        </div>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteGalleryImage(idx); }}
-                                                            className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg">
-                                                            <span className="material-symbols-outlined text-sm">delete</span>
-                                                        </button>
-                                                        {img.description && (
-                                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <p className="text-white text-[9px] font-bold truncate">{img.description}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                <input type="file" ref={galleryFileRef} className="hidden" multiple
-                                    accept={gallerySubTab === 'ebook' ? "application/pdf" : "image/*,video/*"}
-                                    onChange={handleGalleryUpload}
-                                    data-upload-type={gallerySubTab} />
+                        <div className="animate-fadeIn w-full max-w-[1920px] mx-auto">
+                            <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl min-h-[calc(100vh-140px)] shadow-neuro">
+                                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando galeria...</div>}>
+                                    <GalleryTab
+                                        project={activeProject}
+                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
+                                        currentUser={currentUser}
+                                    />
+                                </Suspense>
                             </div>
                         </div>
                     )}
@@ -3831,315 +3631,165 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                     {/* --- TAB: FILES VIEW --- */}
 
                     {activeTab === 'files' && hasProject && (
-
-                        <div className="animate-fadeIn w-full flex flex-col gap-8 pb-20 max-w-[1920px] mx-auto">
-
-                            {/* Header and Filter */}
-
-                            <div className="flex flex-col gap-6 w-full">
-
-                                <div className="flex justify-between items-center bg-theme-bg px-6 py-4 rounded-2xl border border-theme-divider shadow-sm">
-
+                        <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                            <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro p-6 md:p-8 flex flex-col gap-6">
+                                {/* Header and Filter */}
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-theme-bg/60 backdrop-blur-md px-6 py-4 rounded-2xl border border-theme-border shadow-sm shrink-0 gap-4">
                                     <div className="flex items-center gap-3">
-
                                         <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
-
                                         <span className="material-symbols-outlined text-base text-theme-orange">folder_special</span>
-
                                         <div>
-
                                             <h2 className="font-square font-black text-xs uppercase tracking-widest text-theme-text">Central de Arquivos</h2>
-
                                             <p className="text-[9px] font-bold text-theme-textMuted uppercase tracking-wider mt-0.5">Painel de Documentação ({activeProject.scopes.reduce((acc, s) => acc + (s.fileLinks?.length || 0), 0)} arquivos)</p>
-
                                         </div>
-
                                     </div>
-
-
 
                                     {/* Filter by Collaborator */}
-
-                                    <div className="flex gap-2 overflow-x-auto scroller px-2 py-1 items-center max-w-[50vw]">
-
-                                        <span className="text-[9px] font-black uppercase text-theme-textMuted mr-2 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">filter_list</span> Status por Colaborador:</span>
-
+                                    <div className="flex gap-2 overflow-x-auto scroller px-2 py-1 items-center max-w-full md:max-w-[50vw]">
+                                        <span className="text-[9px] font-black uppercase text-theme-textMuted mr-2 flex items-center gap-1 shrink-0"><span className="material-symbols-outlined text-[10px]">filter_list</span> Filtrar por:</span>
                                         <button onClick={() => setFileMemberFilter(null)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm border shrink-0 ${!fileMemberFilter ? 'bg-[#E8E9F0] text-black border-transparent' : 'bg-theme-card text-theme-textMuted border-theme-divider hover:bg-theme-highlight'}`}>TODOS</button>
-
                                         {db.team.map((member, idx) => {
-
                                             const defaultColors = ['bg-red-500', 'bg-yellow-500', 'bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-pink-400', 'bg-orange-400', 'bg-teal-400'];
-
                                             const colorClass = defaultColors[idx % defaultColors.length];
-
                                             const isActive = fileMemberFilter === member;
+                                            return (
+                                                <button key={member} onClick={() => setFileMemberFilter(member)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm border shrink-0 ${isActive ? 'bg-theme-card border-theme-text scale-105 text-theme-text' : 'bg-theme-card border-theme-border text-theme-textMuted hover:bg-theme-highlight'}`}>
+                                                    <div className={`w-3 h-3 rounded-full ${colorClass} shadow-sm border border-black/20`} />
+                                                    {member}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Folders Grid Container with internal scroll */}
+                                <div className="flex-1 overflow-y-auto scroller pr-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8 pb-6">
+                                        {activeProject.scopes.map(scope => {
+                                            const sortedFiles = (scope.fileLinks || [])
+                                                .filter(f => !fileMemberFilter || f.author === fileMemberFilter)
+                                                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+                                            if (fileMemberFilter && sortedFiles.length === 0 && scope.resp !== fileMemberFilter) return null; // Hide empty folders when filtering
+
+                                            // distinct authors in this scope
+                                            const authors = Array.from(new Set(scope.fileLinks?.map(f => f.author || 'SISTEMA')));
+
+                                            const scopeTimeSecs = activeProject.timeLogs
+                                                ?.filter(log => log.scopeId === scope.id)
+                                                .reduce((acc, log) => acc + (log.duration || 0), 0) || 0;
+                                            const scopeH = Math.floor(scopeTimeSecs / 3600);
+                                            const scopeM = Math.floor((scopeTimeSecs % 3600) / 60);
+                                            const scopeS = scopeTimeSecs % 60;
+                                            const scopeTimeStr = `${scopeH.toString().padStart(2, '0')}:${scopeM.toString().padStart(2, '0')}:${scopeS.toString().padStart(2, '0')}`;
 
                                             return (
-
-                                                <button key={member} onClick={() => setFileMemberFilter(member)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm border shrink-0 ${isActive ? 'bg-theme-card border-theme-text scale-105 text-theme-text' : 'bg-theme-card border-theme-divider text-theme-textMuted hover:bg-theme-highlight'}`}>
-
-                                                    <div className={`w-3 h-3 rounded-full ${colorClass} shadow-sm border border-black/20`} />
-
-                                                    {member}
-
-                                                </button>
-
-                                            );
-
-                                        })}
-
-                                    </div>
-
-                                </div>
-
-
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-
-                                    {activeProject.scopes.map(scope => {
-
-                                        const sortedFiles = (scope.fileLinks || [])
-
-                                            .filter(f => !fileMemberFilter || f.author === fileMemberFilter)
-
-                                            .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-
-
-
-                                        if (fileMemberFilter && sortedFiles.length === 0 && scope.resp !== fileMemberFilter) return null; // Hide empty folders when filtering
-
-
-
-                                        // distinct authors in this scope
-
-                                        const authors = Array.from(new Set(scope.fileLinks?.map(f => f.author || 'SISTEMA')));
-
-
-
-                                        const scopeTimeSecs = activeProject.timeLogs
-
-                                            ?.filter(log => log.scopeId === scope.id)
-
-                                            .reduce((acc, log) => acc + (log.duration || 0), 0) || 0;
-
-                                        const scopeH = Math.floor(scopeTimeSecs / 3600);
-
-                                        const scopeM = Math.floor((scopeTimeSecs % 3600) / 60);
-
-                                        const scopeS = scopeTimeSecs % 60;
-
-                                        const scopeTimeStr = `${scopeH.toString().padStart(2, '0')}:${scopeM.toString().padStart(2, '0')}:${scopeS.toString().padStart(2, '0')}`;
-
-
-
-                                        return (
-
-                                            <div key={scope.id} className="bg-theme-card border border-theme-divider rounded-[2rem] flex flex-col transition-all duration-300 shadow-neuro group overflow-hidden relative" style={{ borderColor: scope.colorClass }}>
-
-                                                {/* Accent Glow */}
-
-                                                <div className="absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-20 pointer-events-none rounded-full" style={{ backgroundColor: scope.colorClass }}></div>
-
-
-
-                                                {/* Folder Header */}
-
-                                                <div className="p-6 pb-4 border-b border-theme-divider relative z-10">
-
-                                                    <div className="flex justify-between items-start mb-4">
-
-                                                        <div className="w-16 h-16 rounded-2xl bg-theme-highlight flex items-center justify-center mb-2 group-hover:opacity-90 transition-all" style={{ backgroundColor: `${scope.colorClass}18` }}>
-
-                                                            <span className="material-symbols-outlined text-4xl" style={{ color: scope.colorClass }}>folder_open</span>
-
-                                                        </div>
-
-                                                        <div className="flex flex-col items-end gap-2">
-
-                                                            {scopeTimeStr !== "00:00:00" && (
-
-                                                                <span className="text-[9px] font-black bg-theme-bg border border-theme-divider px-3 py-1 rounded-full text-theme-orange uppercase tracking-widest flex items-center gap-1 shadow-sm">
-
-                                                                    <span className="material-symbols-outlined text-[12px]">timer</span> {scopeTimeStr}
-
-                                                                </span>
-
-                                                            )}
-
-                                                            <span className="text-[9px] font-black bg-theme-bg border border-theme-divider px-3 py-1 rounded-full text-theme-textMuted uppercase tracking-widest flex items-center gap-1 shadow-sm">
-
-                                                                LÍDER <span className="text-theme-text">{scope.resp}</span>
-
-                                                            </span>
-
-                                                        </div>
-
-                                                    </div>
-
-                                                    <h3 className="font-square font-black text-xl text-theme-text uppercase tracking-widest truncate">{scope.name}</h3>
-
-
-
-                                                    <div className="flex justify-between items-end mt-4">
-
-                                                        {/* Author Avatars */}
-
-                                                        <div className="flex -space-x-2">
-
-                                                            {authors.length > 0 ? authors.slice(0, 5).map(author => {
-
-                                                                const idx = db.team.indexOf(author);
-
-                                                                const defaultColors = ['bg-red-500', 'bg-yellow-500', 'bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-pink-400', 'bg-orange-400', 'bg-teal-400'];
-
-                                                                const colorClass = idx >= 0 ? defaultColors[idx % defaultColors.length] : 'bg-gray-500';
-
-                                                                const initials = author.substring(0, 2).toUpperCase();
-
-                                                                return (
-
-                                                                    <div key={author} className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-white border-[3px] border-theme-card shadow-sm ${colorClass}`} title={author}>
-
-                                                                        {initials}
-
-                                                                    </div>
-
-                                                                )
-
-                                                            }) : (
-
-                                                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-white border-[3px] border-theme-card shadow-sm bg-theme-divider" title="SISTEMA">
-
-                                                                    --
-
-                                                                </div>
-
-                                                            )}
-
-                                                            {authors.length > 5 && <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-theme-textMuted bg-theme-bg border-2 border-theme-card shadow-sm">+{authors.length - 5}</div>}
-
-                                                        </div>
-
-
-
-                                                        <div className="flex gap-2 shrink-0">
-
-                                                            <label className="text-theme-text cursor-pointer transition-transform hover:scale-110 hover:-translate-y-1 p-2 bg-theme-bg border border-theme-divider rounded-xl shadow-lg flex items-center justify-center" title="Upload de Arquivo">
-
-                                                                <span className="material-symbols-outlined text-sm">upload_file</span>
-
-                                                                <input type="file" className="hidden" onChange={(e) => handleFileTabUpload(e, scope.id)} />
-
-                                                            </label>
-
-                                                            <button onClick={() => handleAddLink(scope.id)} className="text-theme-text transition-transform hover:scale-110 hover:-translate-y-1 p-2 bg-theme-bg border border-theme-divider rounded-xl shadow-lg flex items-center justify-center" title="Adicionar Link Externo">
-
-                                                                <span className="material-symbols-outlined text-sm">add_link</span>
-
-                                                            </button>
-
-                                                        </div>
-
-                                                    </div>
-
-                                                </div>
-
-
-
-                                                {/* File List */}
-
-                                                <div className="p-4 space-y-2 flex-1 max-h-[300px] overflow-y-auto scroller relative z-10 bg-black/5 dark:bg-black/20">
-
-                                                    {sortedFiles.length > 0 ? sortedFiles.map((f, i) => {
-
-                                                        const authorIdx = db.team.indexOf(f.author || '');
-
-                                                        const defaultColors = ['#ef4444', '#eab308', '#4ade80', '#60a5fa', '#c084fc', '#f472b6', '#fb923c', '#2dd4bf'];
-
-                                                        const hexColor = authorIdx >= 0 ? defaultColors[authorIdx % defaultColors.length] : '#888';
-
-
-
-                                                        return (
-
-                                                            <div key={i} className="flex flex-col p-4 rounded-2xl bg-theme-bg border border-theme-divider hover:border-theme-orange group/link cursor-pointer transition-all shadow-md hover:shadow-xl hover:-translate-y-1" onClick={() => {
-
-                                                                if (f.path.startsWith('data:application/pdf')) {
-
-                                                                    setViewingFile({ path: f.path, type: 'pdf' });
-
-                                                                } else if (f.path.startsWith('data:image')) {
-
-                                                                    setViewingFile({ path: f.path, type: 'image' });
-
-                                                                } else {
-
-                                                                    window.open(f.path, '_blank');
-
-                                                                }
-
-                                                            }}>
-
-                                                                <div className="flex items-start justify-between mb-3">
-
-                                                                    <div className="flex items-start gap-3 max-w-[85%]">
-
-                                                                        <div className="w-8 h-8 rounded-xl bg-theme-card flex items-center justify-center border border-theme-divider shrink-0 shadow-inner">
-
-                                                                            <span className="material-symbols-outlined text-[16px] text-theme-cyan">description</span>
-
-                                                                        </div>
-
-                                                                        <span className="text-xs font-bold text-theme-text line-clamp-2 uppercase leading-snug group-hover/link:text-theme-orange transition-colors tracking-wide">{f.label}</span>
-
-                                                                    </div>
-
-                                                                    <button onClick={(e) => { e.stopPropagation(); onDeleteFile(scope.id, scope.fileLinks!.indexOf(f!)); }} className="text-theme-textMuted hover:text-red-500 opacity-0 group-hover/link:opacity-100 transition-opacity p-1 bg-red-500/10 rounded-lg shrink-0">
-
-                                                                        <span className="material-symbols-outlined text-[16px]">delete</span>
-
-                                                                    </button>
-
-                                                                </div>
-
-                                                                <div className="flex justify-between items-center mt-auto border-t border-theme-divider pt-3">
-
-                                                                    <div className="flex items-center gap-2">
-
-                                                                        <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: hexColor }}></div>
-
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[150px]" style={{ color: hexColor }}>{f.author || 'SISTEMA'}</span>
-
-                                                                    </div>
-
-                                                                    <span className="text-[9px] font-mono font-bold text-theme-textMuted opacity-60">
-
-                                                                        {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '--/--/----'}
-
-                                                                    </span>
-
-                                                                </div>
-
+                                                <div key={scope.id} className={`rounded-[2rem] flex flex-col transition-all duration-300 shadow-neuro group overflow-hidden relative border ${theme === 'dark' ? 'bg-[#151B24]/40 hover:bg-[#151B24]/60' : 'bg-white hover:shadow-xl'}`} style={{ borderColor: `${scope.colorClass}40` }}>
+                                                    {/* Accent Glow */}
+                                                    <div className="absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-20 pointer-events-none rounded-full" style={{ backgroundColor: scope.colorClass }}></div>
+
+                                                    {/* Folder Header */}
+                                                    <div className="p-6 pb-4 border-b border-theme-divider relative z-10">
+                                                        <div className="flex justify-between items-start mb-4">
+                                                            <div className="w-16 h-16 rounded-2xl bg-theme-highlight flex items-center justify-center mb-2 group-hover:opacity-90 transition-all" style={{ backgroundColor: `${scope.colorClass}18` }}>
+                                                                <span className="material-symbols-outlined text-4xl" style={{ color: scope.colorClass }}>folder_open</span>
                                                             </div>
 
-                                                        )
+                                                            <div className="flex flex-col items-end gap-2">
+                                                                {scopeTimeStr !== "00:00:00" && (
+                                                                    <span className="text-[9px] font-black bg-theme-bg border border-theme-divider px-3 py-1 rounded-full text-theme-orange uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                                                                        <span className="material-symbols-outlined text-[12px]">timer</span> {scopeTimeStr}
+                                                                    </span>
+                                                                )}
+                                                                <span className="text-[9px] font-black bg-theme-bg border border-theme-divider px-3 py-1 rounded-full text-theme-textMuted uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                                                                    LÍDER <span className="text-theme-text">{scope.resp}</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
 
-                                                    }) : <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-10"><span className="material-symbols-outlined text-5xl mb-3 text-theme-textMuted font-light">inventory_2</span><span className="text-[10px] font-black uppercase tracking-widest text-theme-textMuted">NENHUM ARQUIVO VINCULADO</span></div>}
+                                                        <h3 className="font-square font-black text-xl text-theme-text uppercase tracking-widest truncate">{scope.name}</h3>
 
+                                                        <div className="flex justify-between items-end mt-4">
+                                                            {/* Author Avatars */}
+                                                            <div className="flex -space-x-2">
+                                                                {authors.length > 0 ? authors.slice(0, 5).map(author => {
+                                                                    const idx = db.team.indexOf(author);
+                                                                    const defaultColors = ['bg-red-500', 'bg-yellow-500', 'bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-pink-400', 'bg-orange-400', 'bg-teal-400'];
+                                                                    const colorClass = idx >= 0 ? defaultColors[idx % defaultColors.length] : 'bg-gray-500';
+                                                                    const initials = author.substring(0, 2).toUpperCase();
+                                                                    return (
+                                                                        <div key={author} className={`w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-white border-[3px] border-theme-card shadow-sm ${colorClass}`} title={author}>
+                                                                            {initials}
+                                                                        </div>
+                                                                    )
+                                                                }) : (
+                                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-white border-[3px] border-theme-card shadow-sm bg-theme-divider" title="SISTEMA">
+                                                                        --
+                                                                    </div>
+                                                                )}
+                                                                {authors.length > 5 && <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-black text-theme-textMuted bg-theme-bg border-2 border-theme-card shadow-sm">+{authors.length - 5}</div>}
+                                                            </div>
+
+                                                            <div className="flex gap-2 shrink-0">
+                                                                <label className="text-theme-text cursor-pointer transition-transform hover:scale-110 hover:-translate-y-1 p-2 bg-theme-bg border border-theme-divider rounded-xl shadow-lg flex items-center justify-center" title="Upload de Arquivo">
+                                                                    <span className="material-symbols-outlined text-sm">upload_file</span>
+                                                                    <input type="file" className="hidden" onChange={(e) => handleFileTabUpload(e, scope.id)} />
+                                                                </label>
+                                                                <button onClick={() => handleAddLink(scope.id)} className="text-theme-text transition-transform hover:scale-110 hover:-translate-y-1 p-2 bg-theme-bg border border-theme-divider rounded-xl shadow-lg flex items-center justify-center" title="Adicionar Link Externo">
+                                                                    <span className="material-symbols-outlined text-sm">add_link</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* File List */}
+                                                    <div className="p-4 space-y-2 flex-1 max-h-[300px] overflow-y-auto scroller relative z-10 bg-black/5 dark:bg-black/20">
+                                                        {sortedFiles.length > 0 ? sortedFiles.map((f, i) => {
+                                                            const authorIdx = db.team.indexOf(f.author || '');
+                                                            const defaultColors = ['#ef4444', '#eab308', '#4ade80', '#60a5fa', '#c084fc', '#f472b6', '#fb923c', '#2dd4bf'];
+                                                            const hexColor = authorIdx >= 0 ? defaultColors[authorIdx % defaultColors.length] : '#888';
+
+                                                            return (
+                                                                <div key={i} className="flex flex-col p-4 rounded-2xl bg-theme-bg border border-theme-divider hover:border-theme-orange group/link cursor-pointer transition-all shadow-md hover:shadow-xl hover:-translate-y-1" onClick={() => {
+                                                                    if (f.path.startsWith('data:application/pdf')) {
+                                                                        setViewingFile({ path: f.path, type: 'pdf' });
+                                                                    } else if (f.path.startsWith('data:image')) {
+                                                                        setViewingFile({ path: f.path, type: 'image' });
+                                                                    } else {
+                                                                        window.open(f.path, '_blank');
+                                                                    }
+                                                                }}>
+                                                                    <div className="flex items-start justify-between mb-3">
+                                                                        <div className="flex items-start gap-3 max-w-[85%]">
+                                                                            <div className="w-8 h-8 rounded-xl bg-theme-card flex items-center justify-center border border-theme-divider shrink-0 shadow-inner">
+                                                                                <span className="material-symbols-outlined text-[16px] text-theme-cyan">description</span>
+                                                                            </div>
+                                                                            <span className="text-xs font-bold text-theme-text line-clamp-2 uppercase leading-snug group-hover/link:text-theme-orange transition-colors tracking-wide">{f.label}</span>
+                                                                        </div>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onDeleteFile(scope.id, scope.fileLinks!.indexOf(f!)); }} className="text-theme-textMuted hover:text-red-500 opacity-0 group-hover/link:opacity-100 transition-opacity p-1 bg-red-500/10 rounded-lg shrink-0">
+                                                                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center mt-auto border-t border-theme-divider pt-3">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: hexColor }}></div>
+                                                                            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[150px]" style={{ color: hexColor }}>{f.author || 'SISTEMA'}</span>
+                                                                        </div>
+                                                                        <span className="text-[9px] font-mono font-bold text-theme-textMuted opacity-60">
+                                                                            {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '--/--/----'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        }) : <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-10"><span className="material-symbols-outlined text-5xl mb-3 text-theme-textMuted font-light">inventory_2</span><span className="text-[10px] font-black uppercase tracking-widest text-theme-textMuted">NENHUM ARQUIVO VINCULADO</span></div>}
+                                                    </div>
                                                 </div>
-
-                                            </div>
-
-                                        );
-
-                                    })}
-
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-
                             </div>
-
                         </div>
-
                     )}
 
 
@@ -5105,10 +4755,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                         activeTab === 'viabilidade' && hasProject && (
 
                             <div className="animate-fadeIn flex flex-col gap-8 max-w-[1920px] mx-auto w-full pb-20">
-                                {/* Viabilidades Kanban */}
-            <div className="bg-theme-card rounded-2xl border border-theme-border overflow-hidden w-full" style={{minHeight:'70vh'}}>
-                          </div>
-            {/* Contracts Section Card */}                                <div className="ds-card bg-theme-card overflow-hidden w-full">
+                                {/* Contracts Section Card */}
+                                <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl min-h-[calc(100vh-140px)]">
                                     <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando contratos...</div>}>
                                       <ContractsManager
                                         project={activeProject}
@@ -5117,69 +4765,55 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                         currentUser={currentUser}
                                     />
                                     </Suspense>
-
-              {/* Aba Financeiro — EVR */}
-              {activeTab === 'financeiro' && hasProject && (
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
-                  <FinanceiroTab project={activeProject} db={db} />
-                </Suspense>
-              )}
                                 </div>
                             </div>
                         )
 
                     }
 
+              {/* Aba Financeiro — EVR */}
+              {activeTab === 'financeiro' && hasProject && (
+                <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                  <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro">
+                    <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
+                      <FinanceiroTab project={activeProject} db={db} />
+                    </Suspense>
+                  </div>
+                </div>
+              )}
+
 
 
                     {/* --- TAB: NOTAS VIEW --- */}
-
                     {
-
                         activeTab === 'notas' && hasProject && (
-
-                            <div className="max-w-[1920px] mx-auto w-full">
-                                <NotesTab
-
-                                    project={activeProject}
-
-                                    db={db}
-
-                                    onUpdateProject={(upd) => {
-
-                                        setDb({ ...db, projects: db.projects.map(p => p.id === upd.id ? upd : p) });
-
-                                    }}
-
-                                    currentUser={currentUser as { name: string; avatar: string; } | null}
-
-                                />
+                            <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                                <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro">
+                                    <NotesTab
+                                        project={activeProject}
+                                        db={db}
+                                        onUpdateProject={(upd) => {
+                                            setDb({ ...db, projects: db.projects.map(p => p.id === upd.id ? upd : p) });
+                                        }}
+                                        currentUser={currentUser as { name: string; avatar: string; } | null}
+                                    />
+                                </div>
                             </div>
-
                         )
-
                     }
 
-
-
                     {/* --- TAB: COLABORADOR VIEW --- */}
-
                     {
-
                         activeTab === 'colaborador' && hasProject && (
-
-                            <div className="max-w-[1920px] mx-auto w-full">
-                                <ColaboradorTab
-
-                                    project={activeProject}
-
-                                    db={db}
-
-                                />
+                            <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                                <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro">
+                                    <ColaboradorTab
+                                        project={activeProject}
+                                        db={db}
+                                    />
+                                </div>
                             </div>
-
                         )
-
                     }
 
 

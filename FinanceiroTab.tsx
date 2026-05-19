@@ -1,167 +1,101 @@
-import React, { useEffect, useRef, useMemo } from 'react';
-import { useApp } from '../contexts/AppContext';
+import React, { useEffect, useRef } from 'react';
+import { Project, Database } from '../types';
 
 interface FinanceiroTabProps {
-  project: any;
-  db: any;
+  project: Project | null;
+  db: Database;
 }
 
-export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => {
+export function FinanceiroTab({ project, db }: FinanceiroTabProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Lê dados de múltiplas fontes: project.details, project.dataRows e scopes
-  const dadosConfig = useMemo(() => {
-    const d = project.details || {};
-    const rows: any[] = project.dataRows || [];
-    const scopes: any[] = project.scopes || [];
-
-    // Tenta extrair número de qualquer string
-    const toNum = (v: any): number => {
-      if (!v) return 0;
-      const n = parseFloat(String(v).replace(/[^0-9,.-]/g, '').replace(',', '.'));
-      return isNaN(n) ? 0 : n;
-    };
-
-    // Busca em dataRows pelos campos diretos (ProjectDataRow)
-    const firstRow = rows[0];
-
-    // Área terreno: project.details.landArea ou primeiro dataRow.landArea
-    const areaTerreno =
-      toNum(d.landArea) ||
-      toNum(firstRow?.landArea) ||
-      0;
-
-    // Área vendável: salesArea
-    const areaVendavel =
-      toNum(d.salesArea) ||
-      toNum(firstRow?.salesArea) ||
-      0;
-
-    // Área construída: builtArea
-    const areaConstruida =
-      toNum(d.builtArea) ||
-      toNum(firstRow?.builtArea) ||
-      0;
-
-    // Total de escopos como indicador de disciplinas
-    const totalScopes = scopes.length;
-
-    // Contagem de eventos concluídos em todos os escopos
-    const totalEvents = scopes.reduce((s: number, sc: any) => s + (sc.events?.length || 0), 0);
-    const doneEvents  = scopes.reduce((s: number, sc: any) =>
-      s + (sc.events?.filter((e: any) => e.completed)?.length || 0), 0);
-
-    return {
-      projectName: project.name || '',
-      areaTerreno,
-      areaVendavel,
-      areaConstruida,
-      totalScopes,
-      totalEvents,
-      doneEvents,
-      // Para o EVR iframe, mantém compatibilidade com campos antigos
-      cub: 0,
-      vgv: 0,
-      caBasico: toNum(firstRow?.potential) || 0,
-      prazo: 0,
-      taxaMensal: 0,
-    };
-  }, [project]);
-
   useEffect(() => {
+    if (!project || !iframeRef.current) return;
+
+    // Converter string de área (ex: "1000 m²") para número
+    const toNum = (str: string | undefined | null) => {
+      if (!str) return 0;
+      const parsed = parseFloat(str.replace(/[^\d.,]/g, '').replace(',', '.'));
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const areaTerreno = toNum(project.details?.landArea);
+    const pavements = project.details?.pavements || [];
+
+    // Para cfg.areas, mapeamos a tipologia
+    // evr.html suporta: Residencial, Comercial, Garagem, Lazer, etc.
+    const areas = pavements.map((p) => {
+      let tipo = 'Comum';
+      let coef = 1;
+      if (p.category === 'Habitacional') { tipo = 'Privativa'; coef = 1; }
+      else if (p.category === 'Garagem') { tipo = 'Garagem'; coef = 0.5; }
+      else if (p.category === 'Lazer Interno') { tipo = 'Comum'; coef = 0.8; }
+      else if (p.category === 'Lazer Externo') { tipo = 'Descoberta'; coef = 0; }
+
+      return {
+        nome: p.type || p.category,
+        tipo: tipo,
+        qtd: p.count || 1,
+        comp: p.areaPerPavement || 0,
+        cob: p.areaPerPavement || 0,
+        desc: 0,
+        total: p.areaPerPavement || 0,
+        coef: coef
+      };
+    });
+
+    // Para cfg.units (unidades vendáveis)
+    const units = pavements
+      .filter((p) => p.category === 'Habitacional' || p.category === 'Garagem')
+      .map((p) => {
+        return {
+          nome: p.type || p.category,
+          tipo: p.category === 'Habitacional' ? 'Residencial' : 'Estacionamento',
+          qtd: p.count * (p.unitsPerPavement || 0),
+          area: p.unitArea || 0,
+          pm2: 0, // Usuário preenche depois no EVR
+          permuta: 0
+        };
+      });
+
+    const dadosConfig = {
+      nome: project.name || '',
+      cidade: project.details?.location || '',
+      areaTerreno: areaTerreno,
+      caBasico: 0, // Será calculado ou preenchido pelo usuário
+      areas: areas.length > 0 ? areas : null,
+      units: units.length > 0 ? units : null,
+    };
+
     const iframe = iframeRef.current;
-    if (!iframe) return;
     const onLoad = () => {
       try {
         iframe.contentWindow?.postMessage({ type: 'ENIGAMI_INIT', config: dadosConfig }, '*');
-      } catch {}
+      } catch (err) {
+        console.error("Erro ao enviar postMessage para evr.html:", err);
+      }
     };
+
     iframe.addEventListener('load', onLoad);
-    return () => iframe.removeEventListener('load', onLoad);
-  }, [dadosConfig]);
+    
+    // Se o iframe já estiver carregado (hot reload)
+    if (iframe.contentWindow && iframe.contentDocument?.readyState === 'complete') {
+        onLoad();
+    }
 
-  const fmt = (v: number, unit = '') =>
-    v > 0 ? `${v.toLocaleString('pt-BR')}${unit}` : '—';
-
-  const summaryCards = [
-    {
-      label: 'Área Terreno',
-      value: fmt(dadosConfig.areaTerreno, ' m²'),
-      icon: 'landscape',
-      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    },
-    {
-      label: 'Área Vendável',
-      value: fmt(dadosConfig.areaVendavel, ' m²'),
-      icon: 'storefront',
-      color: 'bg-blue-50 text-blue-700 border-blue-200',
-    },
-    {
-      label: 'Área Construída',
-      value: fmt(dadosConfig.areaConstruida, ' m²'),
-      icon: 'apartment',
-      color: 'bg-purple-50 text-purple-700 border-purple-200',
-    },
-    {
-      label: 'Disciplinas',
-      value: dadosConfig.totalScopes > 0 ? String(dadosConfig.totalScopes) : '—',
-      icon: 'analytics',
-      color: 'bg-orange-50 text-orange-700 border-orange-200',
-    },
-    {
-      label: 'Progresso',
-      value: dadosConfig.totalEvents > 0
-        ? `${Math.round((dadosConfig.doneEvents / dadosConfig.totalEvents) * 100)}%`
-        : '—',
-      icon: 'task_alt',
-      color: 'bg-amber-50 text-amber-700 border-amber-200',
-    },
-  ];
-
-  const hasData = dadosConfig.areaTerreno > 0 || dadosConfig.areaVendavel > 0 || dadosConfig.areaConstruida > 0;
+    return () => {
+      iframe.removeEventListener('load', onLoad);
+    };
+  }, [project]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-[#F0F2F5]">
-      {/* Barra superior com dados do projeto */}
-      <div className="shrink-0 px-5 py-2.5 border-b border-gray-200 bg-white/90 backdrop-blur flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2 mr-2">
-          <div className="w-7 h-7 rounded-lg bg-[#FF6B4A] flex items-center justify-center shadow-sm">
-            <span className="material-symbols-outlined text-white text-sm leading-none">analytics</span>
-          </div>
-          <div className="leading-tight">
-            <p className="text-[11px] font-black tracking-widest uppercase text-gray-800 font-[Orbitron,sans-serif]">Estudo Financeiro</p>
-            <p className="text-[10px] text-gray-400 font-medium">{project.name}</p>
-          </div>
-        </div>
-        <div className="h-6 w-px bg-gray-200 hidden sm:block" />
-        <div className="flex gap-2 flex-wrap">
-          {summaryCards.map(card => (
-            <div key={card.label} className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1 ${card.color}`}>
-              <span className="material-symbols-outlined text-[14px] leading-none">{card.icon}</span>
-              <div className="leading-tight">
-                <p className="text-[8px] font-bold uppercase tracking-wider opacity-70">{card.label}</p>
-                <p className="text-[11px] font-semibold">{card.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        {!hasData && (
-          <p className="text-[11px] text-gray-400 flex items-center gap-1 ml-auto">
-            <span className="material-symbols-outlined text-sm text-amber-400">info</span>
-            Preencha <strong className="text-gray-600">Detalhes do Projeto</strong> para carregar os valores
-          </p>
-        )}
-      </div>
-
-      {/* EVR embutido */}
-      <iframe
-        ref={iframeRef}
-        src="/evr.html"
-        className="flex-1 w-full border-0"
-        title="EVR — Estudo Financeiro"
-      />
+    <div className="w-full h-full flex flex-col relative overflow-hidden bg-white">
+        <iframe
+            ref={iframeRef}
+            src="/evr.html"
+            className="flex-1 w-full h-full border-0"
+            title="Estudo de Viabilidade EVR"
+        />
     </div>
   );
-};
-
-export default FinanceiroTab;
+}

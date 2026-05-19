@@ -11,6 +11,8 @@ import './index.css';
 const Root = () => {
   const [session, setSession] = useState<any>(null); // Login aparece imediatamente
 
+  const [useDemo, setUseDemo] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session ?? null);
@@ -23,9 +25,9 @@ const Root = () => {
 
 
 
-  if (!session) return <AuthGate />;
+  if (!session && !useDemo) return <AuthGate onBypass={() => setUseDemo(true)} />;
 
-  const userId = session.user?.id || 'anonymous';
+  const userId = session?.user?.id || 'demo_user';
 
   return (
     <React.StrictMode>

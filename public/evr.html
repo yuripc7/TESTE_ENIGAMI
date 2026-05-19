@@ -2035,6 +2035,32 @@ function init() {
   calc();
 }
 
+// ── ENIGAMI INTEGRATION — recebe dados da aba Dados via postMessage ──
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'ENIGAMI_INIT') return;
+  const cfg = e.data.config;
+  if (!cfg) return;
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null && val !== '') el.value = val;
+  };
+  if (cfg.areaTerreno > 0) setVal('area_terreno', cfg.areaTerreno);
+  if (cfg.nome)            setVal('nome', cfg.nome);
+  if (cfg.cidade)          setVal('cidade', cfg.cidade);
+  if (cfg.caBasico > 0)   setVal('ca_bas', cfg.caBasico);
+  if (cfg.areas && cfg.areas.length > 0) {
+    areas = []; aid = 0;
+    document.getElementById('areas-body').innerHTML = '';
+    cfg.areas.forEach(a => addAreaObj(a));
+  }
+  if (cfg.units && cfg.units.length > 0) {
+    units = []; uid = 0;
+    document.getElementById('units-body').innerHTML = '';
+    cfg.units.forEach(u => addUnitObj(u));
+  }
+  calc();
+});
+
 window.addEventListener('DOMContentLoaded', init);
 
 </script>

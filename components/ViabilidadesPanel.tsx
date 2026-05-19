@@ -265,13 +265,13 @@ onClose,
                   onClick={onClose}
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-theme-border hover:border-red-400/40 hover:text-red-400 text-theme-textMuted rounded-lg text-xs font-semibold transition-colors"
                 >
-                  <span className="material-icons text-base leading-none">arrow_back</span>
+                  <span className="material-symbols-outlined text-base leading-none">arrow_back</span>
                   Voltar
                 </button>
               )}
                         {/* Busca */}
           <div className="relative">
-            <span className="material-icons absolute left-2 top-1/2 -translate-y-1/2 text-theme-textMuted text-base">search</span>
+            <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-theme-textMuted text-base">search</span>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -284,7 +284,7 @@ onClose,
             onClick={() => { setForm(EMPTY_FORM); setErrs({}); setShowNew(true); }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors"
           >
-            <span className="material-icons text-base">add</span>
+            <span className="material-symbols-outlined text-base">add</span>
             Nova Viabilidade
           </button>
         </div>

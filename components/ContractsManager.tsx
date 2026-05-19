@@ -51,6 +51,14 @@ const INST_STATUS: Record<ContractInstallment['status'], { label: string; tw: st
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
+// ── Scope status label map ────────────────────────────────────────────────────
+const SCOPE_STATUS_LABEL: Record<string, string> = {
+  stopped: 'Parado',
+  walking: 'Em andamento',
+  running: 'Correndo',
+  done:    'Concluído',
+};
+
 // ══════════════════════════════════════════════════════════════════════════════
 export const ContractsManager: React.FC<ContractsManagerProps> = ({
   project, onUpdateProject, currentUser,
@@ -73,9 +81,9 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
   const [instForm, setInstForm] = useState({ description: '', value: '', dueDate: '', status: 'pending' as ContractInstallment['status'] });
   const [showInstForm, setShowInstForm] = useState(false);
 
-  // New discipline form
-  const [discForm, setDiscForm] = useState({ name: '', progressPct: '0' });
-  const [showDiscForm, setShowDiscForm] = useState(false);
+  // Scope picker (replaces manual discForm)
+  const [showScopePicker, setShowScopePicker] = useState(false);
+  const [discSearch, setDiscSearch]           = useState('');
 
   // PDF upload
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -184,15 +192,20 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
     ));
   };
 
-  // ── Discipline handlers ──────────────────────────────────────────────────────
-  const handleAddDiscipline = () => {
-    if (!selected || !discForm.name.trim()) return;
-    const disc: ContractDiscipline = { id: uid(), name: discForm.name.trim(), progressPct: parseInt(discForm.progressPct) || 0 };
-    saveContracts(contracts.map(c =>
-      c.id === selected.id ? { ...c, disciplines: [...(c.disciplines || []), disc] } : c
-    ));
-    setDiscForm({ name: '', progressPct: '0' });
-    setShowDiscForm(false);
+  // ── Discipline handlers (scope-based) ────────────────────────────────────────
+  const handleLinkScope = (scopeId: string, scopeName: string) => {
+    if (!selected) return;
+    const alreadyLinked = (selected.disciplines || []).find(d => d.id === scopeId);
+    if (alreadyLinked) { setShowScopePicker(false); return; }
+    const disc: ContractDiscipline = { id: scopeId, name: scopeName, progressPct: 0 };
+    saveContracts(
+      contracts.map(c =>
+        c.id === selected.id ? { ...c, disciplines: [...(c.disciplines || []), disc] } : c
+      ),
+      `DISCIPLINA VINCULADA: ${scopeName}`
+    );
+    setShowScopePicker(false);
+    setDiscSearch('');
   };
 
   const handleUpdateProgress = (discId: string, pct: number) => {
@@ -204,6 +217,26 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
       } : c
     ));
   };
+
+  const handleUnlinkDiscipline = (discId: string) => {
+    if (!selected) return;
+    const disc = (selected.disciplines || []).find(d => d.id === discId);
+    saveContracts(
+      contracts.map(c =>
+        c.id === selected.id ? { ...c, disciplines: c.disciplines.filter(d => d.id !== discId) } : c
+      ),
+      `DISCIPLINA DESVINCULADA: ${disc?.name || discId}`
+    );
+  };
+
+  // ── Available scopes for picker ───────────────────────────────────────────────
+  const availableScopes = useMemo(() => {
+    const linkedIds = new Set((selected?.disciplines || []).map(d => d.id));
+    return (project.scopes || []).filter(s =>
+      !linkedIds.has(s.id) &&
+      (!discSearch || s.name.toLowerCase().includes(discSearch.toLowerCase()))
+    );
+  }, [project.scopes, selected, discSearch]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -306,12 +339,18 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
               {/* Discipline pills */}
               {(c.disciplines || []).length > 0 && (
                 <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {c.disciplines.slice(0, 4).map(d => (
-                    <div key={d.id} className="flex items-center gap-1 bg-theme-bg border border-theme-border rounded-lg px-2 py-0.5">
-                      <span className="text-[9px] text-theme-textMuted">{d.name}</span>
-                      <span className="text-[9px] font-bold text-theme-orange">{d.progressPct}%</span>
-                    </div>
-                  ))}
+                  {c.disciplines.slice(0, 4).map(d => {
+                    const scope = (project.scopes || []).find(s => s.id === d.id);
+                    return (
+                      <div key={d.id} className="flex items-center gap-1 bg-theme-bg border border-theme-border rounded-lg px-2 py-0.5">
+                        {scope?.colorClass && (
+                          <div className={`w-2.5 h-2.5 rounded-full ${scope.colorClass}`} />
+                        )}
+                        <span className="text-[9px] text-theme-textMuted">{d.name}</span>
+                        <span className="text-[9px] font-bold text-theme-orange">{d.progressPct}%</span>
+                      </div>
+                    );
+                  })}
                   {c.disciplines.length > 4 && <span className="text-[9px] text-theme-textMuted">+{c.disciplines.length - 4}</span>}
                 </div>
               )}
@@ -446,9 +485,9 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
             {/* Tabs */}
             <div className="flex border-b border-theme-border shrink-0 px-5">
               {([
-                { key: 'info',         label: 'Informações', icon: 'info'            },
-                { key: 'installments', label: 'Parcelas',    icon: 'payments'        },
-                { key: 'disciplines',  label: 'Disciplinas', icon: 'analytics'       },
+                { key: 'info',         label: 'Informações', icon: 'info'      },
+                { key: 'installments', label: 'Parcelas',    icon: 'payments'  },
+                { key: 'disciplines',  label: 'Disciplinas', icon: 'analytics' },
               ] as const).map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
                   className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold border-b-2 transition-all -mb-px ${
@@ -458,6 +497,11 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                   {t.key === 'installments' && overdueCount(selected) > 0 && (
                     <span className="ml-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-black flex items-center justify-center">
                       {overdueCount(selected)}
+                    </span>
+                  )}
+                  {t.key === 'disciplines' && (selected.disciplines || []).length > 0 && (
+                    <span className="ml-1 w-4 h-4 bg-theme-orange/20 text-theme-orange rounded-full text-[8px] font-black flex items-center justify-center">
+                      {(selected.disciplines || []).length}
                     </span>
                   )}
                 </button>
@@ -624,50 +668,192 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
               {/* ── DISCIPLINES TAB ──────────────────────────────────────────────── */}
               {tab === 'disciplines' && (
                 <div className="flex flex-col gap-3">
+
+                  {/* Header row */}
+                  <div className="bg-theme-bg border border-theme-border rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black text-theme-textMuted uppercase tracking-wider">Disciplinas Vinculadas</p>
+                      <p className="text-[10px] text-theme-textMuted mt-0.5">Escopos do projeto associados a este contrato.</p>
+                    </div>
+                    <button
+                      onClick={() => { setShowScopePicker(true); setDiscSearch(''); }}
+                      className="flex items-center gap-1.5 text-[10px] font-black bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition-colors shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-sm">link</span>
+                      Vincular
+                    </button>
+                  </div>
+
+                  {/* Empty state */}
                   {(selected.disciplines || []).length === 0 && (
-                    <p className="text-xs text-theme-textMuted text-center py-6">Nenhuma disciplina cadastrada</p>
+                    <div className="border border-dashed border-theme-border rounded-xl p-6 text-center">
+                      <span className="material-symbols-outlined text-3xl text-theme-textMuted/40 block mb-2">analytics</span>
+                      <p className="text-xs text-theme-textMuted">Nenhuma disciplina vinculada ainda.</p>
+                      <p className="text-[10px] text-theme-textMuted/60 mt-0.5">Clique em Vincular para associar escopos do projeto.</p>
+                    </div>
                   )}
 
-                  {(selected.disciplines || []).map(d => (
-                    <div key={d.id} className="bg-theme-bg border border-theme-border rounded-xl p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-bold text-theme-text">{d.name}</p>
-                        <span className="text-xs font-black text-theme-orange">{d.progressPct}%</span>
-                      </div>
-                      <div className="h-2 bg-theme-card rounded-full overflow-hidden mb-2">
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${d.progressPct}%`, background: `hsl(${d.progressPct * 1.2}, 70%, 50%)` }} />
-                      </div>
-                      <input type="range" min="0" max="100" value={d.progressPct}
-                        onChange={e => handleUpdateProgress(d.id, parseInt(e.target.value))}
-                        className="w-full accent-orange-500 cursor-pointer" />
-                    </div>
-                  ))}
+                  {/* Discipline cards */}
+                  {(selected.disciplines || []).map(d => {
+                    const scope = (project.scopes || []).find(s => s.id === d.id);
+                    const colorClass = scope?.colorClass || 'bg-emerald-600';
+                    const initial = d.name.trim()[0]?.toUpperCase() || '?';
+                    const scopeStatus = scope ? SCOPE_STATUS_LABEL[scope.status] || scope.status : null;
 
-                  {showDiscForm ? (
-                    <div className="border border-theme-border rounded-xl p-3 flex flex-col gap-2 bg-theme-bg">
-                      <input value={discForm.name} onChange={e => setDiscForm(f => ({ ...f, name: e.target.value }))}
-                        placeholder="Nome da disciplina (ex: Arquitetura)" className="inp-sm" />
-                      <div>
-                        <div className="flex justify-between text-[10px] text-theme-textMuted mb-1">
-                          <span>Progresso inicial</span><span>{discForm.progressPct}%</span>
+                    return (
+                      <div key={d.id} className="bg-theme-bg border border-theme-border rounded-xl p-4 flex flex-col gap-3">
+                        {/* Top row: avatar + name + unlink */}
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl ${colorClass} flex items-center justify-center text-white font-black text-sm shrink-0`}>
+                            {initial}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-black text-theme-text">{d.name}</p>
+                            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                              {scopeStatus && (
+                                <span className="text-[9px] text-theme-textMuted">{scopeStatus}</span>
+                              )}
+                              {scope?.resp && (
+                                <span className="text-[9px] text-theme-textMuted">· {scope.resp}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${
+                              d.progressPct >= 100
+                                ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                                : d.progressPct > 0
+                                ? 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                                : 'text-theme-textMuted bg-theme-card border-theme-border'
+                            }`}>{d.progressPct}%</span>
+                            <button
+                              onClick={() => handleUnlinkDiscipline(d.id)}
+                              className="text-red-400/60 hover:text-red-400 transition-colors"
+                              title="Desvincular disciplina"
+                            >
+                              <span className="material-symbols-outlined text-base">link_off</span>
+                            </button>
+                          </div>
                         </div>
-                        <input type="range" min="0" max="100" value={discForm.progressPct}
-                          onChange={e => setDiscForm(f => ({ ...f, progressPct: e.target.value }))}
-                          className="w-full accent-orange-500" />
+
+                        {/* Progress bar + slider */}
+                        <div>
+                          <div className="h-2 bg-theme-card rounded-full overflow-hidden mb-2">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${d.progressPct}%`,
+                                background: d.progressPct >= 100
+                                  ? '#10b981'
+                                  : `hsl(${d.progressPct * 1.2}, 70%, 50%)`
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range" min="0" max="100" value={d.progressPct}
+                              onChange={e => handleUpdateProgress(d.id, parseInt(e.target.value))}
+                              className="flex-1 accent-orange-500 cursor-pointer h-1"
+                            />
+                            <input
+                              type="number" min="0" max="100" value={d.progressPct}
+                              onChange={e => handleUpdateProgress(d.id, Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                              className="w-12 text-center text-[10px] bg-theme-card border border-theme-border rounded-lg py-1 text-theme-text outline-none focus:border-theme-orange"
+                            />
+                            <span className="text-[10px] text-theme-textMuted">%</span>
+                          </div>
+                        </div>
+
+                        {/* Scope events summary */}
+                        {scope && (scope.events || []).length > 0 && (
+                          <div className="flex items-center gap-1.5 pt-2 border-t border-theme-border/50">
+                            <span className="material-symbols-outlined text-xs text-theme-textMuted">task_alt</span>
+                            <span className="text-[9px] text-theme-textMuted">
+                              {scope.events.filter(ev => ev.completed).length}/{scope.events.length} atividades concluídas
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowDiscForm(false)}
-                          className="flex-1 py-2 text-[10px] font-bold border border-theme-border rounded-xl text-theme-textMuted hover:text-theme-text transition-colors">Cancelar</button>
-                        <button onClick={handleAddDiscipline}
-                          className="flex-1 py-2 text-[10px] font-black bg-theme-orange text-white rounded-xl hover:opacity-90">Adicionar</button>
+                    );
+                  })}
+
+                  {/* Scope picker modal */}
+                  {showScopePicker && (
+                    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                      onClick={e => { if (e.target === e.currentTarget) setShowScopePicker(false); }}>
+                      <div className="bg-theme-card border border-theme-border rounded-2xl w-full max-w-sm shadow-2xl">
+
+                        {/* Picker header */}
+                        <div className="p-4 border-b border-theme-border flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-black text-theme-text">Vincular Disciplina</p>
+                            <p className="text-[10px] text-theme-textMuted mt-0.5">Escopos disponíveis neste projeto</p>
+                          </div>
+                          <button
+                            onClick={() => setShowScopePicker(false)}
+                            className="text-theme-textMuted hover:text-theme-text transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-base">close</span>
+                          </button>
+                        </div>
+
+                        {/* Search */}
+                        <div className="px-3 pt-3">
+                          <div className="relative">
+                            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-textMuted text-sm">search</span>
+                            <input
+                              value={discSearch}
+                              onChange={e => setDiscSearch(e.target.value)}
+                              placeholder="Buscar disciplina..."
+                              className="w-full pl-8 pr-3 py-2 text-xs bg-theme-bg border border-theme-border rounded-xl text-theme-text outline-none focus:border-theme-orange"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+
+                        {/* Scope list */}
+                        <div className="p-3 flex flex-col gap-1.5 max-h-72 overflow-y-auto">
+                          {availableScopes.length === 0 ? (
+                            <div className="text-center py-6">
+                              <p className="text-xs text-theme-textMuted">
+                                {(project.scopes || []).length === 0
+                                  ? 'Este projeto não possui escopos cadastrados.'
+                                  : discSearch
+                                  ? 'Nenhum escopo encontrado com esse nome.'
+                                  : 'Todos os escopos já estão vinculados.'}
+                              </p>
+                            </div>
+                          ) : (
+                            availableScopes.map(s => (
+                              <button
+                                key={s.id}
+                                onClick={() => handleLinkScope(s.id, s.name)}
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-theme-bg border border-transparent hover:border-theme-border text-left transition-colors w-full group"
+                              >
+                                <div className={`w-9 h-9 rounded-xl ${s.colorClass || 'bg-emerald-600'} flex items-center justify-center text-white font-black text-sm shrink-0`}>
+                                  {s.name.trim()[0]?.toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-theme-text">{s.name}</p>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className="text-[9px] text-theme-textMuted">{SCOPE_STATUS_LABEL[s.status] || s.status}</span>
+                                    {s.resp && <span className="text-[9px] text-theme-textMuted">· {s.resp}</span>}
+                                    {(s.events || []).length > 0 && (
+                                      <span className="text-[9px] text-theme-textMuted">
+                                        · {s.events.filter(e => e.completed).length}/{s.events.length} ativ.
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="material-symbols-outlined text-sm text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                  add_link
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <button onClick={() => setShowDiscForm(true)}
-                      className="w-full border border-dashed border-theme-border rounded-xl py-2.5 text-xs text-theme-textMuted hover:text-theme-text hover:border-theme-textMuted/40 transition-all flex items-center justify-center gap-1">
-                      <span className="material-symbols-outlined text-sm">add</span> Adicionar Disciplina
-                    </button>
                   )}
                 </div>
               )}
@@ -676,7 +862,7 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
         </div>
       )}
 
-      {/* ── Shared input styles via Tailwind arbitrary ─────────────────────────── */}
+      {/* ── Shared input styles ─────────────────────────────────────────────────── */}
       <style>{`
         .lbl-sm { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
         .inp-sm { width: 100%; background: var(--color-bg, #0d1117); border: 1px solid var(--color-border, #30363d); border-radius: 10px; padding: 7px 10px; font-size: 12px; color: var(--color-text, #e6edf3); outline: none; transition: border-color 0.15s; }

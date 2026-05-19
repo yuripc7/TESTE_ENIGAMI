@@ -5119,8 +5119,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                     </Suspense>
 
             
-                                </div>       ← fecha ds-card
-                            </div>       ← fecha animate-fadeIn
+                                </div>
+                            </div>
                         )
 
                {/* Aba Financeiro — EVR */}

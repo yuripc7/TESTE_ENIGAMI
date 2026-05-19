@@ -1,71 +1,101 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { Project, Database } from '../types';
 
 interface FinanceiroTabProps {
-  project: any;
-  db: any;
+  project: Project | null;
+  db: Database;
 }
 
-const toNum = (v: any): number => {
-  if (!v) return 0;
-  const n = parseFloat(String(v).replace(/[^0-9,.-]/g, '').replace(',', '.'));
-  return isNaN(n) ? 0 : n;
-};
-
-export const FinanceiroTab: React.FC<FinanceiroTabProps> = ({ project, db }) => {
+export function FinanceiroTab({ project, db }: FinanceiroTabProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const enigamiConfig = useMemo(() => {
-    const details = project.details || {};
-    const rows = project.dataRows || [];
-    const pavements = details.pavements || [];
-    const areaTerreno = toNum(details.landArea) || toNum(rows[0]?.landArea) || 0;
-    const caBasico    = toNum(rows[0]?.potential) || 0;
-    const cidade      = (details.location || rows[0]?.location || '').split(',').pop()?.trim() || '';
-    const categoryToTipo = (cat: string): 'Torre' | 'Embasamento' | 'Telhado' => {
-      if (cat === 'Garagem' || cat === 'Lazer Interno') return 'Embasamento';
-      if (cat === 'Lazer Externo') return 'Telhado';
-      return 'Torre';
+  useEffect(() => {
+    if (!project || !iframeRef.current) return;
+
+    // Converter string de área (ex: "1000 m²") para número
+    const toNum = (str: string | undefined | null) => {
+      if (!str) return 0;
+      const parsed = parseFloat(str.replace(/[^\d.,]/g, '').replace(',', '.'));
+      return isNaN(parsed) ? 0 : parsed;
     };
-    const categoryToCoef = (cat: string): number => {
-      if (cat === 'Garagem') return 0.5;
-      if (cat === 'Lazer Interno') return 0.8;
-      if (cat === 'Lazer Externo') return 0.3;
-      return 1.0;
-    };
-    const areas = pavements.map((p: any) => ({
-      nome: p.type, tipo: categoryToTipo(p.category), qtd: p.count,
-      comp: p.areaPerPavement, cob: p.areaPerPavement, desc: 0,
-      total: p.areaPerPavement, coef: categoryToCoef(p.category),
-    }));
+
+    const areaTerreno = toNum(project.details?.landArea);
+    const pavements = project.details?.pavements || [];
+
+    // Para cfg.areas, mapeamos a tipologia
+    // evr.html suporta: Residencial, Comercial, Garagem, Lazer, etc.
+    const areas = pavements.map((p) => {
+      let tipo = 'Comum';
+      let coef = 1;
+      if (p.category === 'Habitacional') { tipo = 'Privativa'; coef = 1; }
+      else if (p.category === 'Garagem') { tipo = 'Garagem'; coef = 0.5; }
+      else if (p.category === 'Lazer Interno') { tipo = 'Comum'; coef = 0.8; }
+      else if (p.category === 'Lazer Externo') { tipo = 'Descoberta'; coef = 0; }
+
+      return {
+        nome: p.type || p.category,
+        tipo: tipo,
+        qtd: p.count || 1,
+        comp: p.areaPerPavement || 0,
+        cob: p.areaPerPavement || 0,
+        desc: 0,
+        total: p.areaPerPavement || 0,
+        coef: coef
+      };
+    });
+
+    // Para cfg.units (unidades vendáveis)
     const units = pavements
-      .filter((p: any) => p.category === 'Habitacional' || p.category === 'Garagem')
-      .map((p: any) => ({
-        nome: p.type, tipo: p.category === 'Garagem' ? 'Estacionamento' : 'Residencial',
-        qtd: p.count * p.unitsPerPavement, area: p.unitArea, pm2: 0, permuta: 0,
-      }));
-    return { nome: project.name || '', cidade, areaTerreno, caBasico,
-      areas: areas.length > 0 ? areas : null, units: units.length > 0 ? units : null };
+      .filter((p) => p.category === 'Habitacional' || p.category === 'Garagem')
+      .map((p) => {
+        return {
+          nome: p.type || p.category,
+          tipo: p.category === 'Habitacional' ? 'Residencial' : 'Estacionamento',
+          qtd: p.count * (p.unitsPerPavement || 0),
+          area: p.unitArea || 0,
+          pm2: 0, // Usuário preenche depois no EVR
+          permuta: 0
+        };
+      });
+
+    const dadosConfig = {
+      nome: project.name || '',
+      cidade: project.details?.location || '',
+      areaTerreno: areaTerreno,
+      caBasico: 0, // Será calculado ou preenchido pelo usuário
+      areas: areas.length > 0 ? areas : null,
+      units: units.length > 0 ? units : null,
+    };
+
+    const iframe = iframeRef.current;
+    const onLoad = () => {
+      try {
+        iframe.contentWindow?.postMessage({ type: 'ENIGAMI_INIT', config: dadosConfig }, '*');
+      } catch (err) {
+        console.error("Erro ao enviar postMessage para evr.html:", err);
+      }
+    };
+
+    iframe.addEventListener('load', onLoad);
+    
+    // Se o iframe já estiver carregado (hot reload)
+    if (iframe.contentWindow && iframe.contentDocument?.readyState === 'complete') {
+        onLoad();
+    }
+
+    return () => {
+      iframe.removeEventListener('load', onLoad);
+    };
   }, [project]);
 
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const send = () => {
-      try { iframe.contentWindow?.postMessage({ type: 'ENIGAMI_INIT', config: enigamiConfig }, '*'); } catch {}
-    };
-    iframe.addEventListener('load', send);
-    return () => iframe.removeEventListener('load', send);
-  }, [enigamiConfig]);
-
   return (
-    <iframe
-      ref={iframeRef}
-      src="/evr.html"
-      className="w-full border-0 block"
-      style={{ height: 'calc(100vh - 56px)' }}
-      title="EVR — Estudo Financeiro"
-    />
+    <div className="w-full h-full flex flex-col relative overflow-hidden bg-white">
+        <iframe
+            ref={iframeRef}
+            src="/evr.html"
+            className="flex-1 w-full h-full border-0"
+            title="Estudo de Viabilidade EVR"
+        />
+    </div>
   );
-};
-
-export default FinanceiroTab;
+}

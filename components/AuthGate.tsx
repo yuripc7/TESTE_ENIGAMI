@@ -65,7 +65,11 @@ const neu = {
   },
 };
 
-export const AuthGate: React.FC = () => {
+interface AuthGateProps {
+  onBypass?: () => void;
+}
+
+export const AuthGate: React.FC<AuthGateProps> = ({ onBypass }) => {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,7 +79,7 @@ export const AuthGate: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const REDIRECT = 'https://teste-enigami.vercel.app/';
+  const REDIRECT = window.location.origin + '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,6 +204,28 @@ export const AuthGate: React.FC = () => {
           <button type="submit" style={neu.btnPrimary} disabled={loading}>
             {loading ? <Loader2 size={18} /> : mode === 'login' ? 'ENTRAR NO PROJETO' : mode === 'register' ? 'CRIAR ACESSO' : 'ENVIAR LINK'}
           </button>
+          {onBypass && mode === 'login' && (
+            <button
+              type="button"
+              onClick={onBypass}
+              style={{
+                marginTop: '16px',
+                background: 'rgba(232, 130, 106, 0.1)',
+                border: '1px dashed #e8826a',
+                borderRadius: '14px',
+                padding: '14px',
+                width: '100%',
+                fontSize: '11px',
+                fontWeight: '800',
+                color: '#e8826a',
+                letterSpacing: '1px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              ENTRAR SEM AUTENTICAÇÃO (DEMO)
+            </button>
+          )}
         </form>
         {mode === 'login' && (
           <>

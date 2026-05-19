@@ -111,7 +111,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
     };
 
     return (
-        <div className="w-full flex flex-col gap-6 animate-fadeIn py-4">
+        <div className="w-full h-full flex flex-col relative overflow-hidden p-6 animate-fadeIn">
             {pendingDeleteId && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="bg-theme-card rounded-2xl border border-theme-divider shadow-2xl p-6 mx-4 max-w-sm space-y-4">
@@ -123,7 +123,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                     </div>
                 </div>
             )}
-            <div className="flex justify-between items-center mb-2 pb-3 border-b border-theme-divider">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-theme-divider flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
                     <span className="material-symbols-outlined text-base text-theme-orange">note_stack</span>
@@ -138,70 +138,73 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                 </button>
             </div>
 
-            {/* Masonry Grid */}
-            <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
-                {notes.map(note => (
-                    <div
-                        key={note.id}
-                        className={`break-inside-avoid rounded-3xl p-6 shadow-md relative group transition-all duration-300 hover:shadow-xl ${note.status === 'completed' ? 'opacity-60 grayscale' : ''}`}
-                        style={{ backgroundColor: note.color, color: '#1A1C20' }}
-                    >
-                        {/* Status / Delete controls */}
-                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center hover:bg-black/20" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
-                                <span className="material-symbols-outlined text-[16px]">{note.status === 'pending' ? 'check' : 'undo'}</span>
-                            </button>
-                            <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/20 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white" title="Excluir Nota">
-                                <span className="material-symbols-outlined text-[16px]">delete</span>
-                            </button>
-                        </div>
-
-                        {/* Note Header (Avatars) */}
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="relative">
-                                <img src={`https://ui-avatars.com/api/?name=${note.author}&background=000&color=fff`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm" title={`De: ${note.author}`} />
-                                <img src={`https://ui-avatars.com/api/?name=${note.recipient}&background=FFF&color=000`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm absolute -bottom-2 -right-2" title={`Para: ${note.recipient}`} />
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto scroller pr-1 pb-6">
+                {/* Masonry Grid */}
+                <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                    {notes.map(note => (
+                        <div
+                            key={note.id}
+                            className={`break-inside-avoid rounded-3xl p-6 shadow-md relative group transition-all duration-300 hover:shadow-xl ${note.status === 'completed' ? 'opacity-60 grayscale' : ''}`}
+                            style={{ backgroundColor: note.color, color: '#1A1C20' }}
+                        >
+                            {/* Status / Delete controls */}
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center hover:bg-black/20" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
+                                    <span className="material-symbols-outlined text-[16px]">{note.status === 'pending' ? 'check' : 'undo'}</span>
+                                </button>
+                                <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/20 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white" title="Excluir Nota">
+                                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
                             </div>
-                            <div className="flex flex-col ml-3">
-                                <span className="text-[10px] font-black uppercase tracking-widest">{note.recipient}</span>
-                                <span className="text-[8px] font-bold text-black/50 uppercase tracking-widest">De: {note.author}</span>
+
+                            {/* Note Header (Avatars) */}
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="relative">
+                                    <img src={`https://ui-avatars.com/api/?name=${note.author}&background=000&color=fff`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm" title={`De: ${note.author}`} />
+                                    <img src={`https://ui-avatars.com/api/?name=${note.recipient}&background=FFF&color=000`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm absolute -bottom-2 -right-2" title={`Para: ${note.recipient}`} />
+                                </div>
+                                <div className="flex flex-col ml-3">
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{note.recipient}</span>
+                                    <span className="text-[8px] font-bold text-black/50 uppercase tracking-widest">De: {note.author}</span>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Note Content */}
-                        <p className="text-sm font-medium mb-4 whitespace-pre-wrap leading-relaxed">
-                            {note.text}
-                        </p>
+                            {/* Note Content */}
+                            <p className="text-sm font-medium mb-4 whitespace-pre-wrap leading-relaxed">
+                                {note.text}
+                            </p>
 
-                        {/* Image Attachment */}
-                        {note.imageUrl && (
-                            <div className="mb-4 rounded-xl overflow-hidden shadow-inner border border-black/5">
-                                <img src={note.imageUrl} alt="Anexo" className="w-full h-auto max-h-48 object-cover" />
-                            </div>
-                        )}
-
-                        {/* Footer / Deadline */}
-                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-black/10">
-                            <span className="text-[9px] font-bold text-black/40 font-mono">
-                                {formatLocalDate(note.createdAt)}
-                            </span>
-                            {note.deadline && (
-                                <div className="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-white/40 text-red-600">
-                                    <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                    Prazo: {formatLocalDate(note.deadline)}
+                            {/* Image Attachment */}
+                            {note.imageUrl && (
+                                <div className="mb-4 rounded-xl overflow-hidden shadow-inner border border-black/5">
+                                    <img src={note.imageUrl} alt="Anexo" className="w-full h-auto max-h-48 object-cover" />
                                 </div>
                             )}
-                        </div>
-                    </div>
-                ))}
-            </div>
 
-            {notes.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                    <span className="material-symbols-outlined text-6xl mb-4">note_stack_add</span>
-                    <p className="font-square font-black uppercase tracking-widest text-sm">Nenhuma nota criada.</p>
+                            {/* Footer / Deadline */}
+                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-black/10">
+                                <span className="text-[9px] font-bold text-black/40 font-mono">
+                                    {formatLocalDate(note.createdAt)}
+                                </span>
+                                {note.deadline && (
+                                    <div className="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-white/40 text-red-600">
+                                        <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                                        Prazo: {formatLocalDate(note.deadline)}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            )}
+
+                {notes.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                        <span className="material-symbols-outlined text-6xl mb-4 text-theme-textMuted font-light">note_stack_add</span>
+                        <p className="font-square font-black uppercase tracking-widest text-sm text-theme-textMuted">Nenhuma nota criada.</p>
+                    </div>
+                )}
+            </div>
 
             {/* Note Creation Modal */}
             {showModal && (

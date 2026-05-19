@@ -11,6 +11,8 @@ interface User {
   id?: string;
   name: string;
   avatar?: string;
+  role?: string;
+  profileCompleted?: boolean;
 }
 
 // Helpers
@@ -61,9 +63,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   const [db, setDb] = useState<DB>(() => {
     try {
       const savedDb = localStorage.getItem(STORAGE_KEY + "_" + userId);
-      return savedDb ? JSON.parse(savedDb) : INITIAL_DB;
+      const data = savedDb ? JSON.parse(savedDb) : INITIAL_DB;
+      
+      // Clean up pre-configured static team members from state if present in old local storage
+      if (data && Array.isArray(data.team)) {
+        const preconfigured = ["Arq. Yuri", "Arq. Lourraine", "Eng. Lucas", "Arq. Isabela", "Mkt Gisele", "Gugu (guzinho)"];
+        data.team = data.team.filter((m: string) => !preconfigured.includes(m));
+      }
+      return data;
     } catch (error) {
-      console.error("Erro ao carregar dados locais, resetando para padrÃÂ£o:", error);
+      console.error("Erro ao carregar dados locais, resetando para padrão:", error);
       return INITIAL_DB;
     }
   });
@@ -73,7 +82,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     return savedTheme || 'light';
   });
 
-  const [currentUser, setCurrentUserState] = useState<User | null>(null);
+  const [currentUser, setCurrentUserState] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem(USER_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
   const [notification, setNotification] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -95,11 +110,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
 
   async function loadProfile(userId: string) {
     const { data } = await supabase.from('profiles').select('id, name, avatar_url').eq('id', userId).single();
+    const { data: ud } = await supabase.auth.getUser();
+    const metadata = ud?.user?.user_metadata;
+    const isCompleted = metadata?.profile_completed === true;
+
     if (data) {
-      setCurrentUser({ id: data.id, name: data.name, avatar: data.avatar_url ?? buildAvatar(data.name) });
+      setCurrentUser({
+        id: data.id,
+        name: data.name,
+        avatar: data.avatar_url ?? buildAvatar(data.name),
+        role: metadata?.role || 'Colaborador',
+        profileCompleted: isCompleted,
+      });
     } else {
-      const { data: ud } = await supabase.auth.getUser();
-      if (ud?.user) setCurrentUser({ id: ud.user.id, name: ud.user.email?.split('@')[0] ?? 'Usuário', avatar: ud.user.user_metadata?.avatar_url });
+      if (ud?.user) {
+        setCurrentUser({
+          id: ud.user.id,
+          name: ud.user.email?.split('@')[0] ?? 'Usuário',
+          avatar: metadata?.avatar_url ?? buildAvatar(ud.user.email?.split('@')[0] ?? 'Usuário'),
+          role: metadata?.role,
+          profileCompleted: isCompleted,
+        });
+      }
     }
   }
 
@@ -114,8 +146,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   }, []);
 
   const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    setNotification('SessÃÂ£o encerrada.');
+    supabase.auth.signOut().then(() => {
+      setCurrentUser(null);
+      setNotification('Sessão encerrada.');
+    });
   }, [setCurrentUser, setNotification]);
 
   // Track last saved JSON to skip redundant writes
@@ -159,6 +193,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     document.documentElement.className = theme;
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  // Sincroniza o usuário logado com a lista da equipe técnica
+  useEffect(() => {
+    if (currentUser?.name && currentUser.profileCompleted) {
+      setDb(prev => {
+        if (prev.team && !prev.team.includes(currentUser.name)) {
+          return {
+            ...prev,
+            team: [...prev.team, currentUser.name]
+          };
+        }
+        return prev;
+      });
+    }
+  }, [currentUser]);
 
   // Auto-hide notification after 3 seconds
   useEffect(() => {

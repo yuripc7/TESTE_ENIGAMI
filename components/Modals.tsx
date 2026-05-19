@@ -1,9 +1,10 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Company, Project, Scope, Event, Discipline } from '../types';
 import Plan from './ui/agent-plan';
 import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 import { validateFileSize } from '../utils/validation';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
+import { supabase } from '../lib/supabase';
 
 interface ModalBaseProps {
     isOpen: boolean;
@@ -1122,9 +1123,178 @@ export const EventModal: React.FC<{
 };
 
 // ... TeamModal, TimelineSettingsModal, DisciplinesManagerModal ...
+// Curated professional SVGs
+const MODAL_ROLE_SYMBOLS = [
+  {
+    name: 'Arquitetura',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm1" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#4f46e5" />
+          <stop offset="100%" stop-color="#06b6d4" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm1)"/>
+      <path d="M50 25 L75 55 H60 V75 H40 V55 H25 Z" fill="white" stroke="white" stroke-width="2" stroke-linejoin="round" opacity="0.9"/>
+      <circle cx="50" cy="40" r="4" fill="#4f46e5"/>
+    </svg>`
+  },
+  {
+    name: 'Engenharia',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm2" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f59e0b" />
+          <stop offset="100%" stop-color="#ef4444" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm2)"/>
+      <path d="M50 22 C37 22 28 30 28 42 C28 44 32 46 35 46 C38 46 41 42 50 42 C59 42 62 46 65 46 C68 46 72 44 72 42 C72 30 63 22 50 22 Z" fill="white" opacity="0.9"/>
+      <rect x="47" y="42" width="6" height="30" fill="white" opacity="0.9"/>
+      <rect x="35" y="52" width="30" height="4" fill="white" opacity="0.9"/>
+    </svg>`
+  },
+  {
+    name: 'Design',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm3" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#ec4899" />
+          <stop offset="100%" stop-color="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm3)"/>
+      <path d="M35 55 C35 45 45 35 55 35 C65 35 70 42 70 50 C70 62 55 70 45 70 C40 70 35 65 35 55 Z" fill="white" opacity="0.9"/>
+      <circle cx="43" cy="47" r="3" fill="#ec4899"/>
+      <circle cx="53" cy="43" r="3" fill="#8b5cf6"/>
+      <circle cx="61" cy="51" r="3" fill="#f59e0b"/>
+      <circle cx="51" cy="59" r="3" fill="#10b981"/>
+    </svg>`
+  },
+  {
+    name: 'Coordenação',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm4" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#10b981" />
+          <stop offset="100%" stop-color="#059669" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm4)"/>
+      <circle cx="35" cy="40" r="8" fill="white" opacity="0.9"/>
+      <circle cx="65" cy="40" r="8" fill="white" opacity="0.8"/>
+      <circle cx="50" cy="65" r="10" fill="white"/>
+      <path d="M22 62 C22 55 28 50 35 50 C38 50 41 51 43 53 C39 57 37 62 37 68 H22 Z" fill="white" opacity="0.8"/>
+      <path d="M78 62 C78 55 72 50 65 50 C62 50 59 51 57 53 C61 57 63 62 63 68 H78 Z" fill="white" opacity="0.8"/>
+      <path d="M50 78 C40 78 35 83 35 88 H65 C65 83 60 78 50 78 Z" fill="white"/>
+    </svg>`
+  },
+  {
+    name: 'Gestão',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm5" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#3b82f6" />
+          <stop offset="100%" stop-color="#1d4ed8" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm5)"/>
+      <rect x="30" y="38" width="40" height="32" rx="4" fill="white" opacity="0.9"/>
+      <path d="M42 38 V32 C42 29 45 27 48 27 H52 C55 27 58 29 58 32 V38" fill="none" stroke="white" stroke-width="4" opacity="0.9"/>
+      <circle cx="50" cy="54" r="4" fill="#3b82f6"/>
+    </svg>`
+  },
+  {
+    name: 'Geral',
+    svg: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradm6" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6b7280" />
+          <stop offset="100%" stop-color="#374151" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="50" fill="url(#gradm6)"/>
+      <circle cx="50" cy="40" r="14" fill="white" opacity="0.95"/>
+      <path d="M50 60 C35 60 25 68 25 78 H75 C75 68 65 60 50 60 Z" fill="white" opacity="0.95"/>
+    </svg>`
+  }
+];
+
+const getModalSymbol = (roleId: string) => {
+  let sym = MODAL_ROLE_SYMBOLS[5]; // Geral
+  if (roleId === 'ARQ') sym = MODAL_ROLE_SYMBOLS[0];
+  else if (roleId === 'ENG') sym = MODAL_ROLE_SYMBOLS[1];
+  else if (roleId === 'DESIGN') sym = MODAL_ROLE_SYMBOLS[2];
+  else if (roleId === 'COORD') sym = MODAL_ROLE_SYMBOLS[3];
+  else if (roleId === 'GER' || roleId === 'DIR') sym = MODAL_ROLE_SYMBOLS[4];
+  return `data:image/svg+xml;utf8,${encodeURIComponent(sym.svg)}`;
+};
+
+const getRoleCode = (name: string) => {
+  if (name.toUpperCase().startsWith('ARQ.')) return 'ARQ';
+  if (name.toUpperCase().startsWith('ENG.')) return 'ENG';
+  if (name.toUpperCase().startsWith('COORD.')) return 'COORD';
+  if (name.toUpperCase().startsWith('DIR.')) return 'DIR';
+  if (name.toUpperCase().startsWith('GER.')) return 'GER';
+  if (name.toUpperCase().startsWith('DSGN.')) return 'DESIGN';
+  return 'COLLAB';
+};
+
+const getRoleLabel = (name: string) => {
+  if (name.toUpperCase().startsWith('ARQ.')) return 'Arquiteto(a)';
+  if (name.toUpperCase().startsWith('ENG.')) return 'Engenheiro(a)';
+  if (name.toUpperCase().startsWith('COORD.')) return 'Coordenador(a)';
+  if (name.toUpperCase().startsWith('DIR.')) return 'Diretor(a)';
+  if (name.toUpperCase().startsWith('GER.')) return 'Gerente';
+  if (name.toUpperCase().startsWith('DSGN.')) return 'Designer';
+  return 'Colaborador(a)';
+};
+
+const parseMemberInfo = (rawName: string, registeredList: any[]) => {
+  // Limpar prefixo
+  const prefixRegex = /^(Arq\.|Eng\.|Coord\.|Dir\.|Ger\.|Dsgn\.|ARQ\.|ENG\.|COORD\.|DIR\.|GER\.|DSGN\.)\s+/i;
+  const cleaned = rawName.replace(prefixRegex, '').trim().toLowerCase();
+  
+  // Buscar nos perfis reais cadastrados
+  const match = registeredList.find(p => {
+    const pCleaned = p.name.replace(prefixRegex, '').trim().toLowerCase();
+    return pCleaned.includes(cleaned) || cleaned.includes(pCleaned);
+  });
+  
+  if (match) {
+    return {
+      name: match.name,
+      avatarUrl: match.avatar_url || getModalSymbol(getRoleCode(rawName)),
+      role: getRoleLabel(rawName),
+      isRegistered: true
+    };
+  }
+  
+  return {
+    name: rawName,
+    avatarUrl: getModalSymbol(getRoleCode(rawName)),
+    role: getRoleLabel(rawName),
+    isRegistered: false
+  };
+};
+
 export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () => void; onAdd: (name: string) => void; onRemove: (idx: number) => void; }> = ({ isOpen, team, onClose, onAdd, onRemove }) => {
-    // ... TeamModal implementation (no changes needed) ...
     const [newName, setNewName] = useState('');
+    const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchProfiles = async () => {
+            try {
+                const { data } = await supabase.from('profiles').select('*');
+                if (data) setRegisteredUsers(data);
+            } catch (err) {
+                console.warn('Erro ao buscar perfis do banco:', err);
+            }
+        };
+        if (isOpen) {
+            fetchProfiles();
+        }
+    }, [isOpen]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1142,13 +1312,40 @@ export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () 
                     <button onClick={onClose} className="text-theme-textMuted hover:text-theme-text"><span className="material-symbols-outlined">close</span></button>
                 </div>
 
-                <div className="mb-6 max-h-60 overflow-y-auto scroller pr-2">
-                    {team.map((t, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-3 mb-2 bg-theme-bg border border-theme-divider rounded-xl">
-                            <span className="text-xs font-bold text-theme-text uppercase">{t}</span>
-                            <button onClick={() => onRemove(idx)} className="text-red-500 hover:text-red-400 bg-red-500/10 p-2 rounded-lg transition-colors"><span className="material-symbols-outlined text-sm">delete</span></button>
+                <div className="mb-6 max-h-[320px] overflow-y-auto scroller pr-2">
+                    {team.map((t, idx) => {
+                        const info = parseMemberInfo(t, registeredUsers);
+                        return (
+                            <div key={idx} className="flex justify-between items-center p-3 mb-2.5 bg-theme-bg border border-theme-divider rounded-2xl hover:border-theme-orange/30 transition-all group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full border border-theme-divider overflow-hidden bg-theme-card flex items-center justify-center shrink-0">
+                                        <img src={info.avatarUrl} alt={info.name} className="w-full h-full object-cover" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black text-theme-text uppercase tracking-wider">{info.name}</p>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-theme-highlight text-theme-textMuted border border-theme-divider">
+                                                {info.role}
+                                            </span>
+                                            {info.isRegistered && (
+                                                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-0.5">
+                                                     <span className="material-symbols-outlined text-[8px] leading-none">verified</span> Ativo
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={() => onRemove(idx)} className="text-red-400 hover:text-red-500 bg-red-500/5 hover:bg-red-500/15 w-8 h-8 rounded-xl flex items-center justify-center transition-all opacity-60 group-hover:opacity-100 border border-red-500/10">
+                                    <span className="material-symbols-outlined text-sm">delete</span>
+                                </button>
+                            </div>
+                        );
+                    })}
+                    {team.length === 0 && (
+                        <div className="text-center py-8 text-theme-textMuted uppercase text-[10px] font-bold">
+                            Nenhum membro adicionado
                         </div>
-                    ))}
+                    )}
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex gap-2 border-t border-theme-divider pt-4">

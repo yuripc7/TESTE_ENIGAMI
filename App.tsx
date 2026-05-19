@@ -5118,21 +5118,22 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                     />
                                     </Suspense>
 
-            
+              {/* Aba Financeiro — EVR */}
+              {activeTab === 'financeiro' && hasProject && (
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
+                  <FinanceiroTab project={activeProject} db={db} />
+                </Suspense>
+              )}
                                 </div>
                             </div>
                         )
 
-               {/* Aba Financeiro — EVR */}
-                    {activeTab === 'financeiro' && hasProject && (
-                        <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
-                            <FinanceiroTab project={activeProject} db={db} />
-                        </Suspense>
-                    )}
+                    }
 
 
 
-                  {/* --- TAB: NOTAS VIEW --- */}
+                    {/* --- TAB: NOTAS VIEW --- */}
+
                     {
 
                         activeTab === 'notas' && hasProject && (

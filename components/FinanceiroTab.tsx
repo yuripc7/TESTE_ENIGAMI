@@ -32,17 +32,24 @@ export function FinanceiroTab({ project, db }: FinanceiroTabProps) {
       else if (p.category === 'Lazer Interno') { tipo = 'Comum'; coef = 0.8; }
       else if (p.category === 'Lazer Externo') { tipo = 'Descoberta'; coef = 0; }
 
+      // Para Habitacional: área do pav = Unid/Pav × m²/Unid (evita dupla contagem)
+      // Para Garagem/Lazer: usa areaPerPavement (entrada manual)
+      const areaPav = (p.category === 'Habitacional')
+        ? (p.unitsPerPavement || 0) * (p.unitArea || 0)
+        : (p.areaPerPavement || 0);
+
       return {
         nome: p.type || p.category,
         tipo: tipo,
         qtd: p.count || 1,
-        comp: p.areaPerPavement || 0,
-        cob: p.areaPerPavement || 0,
+        comp: areaPav,
+        cob: areaPav,
         desc: 0,
-        total: p.areaPerPavement || 0,
+        total: areaPav,
         coef: coef
       };
     });
+
 
     // Para cfg.units (unidades vendáveis)
     const units = pavements
@@ -89,13 +96,27 @@ export function FinanceiroTab({ project, db }: FinanceiroTabProps) {
   }, [project]);
 
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden bg-white">
-        <iframe
-            ref={iframeRef}
-            src="/evr.html"
-            className="flex-1 w-full h-full border-0"
-            title="Estudo de Viabilidade EVR"
-        />
+    <div className="w-full h-[800px] flex flex-col relative overflow-hidden bg-transparent">
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="w-full h-full opacity-[0.03]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/diagonal-stripes.png')" }}></div>
+      </div>
+      <div className="flex justify-between items-center px-6 py-4 border-b border-theme-divider bg-theme-bg/95 backdrop-blur-md shadow-lg relative z-10 flex-shrink-0">
+        <div className="flex items-center gap-2">
+            <div className="w-0.5 h-5 bg-theme-orange shadow-[0_0_10px_#FF6B00]"></div>
+            <span className="material-symbols-outlined text-base text-theme-orange">monitoring</span>
+            <h2 className="font-square font-black text-[11px] uppercase tracking-[0.4em] text-theme-text">Financeiro</h2>
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden relative z-10 p-6">
+        <div className="ds-card w-full h-full overflow-hidden">
+            <iframe
+                ref={iframeRef}
+                src="/evr.html"
+                className="w-full h-full border-0"
+                title="Estudo de Viabilidade EVR"
+            />
+        </div>
+      </div>
     </div>
   );
 }

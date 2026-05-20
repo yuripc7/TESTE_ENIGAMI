@@ -111,7 +111,10 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
     };
 
     return (
-        <div className="w-full h-full flex flex-col relative overflow-hidden p-6 animate-fadeIn">
+        <div className="w-full h-full flex flex-col relative overflow-hidden animate-fadeIn bg-transparent">
+            <div className="absolute inset-0 pointer-events-none z-0">
+                <div className="w-full h-full opacity-[0.03]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/diagonal-stripes.png')" }}></div>
+            </div>
             {pendingDeleteId && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="bg-theme-card rounded-2xl border border-theme-divider shadow-2xl p-6 mx-4 max-w-sm space-y-4">
@@ -123,15 +126,15 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                     </div>
                 </div>
             )}
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-theme-divider flex-shrink-0">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-theme-divider bg-theme-bg/95 backdrop-blur-md shadow-lg relative z-10 flex-shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
+                    <div className="w-0.5 h-5 bg-theme-orange shadow-[0_0_10px_#FF6B00]"></div>
                     <span className="material-symbols-outlined text-base text-theme-orange">note_stack</span>
-                    <h2 className="font-square font-black text-xs uppercase tracking-widest text-theme-text">Mural de Notas</h2>
+                    <h2 className="font-square font-black text-[11px] uppercase tracking-[0.4em] text-theme-text">Mural de Notas</h2>
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-theme-divider bg-theme-bg text-theme-textMuted hover:text-theme-text hover:border-theme-orange hover:text-theme-orange text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 rounded border border-theme-divider bg-theme-bg text-theme-textMuted hover:text-white hover:border-theme-orange hover:bg-theme-orange hover:shadow-[0_0_10px_#FF6B00] text-[10px] font-black uppercase tracking-widest transition-all"
                 >
                     <span className="material-symbols-outlined text-sm">edit_note</span>
                     Nova Nota
@@ -139,21 +142,25 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
             </div>
 
             {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto scroller pr-1 pb-6">
+            <div className="flex-1 overflow-y-auto scroller p-6 relative z-10">
                 {/* Masonry Grid */}
                 <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
                     {notes.map(note => (
                         <div
                             key={note.id}
-                            className={`break-inside-avoid rounded-3xl p-6 shadow-md relative group transition-all duration-300 hover:shadow-xl ${note.status === 'completed' ? 'opacity-60 grayscale' : ''}`}
-                            style={{ backgroundColor: note.color, color: '#1A1C20' }}
+                            className={`break-inside-avoid ds-card p-6 relative group transition-all duration-300 overflow-hidden ${note.status === 'completed' ? 'opacity-40 grayscale-[50%]' : ''}`}
+                            style={{ 
+                                backgroundColor: note.color + '15',
+                                borderLeft: `6px solid ${note.color}`,
+                                borderRadius: '24px'
+                            }}
                         >
                             {/* Status / Delete controls */}
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-black/10 flex items-center justify-center hover:bg-black/20" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-theme-bg/60 border border-theme-divider hover:border-theme-orange hover:bg-theme-orange/20 text-theme-text flex items-center justify-center transition-colors" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
                                     <span className="material-symbols-outlined text-[16px]">{note.status === 'pending' ? 'check' : 'undo'}</span>
                                 </button>
-                                <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/20 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white" title="Excluir Nota">
+                                <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Excluir Nota">
                                     <span className="material-symbols-outlined text-[16px]">delete</span>
                                 </button>
                             </div>
@@ -161,34 +168,34 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                             {/* Note Header (Avatars) */}
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="relative">
-                                    <img src={`https://ui-avatars.com/api/?name=${note.author}&background=000&color=fff`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm" title={`De: ${note.author}`} />
-                                    <img src={`https://ui-avatars.com/api/?name=${note.recipient}&background=FFF&color=000`} className="w-8 h-8 rounded-full border-2 border-white/50 shadow-sm absolute -bottom-2 -right-2" title={`Para: ${note.recipient}`} />
+                                    <img src={`https://ui-avatars.com/api/?name=${note.author}&background=000&color=fff`} className="w-8 h-8 rounded-full border-2 border-theme-card shadow-sm" title={`De: ${note.author}`} />
+                                    <img src={`https://ui-avatars.com/api/?name=${note.recipient}&background=FFF&color=000`} className="w-8 h-8 rounded-full border-2 border-theme-card shadow-sm absolute -bottom-2 -right-2" title={`Para: ${note.recipient}`} />
                                 </div>
                                 <div className="flex flex-col ml-3">
-                                    <span className="text-[10px] font-black uppercase tracking-widest">{note.recipient}</span>
-                                    <span className="text-[8px] font-bold text-black/50 uppercase tracking-widest">De: {note.author}</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-theme-text">{note.recipient}</span>
+                                    <span className="text-[8px] font-bold text-theme-textMuted uppercase tracking-widest">De: {note.author}</span>
                                 </div>
                             </div>
 
                             {/* Note Content */}
-                            <p className="text-sm font-medium mb-4 whitespace-pre-wrap leading-relaxed">
+                            <p className="text-sm font-medium mb-4 whitespace-pre-wrap leading-relaxed text-theme-text">
                                 {note.text}
                             </p>
 
                             {/* Image Attachment */}
                             {note.imageUrl && (
-                                <div className="mb-4 rounded-xl overflow-hidden shadow-inner border border-black/5">
+                                <div className="mb-4 rounded-xl overflow-hidden shadow-inner border border-theme-divider/50">
                                     <img src={note.imageUrl} alt="Anexo" className="w-full h-auto max-h-48 object-cover" />
                                 </div>
                             )}
 
                             {/* Footer / Deadline */}
-                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-black/10">
-                                <span className="text-[9px] font-bold text-black/40 font-mono">
+                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-theme-divider/50">
+                                <span className="text-[9px] font-bold text-theme-textMuted font-mono">
                                     {formatLocalDate(note.createdAt)}
                                 </span>
                                 {note.deadline && (
-                                    <div className="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-white/40 text-red-600">
+                                    <div className="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-theme-orange/10 text-theme-orange border border-theme-orange/20">
                                         <span className="material-symbols-outlined text-[12px]">calendar_today</span>
                                         Prazo: {formatLocalDate(note.deadline)}
                                     </div>

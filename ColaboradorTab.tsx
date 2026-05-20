@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { Project, DB } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { MembersPresence } from './MembersPresence';
-import { usePresence } from '../hooks/usePresence';
 
 interface ColaboradorTabProps {
   project: Project;
@@ -10,25 +9,9 @@ interface ColaboradorTabProps {
 }
 
 export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) => {
-  const { theme, currentUser } = useApp();
-  const isDark = theme === 'dark';
+  const { currentUser, onlineUsers } = useApp();
 
-  // Presença em tempo real
-  const { onlineUsers } = usePresence({
-    projectId: project.id ?? null,
-    currentUserId: currentUser?.id ?? null,
-    currentName: currentUser?.name || '',
-    currentAvatar: '',
-  });
-
-  // Theme adaptive variables
-  const themeCard = isDark ? 'bg-[#151B24]' : 'bg-white';
-  const themeCardInner = isDark ? 'bg-[#1F2937]' : 'bg-[#F9FAFC]';
-  const themeText = isDark ? 'text-white' : 'text-[#1B1D21]';
-  const themeBorder = isDark ? 'border-[#2D3748]' : 'border-[#E8E9F0]';
-  const themeButton = isDark ? 'bg-[#1F2937] text-[#9CA3AF] hover:bg-[#374151]' : 'bg-[#F2F4F7] text-[#8A909A] hover:bg-[#E8E9F0]';
-  const themeSVGLine = isDark ? '#2D3748' : '#E8E9F0';
-  const themeSVGCurve = isDark ? '#E2E8F0' : '#1B1D21';
+  // onlineUsers comes from the global collaboration context (real + bots)
 
   // Organiza os dados focados por Disciplina (Scope)
   const viewData = useMemo(() => {
@@ -139,17 +122,20 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
   }, [project, db.disciplines]);
 
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden p-6 animate-fadeIn text-theme-text">
+    <div className="w-full h-full flex flex-col relative overflow-hidden animate-fadeIn text-theme-text bg-transparent">
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="w-full h-full opacity-[0.03]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/diagonal-stripes.png')" }}></div>
+      </div>
       {/* Fixed Sticky Header */}
-      <div className="flex justify-between items-center mb-6 pb-4 border-b border-theme-divider flex-shrink-0">
+      <div className="flex justify-between items-center px-6 py-4 border-b border-theme-divider bg-theme-bg/95 backdrop-blur-md shadow-lg relative z-10 flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-0.5 h-5 rounded-full bg-theme-orange"></div>
+            <div className="w-0.5 h-5 bg-theme-orange shadow-[0_0_10px_#FF6B00]"></div>
             <span className="material-symbols-outlined text-base text-theme-orange">monitoring</span>
-            <h2 className="font-square font-black text-xs uppercase tracking-widest text-theme-text">Status por Colaborador</h2>
+            <h2 className="font-square font-black text-[11px] uppercase tracking-[0.4em] text-theme-text">Status por Colaborador</h2>
           </div>
-          {/* Real-time members presence status */}
-          <MembersPresence onlineUsers={onlineUsers} />
+          {/* Real-time members presence status — now powered by global context */}
+          <MembersPresence projectId={String(project.id)} />
         </div>
         <p className="text-[9px] font-bold text-theme-textMuted uppercase tracking-wider">
           Análise de Carga por Disciplina
@@ -157,7 +143,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
       </div>
 
       {/* Scrollable Viewport */}
-      <div className="flex-1 overflow-y-auto scroller pr-1 pb-6 space-y-8">
+      <div className="flex-1 overflow-y-auto scroller p-6 space-y-8 relative z-10">
         {/* Grid de Dashboards por Disciplina */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
           {viewData.map(colab => {
@@ -168,21 +154,21 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
             return (
               <div
                 key={colab.id}
-                className={`${themeCard} rounded-[40px] p-8 ${isDark ? "shadow-[0_8px_30px_rgba(0,0,0,0.7)]" : "shadow-[0_8px_30px_rgba(0,0,0,0.04)]"} flex flex-col relative overflow-hidden group border ${themeBorder}`}
+                className="ds-card p-8 flex flex-col relative overflow-hidden group"
               >
                 <div className="flex flex-col mb-6">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-6 rounded-full" style={{ backgroundColor: colab.colorClass }}></div>
-                      <h3 className={`text-xl font-square font-black ${themeText} uppercase tracking-widest flex items-baseline gap-2`}>
-                        {colab.name} <span className={`text-[10px] font-bold ${isDark ? "text-gray-400" : "text-[#8A909A]"}`}>{colab.fullDisciplineName}</span>
+                      <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest flex items-baseline gap-2">
+                        {colab.name} <span className="text-[10px] font-bold text-theme-textMuted">{colab.fullDisciplineName}</span>
                       </h3>
                     </div>
-                    <button className={`w-8 h-8 rounded-full ${themeButton} flex items-center justify-center transition-colors shrink-0`}>
+                    <button className="w-8 h-8 rounded-full bg-theme-highlight text-theme-textMuted hover:text-theme-text hover:bg-theme-border/20 border border-theme-divider flex items-center justify-center transition-colors shrink-0">
                       <span className="material-symbols-outlined text-sm">north_east</span>
                     </button>
                   </div>
-                  <div className={`text-[10px] font-bold uppercase mt-1 flex items-center gap-4 ${isDark ? "text-theme-cyan" : "text-black/60"}`}>
+                  <div className="text-[10px] font-bold uppercase mt-1 flex items-center gap-4 text-theme-textMuted">
                     <span className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">calendar_month</span>
                       {colab.actualStartDate} até {colab.actualEndDate}
@@ -197,25 +183,25 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 mb-8">
-                  <div className={`${themeCardInner} rounded-3xl p-6 flex items-center gap-6 border ${themeBorder}`}>
+                  <div className="bg-theme-highlight/50 rounded-3xl p-6 flex items-center gap-6 border border-theme-divider/50 shadow-inner">
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-2">
-                        <div className={`w-8 px-2 py-0.5 rounded text-[8px] font-black ${isDark ? "bg-[#2D3748] text-white" : "bg-[#E8E9F0] text-[#1B1D21]"} text-center`}>{colab.totalTasks}</div>
-                        <span className={`text-[9px] font-bold ${isDark ? "text-gray-400" : "text-[#8A909A]"} uppercase`}>AÇÕES</span>
+                        <div className="w-8 px-2 py-0.5 rounded text-[8px] font-black bg-theme-divider/70 text-theme-text text-center">{colab.totalTasks}</div>
+                        <span className="text-[9px] font-bold text-theme-textMuted uppercase">AÇÕES</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-8 px-2 py-0.5 rounded text-[8px] font-black text-white text-center" style={{ backgroundColor: colab.colorClass }}>{colab.totalChecklists}</div>
-                        <span className={`text-[9px] font-bold ${isDark ? "text-gray-400" : "text-[#8A909A]"} uppercase`}>Chklist</span>
+                        <span className="text-[9px] font-bold text-theme-textMuted uppercase">Chklist</span>
                       </div>
-                      <div className={`flex items-center gap-2 mt-2 pt-2 border-t ${themeBorder}`}>
-                        <div className={`w-8 px-2 py-0.5 rounded text-[8px] font-black ${isDark ? "bg-white text-black" : "bg-[#1B1D21] text-white"} text-center`}>{colab.totalOverall}</div>
-                        <span className={`text-[9px] font-bold ${themeText} uppercase`}>Total</span>
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-theme-divider/50">
+                        <div className="w-8 px-2 py-0.5 rounded text-[8px] font-black bg-theme-text text-theme-card text-center">{colab.totalOverall}</div>
+                        <span className="text-[9px] font-bold text-theme-text uppercase">Total</span>
                       </div>
                     </div>
 
                     <div className="relative w-28 h-28 flex flex-col items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90 drop-shadow-sm" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" fill="none" stroke={isDark ? "#0B0C10" : "#F2F4F7"} strokeWidth="12" />
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="var(--theme-bg)" strokeWidth="12" />
                         <circle cx="50" cy="50" r="45" fill="none" stroke={colab.colorClass + '30'} strokeWidth="12" />
                         <circle
                           cx="50" cy="50" r="45" fill="none" stroke={colab.colorClass} strokeWidth="12"
@@ -226,7 +212,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[6px] font-black shadow-sm ${isDark ? 'bg-[#151B24]' : 'bg-white'}`} style={{ color: colab.colorClass }}>
+                        <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full text-[6px] font-black shadow-sm bg-theme-card border border-theme-divider/40" style={{ color: colab.colorClass }}>
                           {Math.round(progressPercent)}%
                         </span>
                       </div>
@@ -256,45 +242,45 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                       <span className="absolute bottom-6 right-6 font-mono font-black text-4xl text-white/90">{colab.completedTasks}</span>
                     </div>
 
-                    <div className={`${themeCardInner} rounded-3xl p-5 flex flex-col border ${themeBorder}`}>
+                    <div className="bg-theme-highlight/50 rounded-3xl p-5 flex flex-col border border-theme-divider/50 shadow-inner">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className={`font-square font-black text-sm uppercase ${themeText}`}>Checklist Finalizados</h4>
-                          <p className={`text-[9px] font-bold mt-1 ${isDark ? "text-gray-400" : "text-[#8A909A]"}`}>Conferência de Qualidade</p>
+                          <h4 className="font-square font-black text-sm uppercase text-theme-text">Checklist Finalizados</h4>
+                          <p className="text-[9px] font-bold mt-1 text-theme-textMuted">Conferência de Qualidade</p>
                         </div>
-                        <button className={`w-6 h-6 rounded-full ${isDark ? "bg-[#2D3748] text-gray-400" : "bg-white text-[#8A909A]"} flex items-center justify-center shadow-sm`}>
+                        <button className="w-6 h-6 rounded-full bg-theme-bg text-theme-textMuted flex items-center justify-center shadow-sm border border-theme-divider hover:text-theme-orange transition-colors">
                           <span className="material-symbols-outlined text-[10px]">north_east</span>
                         </button>
                       </div>
 
                       <div className="flex items-center gap-2 mt-4">
-                        <div className={`flex-1 h-6 ${isDark ? "bg-[#0B0C10]" : "bg-white"} rounded-full flex overflow-hidden border ${themeBorder} p-0.5`}>
+                        <div className="flex-1 h-6 bg-theme-bg rounded-full flex overflow-hidden border border-theme-divider p-0.5">
                           <div
                             className="h-full rounded-full transition-all duration-1000"
                             style={{ width: `${colab.totalChecklists > 0 ? (colab.completedChecklists / colab.totalChecklists) * 100 : 0}%`, backgroundColor: colab.colorClass }}
                           ></div>
                         </div>
-                        <span className={`font-mono font-black text-lg ${themeText}`}>{colab.completedChecklists}</span>
+                        <span className="font-mono font-black text-lg text-theme-text">{colab.completedChecklists}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between mb-6">
-                  <h4 className={`font-square font-black text-sm uppercase text-xs tracking-widest ${themeText}`}>
+                  <h4 className="font-square font-black text-xs tracking-widest text-theme-text uppercase">
                     Status por Colaborador
                   </h4>
-                  <div className={`flex items-center gap-4 text-[9px] font-bold ${themeText}`}>
+                  <div className="flex items-center gap-4 text-[9px] font-bold text-theme-text">
                     <span className="flex items-center gap-1">
                       <div className="w-2 h-2 rounded flex items-center justify-center" style={{ backgroundColor: colab.colorClass }}><div className="w-1 h-1 bg-white rounded-full opacity-50"></div></div> Líder
                     </span>
                     <span className="flex items-center gap-1">
-                      <div className={`w-2 h-2 rounded ${isDark ? "bg-white" : "bg-[#1B1D21]"}`}></div> Normal
+                      <div className="w-2 h-2 rounded bg-theme-text"></div> Normal
                     </span>
                   </div>
                 </div>
 
-                <div className={`flex flex-col flex-1 relative ${themeCardInner} rounded-3xl pt-8 pb-4 px-4 border ${themeBorder} min-h-[200px]`}>
+                <div className="flex flex-col flex-1 relative bg-theme-highlight/50 rounded-3xl pt-8 pb-4 px-4 border border-theme-divider/50 min-h-[200px] shadow-inner">
                   {colab.chartData.length > 0 ? (
                     <div className="h-40 w-full flex items-end justify-around relative">
                       <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ transform: 'scaleY(-1)' }}>
@@ -306,7 +292,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                               return `L ${x}%,${y}%`;
                             }).join(' ')}
                           fill="none"
-                          stroke={themeSVGLine}
+                          stroke="var(--theme-divider)"
                           strokeWidth="2"
                           strokeDasharray="4 4"
                         />
@@ -330,7 +316,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                               return `C ${controlX1}%,${controlY1}% ${controlX2}%,${controlY2}% ${x}%,${y}%`;
                             }).join(' ')}
                           fill="none"
-                          stroke={themeSVGCurve}
+                          stroke="var(--theme-text)"
                           strokeWidth="1.5"
                           opacity="0.3"
                         />
@@ -339,28 +325,26 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                       {colab.chartData.map(member => {
                         const totalHeightPercent = (member.total / colab.maxScopeTasks) * 100 || 8;
 
-                        let pillClass = isDark ? "bg-[#374151]" : "bg-[#DDE2E8]";
+                        let pillClass = "bg-theme-divider text-theme-text";
                         let pillStyle: React.CSSProperties = {};
-                        let textClass = isDark ? "text-white" : "text-[#1B1D21]";
                         if (member.isLeader) {
-                          pillClass = "";
+                          pillClass = "text-white";
                           pillStyle = { backgroundColor: colab.colorClass };
-                          textClass = "text-white";
-                        } else if (member.total < (colab.maxScopeTasks * 0.4)) {
-                          pillClass = isDark ? "bg-[#374151]" : "bg-[#DDE2E8]";
-                          textClass = isDark ? "text-white" : "text-[#1B1D21]";
-                        } else if (member.total < (colab.maxScopeTasks * 0.7)) {
-                          pillClass = isDark ? "bg-[#4B5563]" : "bg-[#8A909A]";
-                          textClass = "text-white";
+                        } else if (member.total >= (colab.maxScopeTasks * 0.7)) {
+                          pillClass = "bg-theme-text/80 text-theme-card";
+                        } else if (member.total >= (colab.maxScopeTasks * 0.4)) {
+                          pillClass = "bg-theme-text/55 text-theme-card";
+                        } else {
+                          pillClass = "bg-theme-divider text-theme-text";
                         }
 
                         return (
                           <div key={member.name} className="flex flex-col items-center w-12 group/bar relative h-full justify-end z-10">
-                            <div className={`absolute -top-14 ${isDark ? "bg-gray-100 text-black" : "bg-[#1B1D21] text-white"} px-3 py-1.5 flex flex-col items-center justify-center rounded-xl shadow-lg text-[10px] font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap pointer-events-none mb-2 z-[90]`}>
+                            <div className="absolute -top-14 bg-theme-text text-theme-card px-3 py-1.5 flex flex-col items-center justify-center rounded-xl shadow-lg text-[10px] font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap pointer-events-none mb-2 z-[90]">
                               {member.total} Total
-                              <span className={`text-[8px] font-normal ${isDark ? "text-black/50" : "text-white/50"}`}>{member.completed} concluídas</span>
-                              <span className={`text-[8px] mt-0.5 pt-0.5 border-t ${isDark ? "border-black/10 text-[#FF9F40]" : "border-white/10 text-[#FF9F40]"} font-black`}>⏱ {member.timeSpentStr}</span>
-                              <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 border-[4px] border-transparent ${isDark ? "border-t-[#F3F4F6]" : "border-t-[#1B1D21]"}`}></div>
+                              <span className="text-[8px] font-normal opacity-70">{member.completed} concluídas</span>
+                              <span className="text-[8px] mt-0.5 pt-0.5 border-t border-theme-card/20 text-theme-orange font-black">⏱ {member.timeSpentStr}</span>
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-theme-text"></div>
                             </div>
 
                             <div
@@ -368,7 +352,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                               style={{ height: `${totalHeightPercent}%`, minHeight: '32px', ...pillStyle }}
                             >
                               {totalHeightPercent > 20 && (
-                                <div className={`mt-3 text-[9px] font-square font-black ${textClass} opacity-80`}>
+                                <div className="mt-3 text-[9px] font-square font-black opacity-80">
                                   {member.total}
                                 </div>
                               )}
@@ -381,7 +365,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                               <div className="absolute top-0 -mt-1.5 w-3 h-3 border-2 border-[#FF9F40] bg-white rounded-full z-20" style={{ bottom: `${totalHeightPercent}%` }}></div>
                             )}
 
-                            <span className={`mt-4 text-[9px] font-black uppercase text-center max-w-[60px] leading-tight ${themeText} truncate`} title={member.name}>
+                            <span className="mt-4 text-[9px] font-black uppercase text-center max-w-[60px] leading-tight text-theme-text truncate" title={member.name}>
                               {member.name.split(' ').map((n, i, arr) => i === 0 || i === arr.length - 1 ? n : n[0] + '.').join(' ')}
                             </span>
                           </div>
@@ -389,7 +373,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
                       })}
                     </div>
                   ) : (
-                    <div className={`h-40 flex items-center justify-center text-[10px] ${isDark ? "text-gray-400" : "text-[#8A909A]"} font-bold uppercase text-center px-8 border-2 border-dashed ${themeBorder} rounded-2xl mx-4`}>
+                    <div className="h-40 flex items-center justify-center text-[10px] text-theme-textMuted font-bold uppercase text-center px-8 border-2 border-dashed border-theme-divider rounded-2xl mx-4">
                       Nenhuma ação de colaborador atribuída.
                     </div>
                   )}

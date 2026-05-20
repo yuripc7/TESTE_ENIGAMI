@@ -4,6 +4,8 @@ import { DB, Project, Company } from '../types';
 import { INITIAL_DB, STORAGE_KEY, THEME_KEY, DEBOUNCE_SAVE_MS, NOTIFICATION_TIMEOUT_MS } from '../constants';
 import { readFileAsText } from '../utils/fileReaderUtils';
 import { useConfirm } from '../components/ConfirmDialog';
+import { getIndexedDBItem, setIndexedDBItem } from '../utils/indexedDbHelper';
+import { useCollaboration, CollaborationUser } from '../hooks/useCollaboration';
 
 const USER_KEY = 'enigami_user_v1';
 
@@ -41,6 +43,19 @@ interface AppContextType {
   handleExportJSON: () => void;
   handleImportJSON: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleLogout: () => void;
+
+  // Collaboration
+  onlineUsers: CollaborationUser[];
+  realOnlineCount: number;
+  isRealtimeConnected: boolean;
+  simulationActive: boolean;
+  setSimulationActive: (active: boolean) => void;
+  simulationSpeed: number;
+  setSimulationSpeed: (speed: number) => void;
+  collaborationToast: { message: string; author: string; avatarUrl: string } | null;
+  setCollaborationToast: (toast: { message: string; author: string; avatarUrl: string } | null) => void;
+  activeTab: string;
+  setActiveTab: (tab: any) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,22 +75,43 @@ interface AppProviderProps {
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) => {
   const { requestConfirm, showAlert } = useConfirm();
-  const [db, setDb] = useState<DB>(() => {
-    try {
-      const savedDb = localStorage.getItem(STORAGE_KEY + "_" + userId);
-      const data = savedDb ? JSON.parse(savedDb) : INITIAL_DB;
-      
-      // Clean up pre-configured static team members from state if present in old local storage
-      if (data && Array.isArray(data.team)) {
-        const preconfigured = ["Arq. Yuri", "Arq. Lourraine", "Eng. Lucas", "Arq. Isabela", "Mkt Gisele", "Gugu (guzinho)"];
-        data.team = data.team.filter((m: string) => !preconfigured.includes(m));
+  const [db, setDb] = useState<DB>(INITIAL_DB);
+  const [dbLoaded, setDbLoaded] = useState(false);
+
+  // Load database from IndexedDB on startup (with backwards compatible localStorage migration!)
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const key = STORAGE_KEY + "_" + userId;
+        let data = await getIndexedDBItem<DB>(key);
+        
+        if (!data) {
+          const oldSaved = localStorage.getItem(key);
+          if (oldSaved) {
+            data = JSON.parse(oldSaved);
+            await setIndexedDBItem(key, data);
+            localStorage.removeItem(key);
+            console.log("Migrated localStorage database state to IndexedDB successfully!");
+          }
+        }
+
+        const finalData = data || INITIAL_DB;
+
+        if (finalData && Array.isArray(finalData.team)) {
+          const preconfigured = ["Arq. Yuri", "Arq. Lourraine", "Eng. Lucas", "Arq. Isabela", "Mkt Gisele", "Gugu (guzinho)"];
+          finalData.team = finalData.team.filter((m: string) => !preconfigured.includes(m));
+        }
+
+        setDb(finalData);
+        lastSavedRef.current = JSON.stringify(finalData);
+      } catch (err) {
+        console.error("Erro ao carregar dados do IndexedDB:", err);
+      } finally {
+        setDbLoaded(true);
       }
-      return data;
-    } catch (error) {
-      console.error("Erro ao carregar dados locais, resetando para padrão:", error);
-      return INITIAL_DB;
     }
-  });
+    loadData();
+  }, [userId]);
 
   const [theme, setThemeState] = useState(() => {
     const savedTheme = localStorage.getItem(THEME_KEY);
@@ -92,6 +128,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   });
   const [notification, setNotification] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Collaboration & Real-Time Sync States
+  const [activeTab, setActiveTab] = useState<string>('timeline');
+  const [collaborationToast, setCollaborationToast] = useState<{ message: string; author: string; avatarUrl: string } | null>(null);
+  
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const showToast = useCallback((message: string, author: string, avatarUrl: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setCollaborationToast({ message, author, avatarUrl });
+    toastTimeoutRef.current = setTimeout(() => {
+      setCollaborationToast(null);
+    }, 4000);
+  }, []);
 
   // Sincroniza currentUser com o perfil do Supabase Auth
   useEffect(() => {
@@ -155,38 +204,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   // Track last saved JSON to skip redundant writes
   const lastSavedRef = useRef<string>('');
 
-  // Persist db to localStorage (DEBOUNCED & SIZE SAFE)
+  // Persist db to IndexedDB (DEBOUNCED & UNLIMITED SIZE SAFE)
   useEffect(() => {
-    const handler = setTimeout(() => {
+    if (!dbLoaded) return;
+
+    const handler = setTimeout(async () => {
       try {
         const json = JSON.stringify(db);
 
-        // Skip write if data hasn't changed since last save
         if (json === lastSavedRef.current) return;
 
-        const sizeMb = (json.length / (1024 * 1024)).toFixed(2);
-
-        if (parseFloat(sizeMb) > 4.5) {
-          console.warn(`DATABASE SIZE WARNING: ${sizeMb}MB. Perto do limite do navegador.`);
-          setNotification(`Aviso: Banco de dados grande (${sizeMb}MB). Recomenda-se exportar e limpar backups antigos.`);
-        }
-
-        localStorage.setItem(STORAGE_KEY + "_" + userId, json);
+        const key = STORAGE_KEY + "_" + userId;
+        await setIndexedDBItem(key, db);
+        
         lastSavedRef.current = json;
         setLastSavedAt(new Date());
-        console.log(`Persistence: Projeto Salvo (${sizeMb}MB).`);
+        
+        const sizeMb = (json.length / (1024 * 1024)).toFixed(2);
+        console.log(`Persistence: Projeto Salvo no IndexedDB (${sizeMb}MB).`);
       } catch (error) {
-        console.error("Erro ao salvar dados:", error);
-        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-          setNotification("ERRO CRÃÂTICO: Limite de armazenamento excedido! Exporte um backup e remova imagens/arquivos antigos para continuar salvando.");
-        } else {
-          setNotification("Erro crÃÂ­tico ao salvar! Verifique o console (F12).");
-        }
+        console.error("Erro ao salvar dados no IndexedDB:", error);
+        setNotification("Erro crítico ao salvar no banco de dados!");
       }
-    }, DEBOUNCE_SAVE_MS); // debounce for safety
+    }, DEBOUNCE_SAVE_MS);
 
     return () => clearTimeout(handler);
-  }, [db]);
+  }, [db, dbLoaded, userId]);
 
   // Persist theme to localStorage and update DOM
   useEffect(() => {
@@ -312,18 +355,45 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     });
   }, []);
 
+  // Collaboration hook — placed after addLog so it can be passed as a prop
+  const activeProjectIdStr = db.activeProjectId ? String(db.activeProjectId) : null;
+  const activeProj = db.projects.find(p => p.id === db.activeProjectId);
+  const activeProjectName = activeProj ? activeProj.name : null;
+
+  const {
+    onlineUsers,
+    realOnlineCount,
+    isConnected: isRealtimeConnected,
+    simulationActive,
+    setSimulationActive,
+    simulationSpeed,
+    setSimulationSpeed
+  } = useCollaboration({
+    projectId: activeProjectIdStr,
+    projectName: activeProjectName,
+    currentUserId: currentUser?.id || 'demo_user',
+    currentName: currentUser?.name || 'Visitante',
+    currentAvatar: currentUser?.avatar || buildAvatar(currentUser?.name || 'Visitante'),
+    activeTab,
+    db,
+    setDb,
+    addLog,
+    showToast
+  });
+
   // Manual save trigger
-  const handleManualSave = useCallback(() => {
+  const handleManualSave = useCallback(async () => {
     try {
       const json = JSON.stringify(db);
-      localStorage.setItem(STORAGE_KEY, json);
+      const key = STORAGE_KEY + "_" + userId;
+      await setIndexedDBItem(key, db);
       lastSavedRef.current = json;
       setLastSavedAt(new Date());
       setNotification('Projeto salvo com sucesso!');
     } catch (error) {
       setNotification('Erro ao salvar!');
     }
-  }, [db]);
+  }, [db, userId]);
 
   // Export JSON backup
   const handleExportJSON = () => {
@@ -441,6 +511,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     handleExportJSON,
     handleImportJSON,
     handleLogout,
+    onlineUsers,
+    realOnlineCount,
+    isRealtimeConnected,
+    simulationActive,
+    setSimulationActive,
+    simulationSpeed,
+    setSimulationSpeed,
+    collaborationToast,
+    setCollaborationToast,
+    activeTab,
+    setActiveTab,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

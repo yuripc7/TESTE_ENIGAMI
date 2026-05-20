@@ -194,35 +194,34 @@ export const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     const finalAvatar = avatarUrl || getSymbolForRole(selectedRole.id);
 
     try {
-      // 1. Atualizar metadados do Supabase Auth
-      try {
-        await supabase.auth.updateUser({
+      // 1. Executar atualizações no Supabase de forma assíncrona (não-bloqueante)
+      if (userId && userId !== 'demo_user') {
+        supabase.auth.updateUser({
           data: {
             name: formattedName,
             role: selectedRole.label,
             avatar_url: finalAvatar,
             profile_completed: true,
           },
+        }).then(({ error: authErr }) => {
+          if (authErr) console.warn('Erro em background ao atualizar metadados do Supabase Auth:', authErr);
+        }).catch(err => {
+          console.warn('Erro em background ao atualizar Auth:', err);
         });
-      } catch (authErr) {
-        console.warn('Erro ao atualizar metadados do Supabase Auth (prosseguindo):', authErr);
+
+        supabase.from('profiles').upsert({
+          id: userId,
+          name: formattedName,
+          avatar_url: finalAvatar,
+          updated_at: new Date().toISOString(),
+        }).then(({ error: dbErr }) => {
+          if (dbErr) console.warn('Erro em background ao atualizar tabela de profiles:', dbErr);
+        }).catch(err => {
+          console.warn('Erro em background ao salvar profile na DB:', err);
+        });
       }
 
-      // 2. Atualizar tabela profiles no Supabase
-      try {
-        if (userId && userId !== 'demo_user') {
-          await supabase.from('profiles').upsert({
-            id: userId,
-            name: formattedName,
-            avatar_url: finalAvatar,
-            updated_at: new Date().toISOString(),
-          });
-        }
-      } catch (dbErr) {
-        console.warn('Erro ao atualizar tabela de profiles (prosseguindo):', dbErr);
-      }
-
-      // 3. Callback para finalizar e adicionar à equipe
+      // 2. Chamar o callback imediatamente para destravar a UI e entrar no app
       onSubmit({
         name: formattedName,
         role: selectedRole.label,

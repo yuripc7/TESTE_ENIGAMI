@@ -33,6 +33,7 @@ const ContractsManager = React.lazy(() => import('./components/ContractsManager'
 const FlipBook = React.lazy(() => import('./components/FlipBook').then(m => ({ default: m.FlipBook })));
 const Panorama360 = React.lazy(() => import('./components/Panorama360').then(m => ({ default: m.Panorama360 })));
 const GalleryTab = React.lazy(() => import('./components/GalleryTab').then(m => ({ default: m.GalleryTab })));
+import { CollaborativeHub } from './components/CollaborativeHub';
 
 
 
@@ -55,13 +56,24 @@ export const App = () => {
 
         notification, setNotification, addLog, handleManualSave,
 
-        handleExportJSON, handleImportJSON, activeProject, activeCompany
+        handleExportJSON, handleImportJSON, activeProject, activeCompany,
+
+        handleLogout,
+
+        onlineUsers, isRealtimeConnected, simulationActive,
+        collaborationToast,
+        setActiveTab: ctxSetActiveTab
 
     } = useApp();
 
     const { requestConfirm, showAlert } = useConfirm();
 
     const [activeTab, setActiveTab] = useState<Tab>('timeline');
+
+    // Sync local activeTab with global context so collaboration hook knows which tab we're on
+    useEffect(() => {
+        ctxSetActiveTab(activeTab);
+    }, [activeTab, ctxSetActiveTab]);
 
     const [activeTimelineView, setActiveTimelineView] = useState<'timeline' | 'agenda'>('timeline');
 
@@ -1992,6 +2004,27 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                         <span className="material-symbols-outlined text-base">cloud_upload</span>
                     </button>
 
+                    {/* Online Users - Presence Avatars */}
+                    {onlineUsers.length > 0 && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-theme-divider bg-theme-bg/50">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeConnected || simulationActive ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                            <div className="flex -space-x-2">
+                                {onlineUsers.slice(0, 5).map(user => (
+                                    <div key={user.userId} className="relative group" title={`${user.name}${user.currentActivity ? ` — ${user.currentActivity}` : ''}`}>
+                                        <img
+                                            src={user.avatarUrl}
+                                            alt={user.name}
+                                            className={`w-6 h-6 rounded-full object-cover ring-2 transition-transform group-hover:scale-125 group-hover:z-10 relative ${user.isVirtual ? 'ring-theme-orange/50' : 'ring-theme-card'}`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            {onlineUsers.length > 5 && (
+                                <span className="text-[9px] font-black text-theme-textMuted">+{onlineUsers.length - 5}</span>
+                            )}
+                        </div>
+                    )}
+
                     <div className="w-px h-5 bg-theme-divider mx-1"></div>
 
                     {currentUser ? (
@@ -2003,7 +2036,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                 Arq. {currentUser.name}
                             </span>
                             <button
-                                onClick={() => setCurrentUser(null)}
+                                onClick={handleLogout}
                                 title="Sair"
                                 className="w-7 h-7 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-red-400 hover:border-red-300 transition-all ml-1"
                             >
@@ -3901,7 +3934,12 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                                         <div className="flex flex-col gap-1.5 opacity-80 cursor-not-allowed">
                                                             <label className="text-[8px] font-black text-theme-textMuted uppercase tracking-widest flex items-center gap-1" title="Calculado automaticamente nas tipologias">Área Construída <span className="material-symbols-outlined text-[10px]">lock</span></label>
                                                             <div className="bg-theme-bg/50 border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text font-mono font-black italic">
-                                                                {((activeProject.details?.pavements || []).reduce((acc, p) => acc + (p.count * (p.areaPerPavement || 0)), 0)).toLocaleString('pt-BR')} m²
+                                                                {(() => {
+                                                                    const pavs = activeProject.details?.pavements || [];
+                                                                    const habGar = pavs.filter(p => p.category === 'Habitacional' || p.category === 'Garagem').reduce((acc, p) => acc + (p.count * (p.unitsPerPavement || 0) * (p.unitArea || 0)), 0);
+                                                                    const lazer = pavs.filter(p => p.category === 'Lazer Interno' || p.category === 'Lazer Externo').reduce((acc, p) => acc + (p.count * (p.areaPerPavement || 0)), 0);
+                                                                    return (habGar + lazer).toLocaleString('pt-BR');
+                                                                })()} m²
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-col gap-1.5 opacity-80 cursor-not-allowed">
@@ -3914,7 +3952,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                                             <label className="text-[8px] font-black text-theme-textMuted uppercase tracking-widest flex items-center gap-1" title="Calculado automaticamente (Área Vendável / Área Construída)">Eficiência de Projeto <span className="material-symbols-outlined text-[10px] align-middle">percent</span></label>
                                                             <div className="bg-[#a855f7]/10 border border-[#a855f7]/30 text-[#a855f7] rounded-xl px-4 py-3 text-xs font-mono font-black italic flex items-center justify-between shadow-sm">
                                                                 {(() => {
-                                                                    const construida = (activeProject.details?.pavements || []).reduce((acc, p) => acc + (p.count * (p.areaPerPavement || 0)), 0);
+                                                                    const pavs = activeProject.details?.pavements || [];
+                                                                    const habGar = pavs.filter(p => p.category === 'Habitacional' || p.category === 'Garagem').reduce((acc, p) => acc + (p.count * (p.unitsPerPavement || 0) * (p.unitArea || 0)), 0);
+                                                                    const lazer = pavs.filter(p => p.category === 'Lazer Interno' || p.category === 'Lazer Externo').reduce((acc, p) => acc + (p.count * (p.areaPerPavement || 0)), 0);
+                                                                    const construida = habGar + lazer;
                                                                     const vendavel = (activeProject.details?.pavements || []).filter(p => p.category === 'Habitacional').reduce((acc, p) => acc + (p.count * (p.unitsPerPavement || 0) * (p.unitArea || 0)), 0);
                                                                     return construida > 0 ? ((vendavel / construida) * 100).toFixed(1) + '%' : '0%';
                                                                 })()}
@@ -4071,15 +4112,30 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                                                         />
                                                                     </div>
 
-                                                                    {/* Row 2 */}
+                                                                    {/* M²/Pav: auto-calculated for Habitacional, manual for Lazer/Garagem */}
                                                                     <div className="col-span-3 flex flex-col gap-1.5">
-                                                                        <label className="text-[8px] font-black text-theme-textMuted uppercase tracking-widest flex items-center gap-1">m² / Pav</label>
-                                                                        <input type="number" min="0" className="w-full bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-xs font-mono font-bold text-center text-theme-text outline-none focus:border-theme-orange" value={p.areaPerPavement || 0}
-                                                                            onChange={e => {
-                                                                                const pts = activeProject.details!.pavements.map((pt, i) => i !== idx ? pt : { ...pt, areaPerPavement: Number(e.target.value) });
-                                                                                onUpdateProjectDetails('pavements', pts);
-                                                                            }}
-                                                                        />
+                                                                        <label className="text-[8px] font-black text-theme-textMuted uppercase tracking-widest flex items-center gap-1">
+                                                                            m² / Pav
+                                                                            {(p.category === 'Habitacional') && (
+                                                                                <span className="material-symbols-outlined text-[9px] text-theme-orange" title="Calculado automaticamente: Unid/Pav × m²/Unid">calculate</span>
+                                                                            )}
+                                                                        </label>
+                                                                        {p.category === 'Habitacional' ? (
+                                                                            /* Auto-calculated: each typology contributes only its own area */
+                                                                            <div className="w-full bg-theme-bg/50 border border-dashed border-theme-divider rounded-xl px-2 py-3 text-xs font-mono font-black text-center text-theme-textMuted italic cursor-not-allowed" title="Calculado: Unid/Pav × m²/Unid">
+                                                                                {((p.unitsPerPavement || 0) * (p.unitArea || 0)).toLocaleString('pt-BR')}
+                                                                            </div>
+                                                                        ) : (
+                                                                            /* Manual for Garagem, Lazer Interno, Lazer Externo */
+                                                                            <input type="number" min="0"
+                                                                                className="w-full bg-theme-bg border border-theme-divider rounded-xl px-2 py-3 text-xs font-mono font-bold text-center text-theme-text outline-none focus:border-theme-orange"
+                                                                                value={p.areaPerPavement || 0}
+                                                                                onChange={e => {
+                                                                                    const pts = activeProject.details!.pavements.map((pt, i) => i !== idx ? pt : { ...pt, areaPerPavement: Number(e.target.value) });
+                                                                                    onUpdateProjectDetails('pavements', pts);
+                                                                                }}
+                                                                            />
+                                                                        )}
                                                                     </div>
 
                                                                     {(p.category === 'Habitacional' || p.category === 'Garagem') ? (
@@ -5245,6 +5301,27 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 </div>
             );
         })()}
+
+            {/* Collaborative Hub Floating Panel */}
+            <CollaborativeHub />
+
+            {/* Collaboration Toast Notification */}
+            {collaborationToast && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] no-print animate-scaleIn">
+                    <div className="flex items-center gap-3 bg-theme-card/95 backdrop-blur-xl border border-theme-orange/30 text-theme-text px-5 py-3 rounded-2xl shadow-2xl shadow-theme-orange/10 max-w-sm">
+                        <img
+                            src={collaborationToast.avatarUrl}
+                            alt={collaborationToast.author}
+                            className="w-8 h-8 rounded-full object-cover ring-2 ring-theme-orange/40 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-theme-orange">{collaborationToast.author}</p>
+                            <p className="text-[11px] text-theme-text truncate mt-0.5">{collaborationToast.message}</p>
+                        </div>
+                        <span className="w-2 h-2 rounded-full bg-theme-orange animate-ping shrink-0" />
+                    </div>
+                </div>
+            )}
 
         </>
     );

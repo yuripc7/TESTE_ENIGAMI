@@ -4,6 +4,7 @@ import Plan from './ui/agent-plan';
 import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 import { validateFileSize } from '../utils/validation';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
+import { compressImage } from '../utils/imageCompression';
 import { supabase } from '../lib/supabase';
 
 interface ModalBaseProps {
@@ -39,7 +40,12 @@ export const GalleryModal: React.FC<{
             return;
         }
         try {
-            const dataUrl = await readFileAsDataURL(file);
+            let dataUrl = '';
+            if (file.type.startsWith('image/')) {
+                dataUrl = await compressImage(file, 1024, 1024, 0.6);
+            } else {
+                dataUrl = await readFileAsDataURL(file);
+            }
             onUpload(dataUrl);
         } catch (err) {
             console.error('Erro ao ler arquivo:', err);
@@ -621,12 +627,18 @@ export const CompanyModal: React.FC<{
         onReorder(newItems);
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setLogo(reader.result as string);
-            reader.readAsDataURL(file);
+            try {
+                const compressed = await compressImage(file, 400, 400, 0.7);
+                setLogo(compressed);
+            } catch (err) {
+                console.error('Erro ao comprimir imagem:', err);
+                const reader = new FileReader();
+                reader.onloadend = () => setLogo(reader.result as string);
+                reader.readAsDataURL(file);
+            }
         }
     };
 
@@ -746,12 +758,18 @@ export const ProjectModal: React.FC<{ isOpen: boolean; companyName: string; proj
         }
     }, [isOpen]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (s: string) => void) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, setter: (s: string) => void) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setter(reader.result as string);
-            reader.readAsDataURL(file);
+            try {
+                const compressed = await compressImage(file, 800, 800, 0.6);
+                setter(compressed);
+            } catch (err) {
+                console.error('Erro ao comprimir imagem:', err);
+                const reader = new FileReader();
+                reader.onloadend = () => setter(reader.result as string);
+                reader.readAsDataURL(file);
+            }
         }
     };
 
@@ -860,12 +878,11 @@ export const ScopeModal: React.FC<{
     team: string[];
     onClose: () => void;
     onManage: () => void;
-    onSave: (name: string, startDate: string, color: string, status: string, pDate: string, resp: string) => void;
+    onSave: (name: string, startDate: string, color: string, status: 'stopped' | 'walking' | 'running' | 'done', pDate: string, resp: string) => void;
 }> = ({ isOpen, scope, disciplines, team, onClose, onManage, onSave }) => {
-    // ... ScopeModal implementation ...
     const [discCode, setDiscCode] = useState('');
     const [start, setStart] = useState('');
-    const [status, setStatus] = useState('walking');
+    const [status, setStatus] = useState<'stopped' | 'walking' | 'running' | 'done'>('walking');
     const [protocolDate, setProtocolDate] = useState('');
     const [resp, setResp] = useState('');
     const [useProtocol, setUseProtocol] = useState(false);
@@ -932,7 +949,7 @@ export const ScopeModal: React.FC<{
                     <div className={`grid gap-4 ${useProtocol ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Status Inicial</label>
-                            <select value={status} onChange={e => setStatus(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
+                            <select value={status} onChange={e => setStatus(e.target.value as 'stopped' | 'walking' | 'running' | 'done')} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
                                 <option value="stopped">Parado</option>
                                 <option value="walking">Em Andamento</option>
                                 <option value="running">Acelerado</option>

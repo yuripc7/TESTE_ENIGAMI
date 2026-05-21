@@ -4,7 +4,7 @@
 // ╚══════════════════════════════════════════════════════════════════╝
 
 import React, { useState, useRef, useCallback } from 'react';
-import { FileLink } from '../types';
+import { FileLink, DB } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
 import { validateFileSize } from '../utils/validation';
@@ -168,7 +168,7 @@ onClose,
       createdAt: new Date().toISOString(),
     };
 
-    setDb(prev => ({
+    setDb((prev: DB) => ({
       ...prev,
       viabilities: [...((prev as any).viabilities || []), nova],
     }));
@@ -182,7 +182,7 @@ onClose,
 
   // ── Mover coluna ─────────────────────────────────────────────────────────
   const move = (id: string, to: KanbanStatus) => {
-    setDb(prev => ({
+    setDb((prev: DB) => ({
       ...prev,
       viabilities: ((prev as any).viabilities || []).map((v: ExtViab) =>
         v.id === id ? { ...v, kanbanStatus: to } : v
@@ -194,7 +194,7 @@ onClose,
 
   // ── Excluir ──────────────────────────────────────────────────────────────
   const del = (id: string) => {
-    setDb(prev => ({
+    setDb((prev: DB) => ({
       ...prev,
       viabilities: ((prev as any).viabilities || []).filter((v: ExtViab) => v.id !== id),
     }));
@@ -209,7 +209,7 @@ onClose,
   }: {
     label: string;
     field: 'pdfConsultaPrefeitura' | 'pdfLocalizacao' | 'pdfEstudoTerceiro';
-    refEl: React.RefObject<HTMLInputElement>;
+    refEl: React.RefObject<HTMLInputElement | null>;
     required?: boolean;
     file: FileLink | null;
     error?: string;

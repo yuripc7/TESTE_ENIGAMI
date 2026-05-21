@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { Project, GalleryFolder } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
+import { compressImage } from '../utils/imageCompression';
 import { validateFileSize } from '../utils/validation';
 import { FlipBook } from './FlipBook';
 import { Panorama360 } from './Panorama360';
@@ -97,11 +98,24 @@ export const GalleryTab: React.FC<GalleryTabProps> = ({ project, onUpdateProject
           continue;
         }
 
-        const dataUrl = await readFileAsDataURL(file);
+        let dataUrl = '';
         let type: 'image' | 'video' | 'panorama' | 'flipbook' = 'image';
         if (subTab === 'ebook') type = 'flipbook';
         else if (subTab === '360') type = 'panorama';
         else if (file.type.startsWith('video/')) type = 'video';
+
+        try {
+          if (type === 'image' && file.type.startsWith('image/')) {
+            dataUrl = await compressImage(file, 1024, 1024, 0.6);
+          } else if (type === 'panorama' && file.type.startsWith('image/')) {
+            dataUrl = await compressImage(file, 1600, 1600, 0.6);
+          } else {
+            dataUrl = await readFileAsDataURL(file);
+          }
+        } catch (compressErr) {
+          console.error('Erro ao comprimir imagem da galeria, salvando original:', compressErr);
+          dataUrl = await readFileAsDataURL(file);
+        }
 
         newImages.push({
           url: dataUrl,

@@ -161,7 +161,6 @@ export function useCollaboration({
   const [lastSyncFromSelf, setLastSyncFromSelf] = useState<number>(0);
 
   const globalChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const isSyncingRef = useRef(false);
   const dbRef = useRef<DB>(db);
   const currentUserIdRef = useRef<string | null>(currentUserId);
 
@@ -172,6 +171,20 @@ export function useCollaboration({
   const prevTeamRef = useRef<string[]>(db.team);
   const prevViabilitiesRef = useRef<any[]>(db.viabilities || []);
   const prevLodsRef = useRef<string[]>(db.lods);
+
+  // Refs for tracking network-received item IDs and list flags to prevent feedback loop
+  const receivedProjectsRef = useRef<Set<number>>(new Set());
+  const receivedCompaniesRef = useRef<Set<number>>(new Set());
+  const receivedViabilitiesRef = useRef<Set<string>>(new Set());
+  const receivedDisciplinesRef = useRef<boolean>(false);
+  const receivedTeamRef = useRef<boolean>(false);
+  const receivedLodsRef = useRef<boolean>(false);
+
+  // Ref to always have the latest online users inside callbacks without re-subscribing
+  const onlineUsersRef = useRef<CollaborationUser[]>([]);
+  useEffect(() => {
+    onlineUsersRef.current = onlineUsers;
+  }, [onlineUsers]);
 
   // Keep refs up to date
   useEffect(() => {
@@ -231,32 +244,48 @@ export function useCollaboration({
       .on('presence', { event: 'leave' }, () => handlePresenceSync(channel.presenceState()))
       .on('broadcast', { event: 'WORKSPACE_PROJECT_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         const incoming = payload.project as Project;
+        
+        // Add to tracking set so we skip broadcasting it back
+        receivedProjectsRef.current.add(incoming.id);
+
         setDb(prev => {
-          isSyncingRef.current = true;
           const exists = prev.projects.find(p => p.id === incoming.id);
           if (!exists) {
-            showToast(`Projeto criado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            if (!payload.isBootstrap) {
+              showToast(`Projeto criado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            }
             return { ...prev, projects: [...prev.projects, incoming] };
           }
           const locTime = new Date(exists.updatedAt || 0).getTime();
           const incTime = new Date(incoming.updatedAt || 0).getTime();
           if (incTime > locTime) {
-            showToast(`Projeto atualizado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            if (!payload.isBootstrap) {
+              showToast(`Projeto atualizado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            }
             return {
               ...prev,
               projects: prev.projects.map(p => p.id === incoming.id ? incoming : p)
             };
           }
-          // Reset if no update applied
-          isSyncingRef.current = false;
+          // If state didn't change, clean from tracking set
+          receivedProjectsRef.current.delete(incoming.id);
           return prev;
         });
       })
       .on('broadcast', { event: 'WORKSPACE_PROJECT_DELETED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedProjectsRef.current.add(payload.projectId);
+
         setDb(prev => {
-          isSyncingRef.current = true;
+          const exists = prev.projects.some(p => p.id === payload.projectId);
+          if (!exists) {
+            receivedProjectsRef.current.delete(payload.projectId);
+            return prev;
+          }
           return {
             ...prev,
             projects: prev.projects.filter(p => p.id !== payload.projectId),
@@ -266,9 +295,12 @@ export function useCollaboration({
       })
       .on('broadcast', { event: 'WORKSPACE_COMPANY_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         const incoming = payload.company as Company;
+        
+        receivedCompaniesRef.current.add(incoming.id);
+
         setDb(prev => {
-          isSyncingRef.current = true;
           const exists = prev.companies.some(c => c.id === incoming.id);
           if (!exists) {
             return { ...prev, companies: [...prev.companies, incoming] };
@@ -281,8 +313,16 @@ export function useCollaboration({
       })
       .on('broadcast', { event: 'WORKSPACE_COMPANY_DELETED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedCompaniesRef.current.add(payload.companyId);
+
         setDb(prev => {
-          isSyncingRef.current = true;
+          const exists = prev.companies.some(c => c.id === payload.companyId);
+          if (!exists) {
+            receivedCompaniesRef.current.delete(payload.companyId);
+            return prev;
+          }
           return {
             ...prev,
             companies: prev.companies.filter(c => c.id !== payload.companyId),
@@ -292,23 +332,32 @@ export function useCollaboration({
       })
       .on('broadcast', { event: 'WORKSPACE_DISCIPLINES_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedDisciplinesRef.current = true;
+
         setDb(prev => {
-          isSyncingRef.current = true;
           return { ...prev, disciplines: payload.disciplines };
         });
       })
       .on('broadcast', { event: 'WORKSPACE_TEAM_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedTeamRef.current = true;
+
         setDb(prev => {
-          isSyncingRef.current = true;
           return { ...prev, team: payload.team };
         });
       })
       .on('broadcast', { event: 'WORKSPACE_VIABILITY_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         const incoming = payload.viability;
+        
+        receivedViabilitiesRef.current.add(incoming.id);
+
         setDb(prev => {
-          isSyncingRef.current = true;
           const viabs = prev.viabilities || [];
           const exists = viabs.some(v => v.id === incoming.id);
           if (!exists) {
@@ -322,63 +371,148 @@ export function useCollaboration({
       })
       .on('broadcast', { event: 'WORKSPACE_VIABILITY_DELETED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedViabilitiesRef.current.add(payload.viabilityId);
+
         setDb(prev => {
-          isSyncingRef.current = true;
+          const viabs = prev.viabilities || [];
+          const exists = viabs.some(v => v.id === payload.viabilityId);
+          if (!exists) {
+            receivedViabilitiesRef.current.delete(payload.viabilityId);
+            return prev;
+          }
           return {
             ...prev,
-            viabilities: (prev.viabilities || []).filter(v => v.id !== payload.viabilityId)
+            viabilities: viabs.filter(v => v.id !== payload.viabilityId)
           };
         });
       })
       .on('broadcast', { event: 'WORKSPACE_LODS_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
+        receivedLodsRef.current = true;
+
         setDb(prev => {
-          isSyncingRef.current = true;
           return { ...prev, lods: payload.lods };
         });
       })
-      .on('broadcast', { event: 'REQUEST_DB_SYNC' }, ({ payload }) => {
+      .on('broadcast', { event: 'REQUEST_DB_SYNC' }, async ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
-        // Respond to sync request with current DB
+        
+        // Find the oldest active real user online
+        const realUsers = onlineUsersRef.current.filter(u => !u.isVirtual && u.userId !== payload.senderId);
+        const oldestUser = realUsers[0];
+        
+        // If I am not the oldest user (and oldestUser exists), do not respond to prevent duplicate broadcasting
+        if (oldestUser && oldestUser.userId !== currentUserIdRef.current) {
+          return;
+        }
+
+        const currentDb = dbRef.current;
+        const senderId = payload.senderId;
+
+        // Send companies chunked
+        for (const comp of currentDb.companies) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_COMPANY_UPDATED',
+            payload: {
+              senderId: currentUserIdRef.current,
+              company: comp,
+              isBootstrap: true,
+              targetUserId: senderId
+            }
+          });
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        // Send projects chunked
+        for (const proj of currentDb.projects) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_PROJECT_UPDATED',
+            payload: {
+              senderId: currentUserIdRef.current,
+              senderName: currentName,
+              senderAvatar: currentAvatar,
+              project: proj,
+              isBootstrap: true,
+              targetUserId: senderId
+            }
+          });
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        // Send viabilities chunked
+        for (const viab of (currentDb.viabilities || [])) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_VIABILITY_UPDATED',
+            payload: {
+              senderId: currentUserIdRef.current,
+              viability: viab,
+              isBootstrap: true,
+              targetUserId: senderId
+            }
+          });
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        // Send disciplines
         globalChannelRef.current?.send({
           type: 'broadcast',
-          event: 'RESPONSE_DB_SYNC',
+          event: 'WORKSPACE_DISCIPLINES_UPDATED',
           payload: {
             senderId: currentUserIdRef.current,
-            db: {
-              projects: dbRef.current.projects,
-              companies: dbRef.current.companies,
-              disciplines: dbRef.current.disciplines,
-              team: dbRef.current.team,
-              viabilities: dbRef.current.viabilities || [],
-              lods: dbRef.current.lods
-            }
+            disciplines: currentDb.disciplines,
+            isBootstrap: true,
+            targetUserId: senderId
+          }
+        });
+        await new Promise(resolve => setTimeout(resolve, 30));
+
+        // Send team
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_TEAM_UPDATED',
+          payload: {
+            senderId: currentUserIdRef.current,
+            team: currentDb.team,
+            isBootstrap: true,
+            targetUserId: senderId
+          }
+        });
+        await new Promise(resolve => setTimeout(resolve, 30));
+
+        // Send lods
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_LODS_UPDATED',
+          payload: {
+            senderId: currentUserIdRef.current,
+            lods: currentDb.lods,
+            isBootstrap: true,
+            targetUserId: senderId
+          }
+        });
+        await new Promise(resolve => setTimeout(resolve, 30));
+
+        // Broadcast completion event to the joining client
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_SYNC_COMPLETED',
+          payload: {
+            senderId: currentUserIdRef.current,
+            targetUserId: senderId
           }
         });
       })
-      .on('broadcast', { event: 'RESPONSE_DB_SYNC' }, ({ payload }) => {
+      .on('broadcast', { event: 'WORKSPACE_SYNC_COMPLETED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
-        const incomingDb = payload.db;
-        setDb(prev => {
-          isSyncingRef.current = true;
-
-          const mergedProjects = mergeProjects(prev.projects, incomingDb.projects || []);
-          const mergedCompanies = mergeCompanies(prev.companies, incomingDb.companies || []);
-          const mergedTeam = mergeTeam(prev.team, incomingDb.team || []);
-          const mergedDisciplines = mergeDisciplines(prev.disciplines, incomingDb.disciplines || []);
-          const mergedViabilities = mergeViabilities(prev.viabilities || [], incomingDb.viabilities || []);
-          const mergedLods = mergeLods(prev.lods, incomingDb.lods || []);
-
-          return {
-            ...prev,
-            projects: mergedProjects,
-            companies: mergedCompanies,
-            team: mergedTeam,
-            disciplines: mergedDisciplines,
-            viabilities: mergedViabilities,
-            lods: mergedLods
-          };
-        });
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+        
         showToast("Base de dados sincronizada com a equipe!", "Sistema", "https://ui-avatars.com/api/?name=Enigami&background=FF5722&color=fff");
       })
       .subscribe(async (status) => {
@@ -395,7 +529,7 @@ export function useCollaboration({
             joinedAt: Date.now()
           } as CollaborationUser);
 
-          // Request initial db sync
+          // Request initial database synchronization
           channel.send({
             type: 'broadcast',
             event: 'REQUEST_DB_SYNC',
@@ -417,18 +551,6 @@ export function useCollaboration({
 
   // Observe all local DB changes and broadcast them
   useEffect(() => {
-    if (isSyncingRef.current) {
-      // Incoming sync state update completed. Update refs to prevent feedback loop and exit.
-      isSyncingRef.current = false;
-      prevProjectsRef.current = db.projects;
-      prevCompaniesRef.current = db.companies;
-      prevDisciplinesRef.current = db.disciplines;
-      prevTeamRef.current = db.team;
-      prevViabilitiesRef.current = db.viabilities || [];
-      prevLodsRef.current = db.lods;
-      return;
-    }
-
     if (!isConnected || !globalChannelRef.current || !currentUserId) return;
 
     // Detect Project changes
@@ -439,6 +561,10 @@ export function useCollaboration({
       // 1. Check for deletions
       const deleted = prev.filter(p => !curr.some(c => c.id === p.id));
       deleted.forEach(p => {
+        if (receivedProjectsRef.current.has(p.id)) {
+          receivedProjectsRef.current.delete(p.id);
+          return; // Skip broadcasting deletion
+        }
         globalChannelRef.current?.send({
           type: 'broadcast',
           event: 'WORKSPACE_PROJECT_DELETED',
@@ -448,6 +574,11 @@ export function useCollaboration({
 
       // 2. Check for updates / creations
       curr.forEach(p => {
+        if (receivedProjectsRef.current.has(p.id)) {
+          receivedProjectsRef.current.delete(p.id);
+          return; // Skip broadcasting updates received from the network
+        }
+
         const prevProj = prev.find(pr => pr.id === p.id);
         if (!prevProj || new Date(p.updatedAt || 0).getTime() > new Date(prevProj.updatedAt || 0).getTime()) {
           globalChannelRef.current?.send({
@@ -475,6 +606,10 @@ export function useCollaboration({
       // Deletions
       const deleted = prev.filter(c => !curr.some(cc => cc.id === c.id));
       deleted.forEach(c => {
+        if (receivedCompaniesRef.current.has(c.id)) {
+          receivedCompaniesRef.current.delete(c.id);
+          return;
+        }
         globalChannelRef.current?.send({
           type: 'broadcast',
           event: 'WORKSPACE_COMPANY_DELETED',
@@ -484,6 +619,11 @@ export function useCollaboration({
 
       // Updates / creations
       curr.forEach(c => {
+        if (receivedCompaniesRef.current.has(c.id)) {
+          receivedCompaniesRef.current.delete(c.id);
+          return;
+        }
+
         const prevComp = prev.find(cc => cc.id === c.id);
         if (!prevComp || JSON.stringify(c) !== JSON.stringify(prevComp)) {
           globalChannelRef.current?.send({
@@ -500,12 +640,16 @@ export function useCollaboration({
     // Detect Disciplines changes
     if (db.disciplines !== prevDisciplinesRef.current) {
       const curr = db.disciplines;
-      if (JSON.stringify(curr) !== JSON.stringify(prevDisciplinesRef.current)) {
-        globalChannelRef.current?.send({
-          type: 'broadcast',
-          event: 'WORKSPACE_DISCIPLINES_UPDATED',
-          payload: { senderId: currentUserId, disciplines: curr }
-        });
+      if (receivedDisciplinesRef.current) {
+        receivedDisciplinesRef.current = false;
+      } else {
+        if (JSON.stringify(curr) !== JSON.stringify(prevDisciplinesRef.current)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_DISCIPLINES_UPDATED',
+            payload: { senderId: currentUserId, disciplines: curr }
+          });
+        }
       }
       prevDisciplinesRef.current = curr;
     }
@@ -513,12 +657,16 @@ export function useCollaboration({
     // Detect Team changes
     if (db.team !== prevTeamRef.current) {
       const curr = db.team;
-      if (JSON.stringify(curr) !== JSON.stringify(prevTeamRef.current)) {
-        globalChannelRef.current?.send({
-          type: 'broadcast',
-          event: 'WORKSPACE_TEAM_UPDATED',
-          payload: { senderId: currentUserId, team: curr }
-        });
+      if (receivedTeamRef.current) {
+        receivedTeamRef.current = false;
+      } else {
+        if (JSON.stringify(curr) !== JSON.stringify(prevTeamRef.current)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_TEAM_UPDATED',
+            payload: { senderId: currentUserId, team: curr }
+          });
+        }
       }
       prevTeamRef.current = curr;
     }
@@ -531,6 +679,10 @@ export function useCollaboration({
       // Deletions
       const deleted = prev.filter(v => !currViab.some(vv => vv.id === v.id));
       deleted.forEach(v => {
+        if (receivedViabilitiesRef.current.has(v.id)) {
+          receivedViabilitiesRef.current.delete(v.id);
+          return;
+        }
         globalChannelRef.current?.send({
           type: 'broadcast',
           event: 'WORKSPACE_VIABILITY_DELETED',
@@ -540,6 +692,11 @@ export function useCollaboration({
 
       // Updates / creations
       currViab.forEach(v => {
+        if (receivedViabilitiesRef.current.has(v.id)) {
+          receivedViabilitiesRef.current.delete(v.id);
+          return;
+        }
+
         const prevV = prev.find(vv => vv.id === v.id);
         if (!prevV || JSON.stringify(v) !== JSON.stringify(prevV)) {
           globalChannelRef.current?.send({
@@ -556,12 +713,16 @@ export function useCollaboration({
     // Detect Lods changes
     if (db.lods !== prevLodsRef.current) {
       const curr = db.lods;
-      if (JSON.stringify(curr) !== JSON.stringify(prevLodsRef.current)) {
-        globalChannelRef.current?.send({
-          type: 'broadcast',
-          event: 'WORKSPACE_LODS_UPDATED',
-          payload: { senderId: currentUserId, lods: curr }
-        });
+      if (receivedLodsRef.current) {
+        receivedLodsRef.current = false;
+      } else {
+        if (JSON.stringify(curr) !== JSON.stringify(prevLodsRef.current)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_LODS_UPDATED',
+            payload: { senderId: currentUserId, lods: curr }
+          });
+        }
       }
       prevLodsRef.current = curr;
     }

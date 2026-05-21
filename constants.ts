@@ -41,53 +41,9 @@ export const INITIAL_DB: DB = {
         "PL_ PROJETO LEGAL",
         "EX_ EXECUTIVO"
     ],
-    companies: [
-        { id: 1, name: "EMPRESA DEMO" },
-        { id: 1770419058245, name: "TONOLHER" },
-        { id: 1770419072614, name: "ENIGAMI" }
-    ],
+    companies: [],
     disciplines: DEFAULT_DISCIPLINES,
-    projects: [
-        {
-            id: 1770419126261,
-            companyId: 1770419058245,
-            lod: "EV",
-            name: "SKY VIEW",
-            coverUrl: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?q=80&w=1000&auto=format&fit=crop", // Placeholder facade
-            createdAt: "2026-02-06T23:05:26.261Z",
-            updatedAt: "2026-02-06T23:10:24.598Z",
-            timelineStart: "2026-01-01",
-            timelineEnd: "2026-12-31",
-            activities: [
-                { date: "06/02 20:05", author: "System", text: "Resp. ARQ: Eng. Roberto" },
-                { date: "06/02 20:06", author: "Admin", text: "PROJETO INICIADO " },
-                { date: "06/02 20:10", author: "System", text: "Resp. TOP: YURI" }
-            ],
-            scopes: [
-                {
-                    id: "sc1770419144816",
-                    name: "ARQ",
-                    colorClass: "#FF8000",
-                    startDate: "2026-02-06",
-                    resp: "Sem Líder",
-                    status: 'walking',
-                    events: [
-                        {
-                            id: "ev1770419256185",
-                            title: "ARQ",
-                            resp: "Sem Resp.",
-                            startDate: "2026-02-06",
-                            endDate: "2026-02-25", // Extended to show red bar (planned was 19)
-                            plannedStartDate: "2026-02-06",
-                            plannedEndDate: "2026-02-19",
-                            checklist: [{ text: "PLANTA BAIXA", done: true }],
-                            completed: false
-                        }
-                    ]
-                }
-            ]
-        }
-    ],
+    projects: [],
     team: [],
     viabilities: [],
 };

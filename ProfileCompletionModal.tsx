@@ -196,29 +196,35 @@ export const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     try {
       // 1. Executar atualizações no Supabase de forma assíncrona (não-bloqueante)
       if (userId && userId !== 'demo_user') {
-        supabase.auth.updateUser({
-          data: {
-            name: formattedName,
-            role: selectedRole.label,
-            avatar_url: finalAvatar,
-            profile_completed: true,
-          },
-        }).then(({ error: authErr }) => {
-          if (authErr) console.warn('Erro em background ao atualizar metadados do Supabase Auth:', authErr);
-        }).catch(err => {
-          console.warn('Erro em background ao atualizar Auth:', err);
-        });
+        (async () => {
+          try {
+            const { error: authErr } = await supabase.auth.updateUser({
+              data: {
+                name: formattedName,
+                role: selectedRole.label,
+                avatar_url: finalAvatar,
+                profile_completed: true,
+              },
+            });
+            if (authErr) console.warn('Erro em background ao atualizar metadados do Supabase Auth:', authErr);
+          } catch (err) {
+            console.warn('Erro em background ao atualizar Auth:', err);
+          }
+        })();
 
-        supabase.from('profiles').upsert({
-          id: userId,
-          name: formattedName,
-          avatar_url: finalAvatar,
-          updated_at: new Date().toISOString(),
-        }).then(({ error: dbErr }) => {
-          if (dbErr) console.warn('Erro em background ao atualizar tabela de profiles:', dbErr);
-        }).catch(err => {
-          console.warn('Erro em background ao salvar profile na DB:', err);
-        });
+        (async () => {
+          try {
+            const { error: dbErr } = await supabase.from('profiles').upsert({
+              id: userId,
+              name: formattedName,
+              avatar_url: finalAvatar,
+              updated_at: new Date().toISOString(),
+            });
+            if (dbErr) console.warn('Erro em background ao atualizar tabela de profiles:', dbErr);
+          } catch (err) {
+            console.warn('Erro em background ao salvar profile na DB:', err);
+          }
+        })();
       }
 
       // 2. Chamar o callback imediatamente para destravar a UI e entrar no app

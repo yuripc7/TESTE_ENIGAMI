@@ -4,6 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { formatLocalDate } from '../utils/dateUtils';
 import { validateFileSize } from '../utils/validation';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
+import { compressImage } from '../utils/imageCompression';
 
 interface NotesTabProps {
     project: Project;
@@ -43,10 +44,21 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
             return;
         }
         try {
-            const dataUrl = await readFileAsDataURL(file);
+            let dataUrl = '';
+            if (file.type.startsWith('image/')) {
+                dataUrl = await compressImage(file, 800, 800, 0.6);
+            } else {
+                dataUrl = await readFileAsDataURL(file);
+            }
             setPendingImage(dataUrl);
         } catch (err) {
             console.error('Erro ao ler imagem:', err);
+            try {
+                const dataUrl = await readFileAsDataURL(file);
+                setPendingImage(dataUrl);
+            } catch (err2) {
+                console.error('Erro de fallback ao ler imagem:', err2);
+            }
         }
     };
 

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Project, Database } from '../types';
+import { Project, DB } from '../types';
 
 interface FinanceiroTabProps {
   project: Project | null;
-  db: Database;
+  db: DB;
 }
 
 export function FinanceiroTab({ project, db }: FinanceiroTabProps) {

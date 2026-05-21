@@ -23,8 +23,8 @@ const uid   = () => `${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
 const isOverdue = (i: ContractInstallment) =>
   i.status !== 'paid' && i.dueDate && i.dueDate < today();
 
-const paidTotal    = (c: Contract) => (c.installments||[]).filter(i=>i.status==='paid').reduce((s,i)=>s+i.value,0);
-const pendingTotal = (c: Contract) => (c.installments||[]).filter(i=>i.status!=='paid').reduce((s,i)=>s+i.value,0);
+const paidTotal    = (c: Contract) => (c.installments||[]).filter((i: ContractInstallment)=>i.status==='paid').reduce((s: number, i: ContractInstallment)=>s+i.value,0);
+const pendingTotal = (c: Contract) => (c.installments||[]).filter((i: ContractInstallment)=>i.status!=='paid').reduce((s: number, i: ContractInstallment)=>s+i.value,0);
 
 const STATUS: Record<Contract['status'],{label:string;tw:string}> = {
   active:  { label:'Ativo',     tw:'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
@@ -81,8 +81,8 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
   }), [contracts, search, filter]);
 
   const availableScopes = useMemo(() => {
-    const linked = new Set((selected?.disciplines||[]).map(d=>d.id));
-    return (project.scopes||[]).filter(s =>
+    const linked = new Set((selected?.disciplines||[]).map((d: ContractDiscipline)=>d.id));
+    return (project.scopes||[]).filter((s: any) =>
       !linked.has(s.id) &&
       (!scopeSearch || s.name.toLowerCase().includes(scopeSearch.toLowerCase()))
     );
@@ -151,13 +151,13 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
     if (!selected) return;
     save(contracts.map(c=>c.id===selected.id?{
       ...c,
-      installments:c.installments.map(i=>i.id===instId?{...i,status:'paid',paymentDate:today()}:i),
+      installments:c.installments.map((i: ContractInstallment)=>i.id===instId?{...i,status:'paid',paymentDate:today()}:i),
     }:c), 'PARCELA PAGA');
   };
 
   const handleDelInst = (instId: string) => {
     if (!selected) return;
-    save(contracts.map(c=>c.id===selected.id?{...c,installments:c.installments.filter(i=>i.id!==instId)}:c));
+    save(contracts.map(c=>c.id===selected.id?{...c,installments:c.installments.filter((i: ContractInstallment)=>i.id!==instId)}:c));
   };
 
   /* ── Discipline handlers ── */
@@ -171,13 +171,13 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
   const handleDiscProgress = (discId: string, pct: number) => {
     if (!selected) return;
     save(contracts.map(c=>c.id===selected.id?{
-      ...c, disciplines:c.disciplines.map(d=>d.id===discId?{...d,progressPct:pct}:d),
+      ...c, disciplines:c.disciplines.map((d: ContractDiscipline)=>d.id===discId?{...d,progressPct:pct}:d),
     }:c));
   };
 
   const handleUnlink = (discId: string) => {
     if (!selected) return;
-    save(contracts.map(c=>c.id===selected.id?{...c,disciplines:c.disciplines.filter(d=>d.id!==discId)}:c), 'DISCIPLINA DESVINCULADA');
+    save(contracts.map(c=>c.id===selected.id?{...c,disciplines:c.disciplines.filter((d: ContractDiscipline)=>d.id!==discId)}:c), 'DISCIPLINA DESVINCULADA');
   };
 
   /* ── Edit request handlers ── */
@@ -282,8 +282,8 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
               {/* Discipline pills */}
               {(c.disciplines||[]).length > 0 && (
                 <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {c.disciplines.slice(0,5).map(d=>{
-                    const sc = (project.scopes||[]).find(s=>s.id===d.id);
+                  {c.disciplines.slice(0,5).map((d: ContractDiscipline)=>{
+                    const sc = (project.scopes||[]).find((s: any)=>s.id===d.id);
                     return (
                       <div key={d.id} className="flex items-center gap-1 bg-theme-bg border border-theme-border rounded-lg px-2 py-0.5">
                         {sc?.colorClass && <div className={`w-2 h-2 rounded-full ${sc.colorClass}`} />}
@@ -350,9 +350,7 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          MODAL — Contract Detail
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ─── MODAL — Contract Detail ─── */}
       {selected && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4"
           onClick={e=>{if(e.target===e.currentTarget)setSelected(null);}}>
@@ -543,7 +541,7 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                     <p className="text-xs text-theme-textMuted text-center py-4">Nenhuma parcela cadastrada</p>
                   )}
                   <div className="flex flex-col gap-2">
-                    {(selected.installments||[]).map((inst,i)=>{
+                    {(selected.installments||[]).map((inst: ContractInstallment, i: number)=>{
                       const over = isOverdue(inst);
                       const bd   = INST_BADGE[inst.status];
                       return (
@@ -602,8 +600,8 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                   )}
 
                   {/* Discipline cards */}
-                  {(selected.disciplines||[]).map(d=>{
-                    const sc = (project.scopes||[]).find(s=>s.id===d.id);
+                  {(selected.disciplines||[]).map((d: ContractDiscipline)=>{
+                    const sc = (project.scopes||[]).find((s: any)=>s.id===d.id);
                     const cl = sc?.colorClass || 'bg-emerald-600';
                     return (
                       <div key={d.id} className="bg-theme-bg border border-theme-border rounded-xl p-4">
@@ -667,7 +665,7 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                             <p className="text-xs text-theme-textMuted text-center py-4">
                               {(project.scopes||[]).length === 0 ? 'Projeto sem escopos.' : 'Todos os escopos já vinculados.'}
                             </p>
-                          ) : availableScopes.map(s=>(
+                          ) : availableScopes.map((s: any)=>(
                             <button key={s.id} onClick={()=>handleLinkScope(s.id,s.name)}
                               className="flex items-center gap-3 p-3 rounded-xl hover:bg-theme-bg border border-transparent hover:border-theme-border text-left transition-colors w-full">
                               <div className={`w-8 h-8 rounded-lg ${s.colorClass||'bg-emerald-600'} flex items-center justify-center text-white font-black text-sm shrink-0`}>

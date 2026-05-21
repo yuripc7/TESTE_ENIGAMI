@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { DB, Project, Note, Activity } from '../types';
+import { DB, Project, Note, Activity, Company } from '../types';
 
 export interface CollaborationUser {
   userId: string;
@@ -25,6 +25,78 @@ interface UseCollaborationOptions {
   setDb: React.Dispatch<React.SetStateAction<DB>>;
   addLog: (author: string, text: string) => void;
   showToast: (message: string, author: string, avatarUrl: string) => void;
+}
+
+// Helper functions for merging databases
+function mergeProjects(local: Project[], incoming: Project[]): Project[] {
+  const merged = [...local];
+  incoming.forEach(incProj => {
+    const locIdx = merged.findIndex(p => p.id === incProj.id);
+    if (locIdx >= 0) {
+      const locProj = merged[locIdx];
+      const locTime = new Date(locProj.updatedAt || 0).getTime();
+      const incTime = new Date(incProj.updatedAt || 0).getTime();
+      if (incTime > locTime) {
+        merged[locIdx] = incProj;
+      }
+    } else {
+      merged.push(incProj);
+    }
+  });
+  return merged;
+}
+
+function mergeCompanies(local: Company[], incoming: Company[]): Company[] {
+  const merged = [...local];
+  incoming.forEach(incComp => {
+    const locIdx = merged.findIndex(c => c.id === incComp.id);
+    if (locIdx >= 0) {
+      merged[locIdx] = incComp;
+    } else {
+      merged.push(incComp);
+    }
+  });
+  return merged;
+}
+
+function mergeTeam(local: string[], incoming: string[]): string[] {
+  return Array.from(new Set([...local, ...incoming]));
+}
+
+function mergeDisciplines(local: any[], incoming: any[]): any[] {
+  const merged = [...local];
+  incoming.forEach(incDisc => {
+    const locIdx = merged.findIndex(d => d.code === incDisc.code);
+    if (locIdx >= 0) {
+      merged[locIdx] = incDisc;
+    } else {
+      merged.push(incDisc);
+    }
+  });
+  return merged;
+}
+
+function mergeViabilities(local: any[] = [], incoming: any[] = []): any[] {
+  const merged = [...local];
+  incoming.forEach(incViab => {
+    const locIdx = merged.findIndex(v => v.id === incViab.id);
+    if (locIdx >= 0) {
+      const locTime = new Date(merged[locIdx].createdAt || 0).getTime();
+      const incTime = new Date(incViab.createdAt || 0).getTime();
+      const locVers = merged[locIdx].versions?.length || 0;
+      const incVers = incViab.versions?.length || 0;
+      if (incVers > locVers || incTime > locTime) {
+        merged[locIdx] = incViab;
+      }
+    } else {
+      merged.push(incViab);
+    }
+  });
+  return merged;
+}
+
+function mergeLods(local: string[] = [], incoming: string[] = []): string[] {
+  return Array.from(new Set([...local, ...incoming]));
 }
 
 const BOTS = [
@@ -89,10 +161,17 @@ export function useCollaboration({
   const [lastSyncFromSelf, setLastSyncFromSelf] = useState<number>(0);
 
   const globalChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isSyncingRef = useRef(false);
   const dbRef = useRef<DB>(db);
   const currentUserIdRef = useRef<string | null>(currentUserId);
+
+  // Refs for tracking local changes and avoiding loopback sync broadcasts
+  const prevProjectsRef = useRef<Project[]>(db.projects);
+  const prevCompaniesRef = useRef<Company[]>(db.companies);
+  const prevDisciplinesRef = useRef<any[]>(db.disciplines);
+  const prevTeamRef = useRef<string[]>(db.team);
+  const prevViabilitiesRef = useRef<any[]>(db.viabilities || []);
+  const prevLodsRef = useRef<string[]>(db.lods);
 
   // Keep refs up to date
   useEffect(() => {
@@ -132,7 +211,7 @@ export function useCollaboration({
     setOnlineUsers(unique);
   }, []);
 
-  // Set up Global Presence Channel
+  // Set up Global Channel (Presence + Sync Broadcast)
   useEffect(() => {
     if (!currentUserId) {
       setIsConnected(false);
@@ -150,6 +229,158 @@ export function useCollaboration({
       .on('presence', { event: 'sync' }, () => handlePresenceSync(channel.presenceState()))
       .on('presence', { event: 'join' }, () => handlePresenceSync(channel.presenceState()))
       .on('presence', { event: 'leave' }, () => handlePresenceSync(channel.presenceState()))
+      .on('broadcast', { event: 'WORKSPACE_PROJECT_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        const incoming = payload.project as Project;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          const exists = prev.projects.find(p => p.id === incoming.id);
+          if (!exists) {
+            showToast(`Projeto criado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            return { ...prev, projects: [...prev.projects, incoming] };
+          }
+          const locTime = new Date(exists.updatedAt || 0).getTime();
+          const incTime = new Date(incoming.updatedAt || 0).getTime();
+          if (incTime > locTime) {
+            showToast(`Projeto atualizado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
+            return {
+              ...prev,
+              projects: prev.projects.map(p => p.id === incoming.id ? incoming : p)
+            };
+          }
+          // Reset if no update applied
+          isSyncingRef.current = false;
+          return prev;
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_PROJECT_DELETED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return {
+            ...prev,
+            projects: prev.projects.filter(p => p.id !== payload.projectId),
+            activeProjectId: prev.activeProjectId === payload.projectId ? null : prev.activeProjectId
+          };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_COMPANY_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        const incoming = payload.company as Company;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          const exists = prev.companies.some(c => c.id === incoming.id);
+          if (!exists) {
+            return { ...prev, companies: [...prev.companies, incoming] };
+          }
+          return {
+            ...prev,
+            companies: prev.companies.map(c => c.id === incoming.id ? incoming : c)
+          };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_COMPANY_DELETED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return {
+            ...prev,
+            companies: prev.companies.filter(c => c.id !== payload.companyId),
+            activeCompanyId: prev.activeCompanyId === payload.companyId ? null : prev.activeCompanyId
+          };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_DISCIPLINES_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return { ...prev, disciplines: payload.disciplines };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_TEAM_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return { ...prev, team: payload.team };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_VIABILITY_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        const incoming = payload.viability;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          const viabs = prev.viabilities || [];
+          const exists = viabs.some(v => v.id === incoming.id);
+          if (!exists) {
+            return { ...prev, viabilities: [...viabs, incoming] };
+          }
+          return {
+            ...prev,
+            viabilities: viabs.map(v => v.id === incoming.id ? incoming : v)
+          };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_VIABILITY_DELETED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return {
+            ...prev,
+            viabilities: (prev.viabilities || []).filter(v => v.id !== payload.viabilityId)
+          };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_LODS_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        setDb(prev => {
+          isSyncingRef.current = true;
+          return { ...prev, lods: payload.lods };
+        });
+      })
+      .on('broadcast', { event: 'REQUEST_DB_SYNC' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        // Respond to sync request with current DB
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'RESPONSE_DB_SYNC',
+          payload: {
+            senderId: currentUserIdRef.current,
+            db: {
+              projects: dbRef.current.projects,
+              companies: dbRef.current.companies,
+              disciplines: dbRef.current.disciplines,
+              team: dbRef.current.team,
+              viabilities: dbRef.current.viabilities || [],
+              lods: dbRef.current.lods
+            }
+          }
+        });
+      })
+      .on('broadcast', { event: 'RESPONSE_DB_SYNC' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        const incomingDb = payload.db;
+        setDb(prev => {
+          isSyncingRef.current = true;
+
+          const mergedProjects = mergeProjects(prev.projects, incomingDb.projects || []);
+          const mergedCompanies = mergeCompanies(prev.companies, incomingDb.companies || []);
+          const mergedTeam = mergeTeam(prev.team, incomingDb.team || []);
+          const mergedDisciplines = mergeDisciplines(prev.disciplines, incomingDb.disciplines || []);
+          const mergedViabilities = mergeViabilities(prev.viabilities || [], incomingDb.viabilities || []);
+          const mergedLods = mergeLods(prev.lods, incomingDb.lods || []);
+
+          return {
+            ...prev,
+            projects: mergedProjects,
+            companies: mergedCompanies,
+            team: mergedTeam,
+            disciplines: mergedDisciplines,
+            viabilities: mergedViabilities,
+            lods: mergedLods
+          };
+        });
+        showToast("Base de dados sincronizada com a equipe!", "Sistema", "https://ui-avatars.com/api/?name=Enigami&background=FF5722&color=fff");
+      })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
@@ -163,6 +394,13 @@ export function useCollaboration({
             currentActivity: getCurrentActivityText(),
             joinedAt: Date.now()
           } as CollaborationUser);
+
+          // Request initial db sync
+          channel.send({
+            type: 'broadcast',
+            event: 'REQUEST_DB_SYNC',
+            payload: { senderId: currentUserId }
+          });
         } else {
           setIsConnected(false);
         }
@@ -175,94 +413,160 @@ export function useCollaboration({
       setIsConnected(false);
       setOnlineUsers([]);
     };
-  }, [currentUserId, currentName, currentAvatar, projectId, projectName, activeTab, getCurrentActivityText, handlePresenceSync]);
+  }, [currentUserId, currentName, currentAvatar, projectId, projectName, activeTab, getCurrentActivityText, handlePresenceSync, setDb, showToast]);
 
-  // Set up Project Broadcast Channel
+  // Observe all local DB changes and broadcast them
   useEffect(() => {
-    if (!projectId || !currentUserId) {
-      if (broadcastChannelRef.current) {
-        supabase.removeChannel(broadcastChannelRef.current);
-        broadcastChannelRef.current = null;
-      }
+    if (isSyncingRef.current) {
+      // Incoming sync state update completed. Update refs to prevent feedback loop and exit.
+      isSyncingRef.current = false;
+      prevProjectsRef.current = db.projects;
+      prevCompaniesRef.current = db.companies;
+      prevDisciplinesRef.current = db.disciplines;
+      prevTeamRef.current = db.team;
+      prevViabilitiesRef.current = db.viabilities || [];
+      prevLodsRef.current = db.lods;
       return;
     }
 
-    const channel = supabase.channel(`project-broadcast:${projectId}`);
-    broadcastChannelRef.current = channel;
+    if (!isConnected || !globalChannelRef.current || !currentUserId) return;
 
-    channel
-      .on('broadcast', { event: 'PROJECT_SYNC' }, ({ payload }) => {
-        // Prevent loopback or handling outdated syncs
-        if (payload.senderId === currentUserIdRef.current) return;
-        
-        const incomingProject = payload.project as Project;
-        const currentDb = dbRef.current;
-        const localProject = currentDb.projects.find(p => p.id === Number(projectId));
+    // Detect Project changes
+    if (db.projects !== prevProjectsRef.current) {
+      const prev = prevProjectsRef.current;
+      const curr = db.projects;
 
-        if (!localProject) return;
+      // 1. Check for deletions
+      const deleted = prev.filter(p => !curr.some(c => c.id === p.id));
+      deleted.forEach(p => {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_PROJECT_DELETED',
+          payload: { senderId: currentUserId, projectId: p.id }
+        });
+      });
 
-        // Apply if incoming has a newer updatedAt
-        const localTime = new Date(localProject.updatedAt || 0).getTime();
-        const incomingTime = new Date(incomingProject.updatedAt || 0).getTime();
-
-        if (incomingTime > localTime) {
-          isSyncingRef.current = true;
-          setDb(prev => ({
-            ...prev,
-            projects: prev.projects.map(p => p.id === Number(projectId) ? incomingProject : p)
-          }));
-          
-          showToast(
-            `Sincronizado: ${payload.senderName} atualizou o projeto!`,
-            payload.senderName,
-            payload.senderAvatar
-          );
-
-          // Clear sync flag after state updates
-          setTimeout(() => {
-            isSyncingRef.current = false;
-          }, 200);
+      // 2. Check for updates / creations
+      curr.forEach(p => {
+        const prevProj = prev.find(pr => pr.id === p.id);
+        if (!prevProj || new Date(p.updatedAt || 0).getTime() > new Date(prevProj.updatedAt || 0).getTime()) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_PROJECT_UPDATED',
+            payload: {
+              senderId: currentUserId,
+              senderName: currentName,
+              senderAvatar: currentAvatar,
+              project: p
+            }
+          });
+          setLastSyncFromSelf(Date.now());
         }
-      })
-      .subscribe();
+      });
 
-    return () => {
-      if (broadcastChannelRef.current) {
-        supabase.removeChannel(broadcastChannelRef.current);
-        broadcastChannelRef.current = null;
-      }
-    };
-  }, [projectId, currentUserId, setDb, showToast]);
-
-  // Broadcast Project Updates on Local Changes
-  const broadcastProjectUpdate = useCallback((updatedProject: Project) => {
-    if (!projectId || !broadcastChannelRef.current || isSyncingRef.current || !currentUserId) return;
-
-    broadcastChannelRef.current.send({
-      type: 'broadcast',
-      event: 'PROJECT_SYNC',
-      payload: {
-        senderId: currentUserId,
-        senderName: currentName,
-        senderAvatar: currentAvatar,
-        project: updatedProject
-      }
-    });
-    setLastSyncFromSelf(Date.now());
-  }, [projectId, currentUserId, currentName, currentAvatar]);
-
-  // Observe activeProject changes to broadcast them
-  useEffect(() => {
-    if (!projectId) return;
-    const activeP = db.projects.find(p => p.id === Number(projectId));
-    if (activeP && !isSyncingRef.current) {
-      // Debounce slightly to prevent overwhelming the broadcast channel
-      const timer = setTimeout(() => {
-        broadcastProjectUpdate(activeP);
-      }, 500);
-      return () => clearTimeout(timer);
+      prevProjectsRef.current = curr;
     }
-  }, [db, projectId, broadcastProjectUpdate]);
+
+    // Detect Company changes
+    if (db.companies !== prevCompaniesRef.current) {
+      const prev = prevCompaniesRef.current;
+      const curr = db.companies;
+
+      // Deletions
+      const deleted = prev.filter(c => !curr.some(cc => cc.id === c.id));
+      deleted.forEach(c => {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_COMPANY_DELETED',
+          payload: { senderId: currentUserId, companyId: c.id }
+        });
+      });
+
+      // Updates / creations
+      curr.forEach(c => {
+        const prevComp = prev.find(cc => cc.id === c.id);
+        if (!prevComp || JSON.stringify(c) !== JSON.stringify(prevComp)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_COMPANY_UPDATED',
+            payload: { senderId: currentUserId, company: c }
+          });
+        }
+      });
+
+      prevCompaniesRef.current = curr;
+    }
+
+    // Detect Disciplines changes
+    if (db.disciplines !== prevDisciplinesRef.current) {
+      const curr = db.disciplines;
+      if (JSON.stringify(curr) !== JSON.stringify(prevDisciplinesRef.current)) {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_DISCIPLINES_UPDATED',
+          payload: { senderId: currentUserId, disciplines: curr }
+        });
+      }
+      prevDisciplinesRef.current = curr;
+    }
+
+    // Detect Team changes
+    if (db.team !== prevTeamRef.current) {
+      const curr = db.team;
+      if (JSON.stringify(curr) !== JSON.stringify(prevTeamRef.current)) {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_TEAM_UPDATED',
+          payload: { senderId: currentUserId, team: curr }
+        });
+      }
+      prevTeamRef.current = curr;
+    }
+
+    // Detect Viabilities changes
+    const currViab = db.viabilities || [];
+    if (currViab !== prevViabilitiesRef.current) {
+      const prev = prevViabilitiesRef.current;
+      
+      // Deletions
+      const deleted = prev.filter(v => !currViab.some(vv => vv.id === v.id));
+      deleted.forEach(v => {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_VIABILITY_DELETED',
+          payload: { senderId: currentUserId, viabilityId: v.id }
+        });
+      });
+
+      // Updates / creations
+      currViab.forEach(v => {
+        const prevV = prev.find(vv => vv.id === v.id);
+        if (!prevV || JSON.stringify(v) !== JSON.stringify(prevV)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_VIABILITY_UPDATED',
+            payload: { senderId: currentUserId, viability: v }
+          });
+        }
+      });
+
+      prevViabilitiesRef.current = currViab;
+    }
+
+    // Detect Lods changes
+    if (db.lods !== prevLodsRef.current) {
+      const curr = db.lods;
+      if (JSON.stringify(curr) !== JSON.stringify(prevLodsRef.current)) {
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_LODS_UPDATED',
+          payload: { senderId: currentUserId, lods: curr }
+        });
+      }
+      prevLodsRef.current = curr;
+    }
+
+  }, [db, isConnected, currentUserId, currentName, currentAvatar]);
 
   // ----------------------------------------------------
   // SIMULATION (BOTS / OFFICE TASK FORCE MODE)

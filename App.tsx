@@ -913,7 +913,7 @@ export const App = () => {
 
             if (s.status === 'done') statusLabel = ' · FINALIZADA';
 
-            else if (s.status === 'in_progress') statusLabel = ' · EM ANDAMENTO';
+            else if (s.status === 'walking' || s.status === 'running') statusLabel = ' · EM ANDAMENTO';
 
             lines.push(`${icon} **${s.name}**${statusLabel} · Líder: ${s.resp || '—'} · ${done}/${total} AÇÕES (${pct}%)${late > 0 ? ` · ⚠️ ${late} atrasada(s)` : ''}`);
 
@@ -2318,7 +2318,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onManage={() => { setShowScopeModal(false); setShowDisciplinesModal(true); }}
 
-                onSave={(name, startDate, color, status, pDate, resp) => {
+                onSave={(name, startDate, color, status: 'stopped' | 'walking' | 'running' | 'done', pDate, resp) => {
 
                     if (!activeProject) return;
 
@@ -2964,7 +2964,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                             <p className={`text-xs font-medium leading-relaxed text-theme-text ${(isAI || isReport) ? 'whitespace-pre-wrap' : ''}`}>{a.text}</p>
 
-                                            {a.imageUrl && <img src={a.imageUrl} onClick={() => setViewingImage(a.imageUrl)} className="mt-3 rounded-2xl border border-theme-divider shadow-md max-w-full hover:scale-105 transition-transform cursor-zoom-in" />}
+                                            {a.imageUrl && <img src={a.imageUrl} onClick={() => setViewingImage(a.imageUrl || null)} className="mt-3 rounded-2xl border border-theme-divider shadow-md max-w-full hover:scale-105 transition-transform cursor-zoom-in" />}
 
                                         </div>
 

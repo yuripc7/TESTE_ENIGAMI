@@ -62,7 +62,9 @@ export const App = () => {
 
         onlineUsers, isRealtimeConnected, simulationActive,
         collaborationToast,
-        setActiveTab: ctxSetActiveTab
+        setActiveTab: ctxSetActiveTab,
+        showProfileModal,
+        setShowProfileModal
 
     } = useApp();
 
@@ -146,15 +148,11 @@ export const App = () => {
 
     const [showUploadInstructionsModal, setShowUploadInstructionsModal] = useState(false);
 
-    const [showProfileModal, setShowProfileModal] = useState(() => {
-        return localStorage.getItem('enigami_profile_completed') !== 'true';
-    });
-
     useEffect(() => {
         if (currentUser && !currentUser.profileCompleted) {
             setShowProfileModal(true);
         }
-    }, [currentUser]);
+    }, [currentUser, setShowProfileModal]);
 
     const [newEventDate, setNewEventDate] = useState<string | undefined>(undefined); // New State for Agenda
 
@@ -548,14 +546,15 @@ export const App = () => {
 
     };
 
-    const handleProfileComplete = (profile: { name: string; role: string; avatarUrl: string }) => {
+    const handleProfileComplete = (profile: { name: string; role: string; avatarUrl: string; companyTime?: string }) => {
         if (currentUser) {
             setCurrentUser({
                 ...currentUser,
                 name: profile.name,
                 avatar: profile.avatarUrl,
                 role: profile.role,
-                profileCompleted: true
+                profileCompleted: true,
+                companyTime: profile.companyTime
             });
         } else {
             setCurrentUser({
@@ -563,7 +562,8 @@ export const App = () => {
                 name: profile.name,
                 avatar: profile.avatarUrl,
                 role: profile.role,
-                profileCompleted: true
+                profileCompleted: true,
+                companyTime: profile.companyTime
             });
         }
 
@@ -1411,7 +1411,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
     const companyViabilities = useMemo(() => {
         if (!db.activeCompanyId) return [];
-        return (db.viabilities || []).filter(v => v.companyId === db.activeCompanyId);
+        return (db.viabilities || []).filter(v => String(v.companyId) === String(db.activeCompanyId));
     }, [db.viabilities, db.activeCompanyId]);
 
     const onAddViability = (v: Omit<Viability, 'id' | 'createdAt' | 'versions'>) => {
@@ -2029,12 +2029,26 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                     {currentUser ? (
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ background: '#E85028' }}>
-                                {currentUser.name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-theme-text hidden sm:block">
-                                Arq. {currentUser.name}
-                            </span>
+                            <button
+                                onClick={() => setShowProfileModal(true)}
+                                title="Editar Perfil"
+                                className="flex items-center gap-2 hover:opacity-85 transition-all group"
+                            >
+                                {currentUser.avatar ? (
+                                    <img
+                                        src={currentUser.avatar}
+                                        alt={currentUser.name}
+                                        className="w-8 h-8 rounded-full object-cover ring-2 ring-theme-orange/40 group-hover:ring-theme-orange transition-all"
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-black ring-2 ring-theme-orange/40 group-hover:ring-theme-orange transition-all" style={{ background: '#E85028' }}>
+                                        {currentUser.name.slice(0, 2).toUpperCase()}
+                                    </div>
+                                )}
+                                <span className="text-[10px] font-black uppercase tracking-widest text-theme-text hidden sm:block">
+                                    {currentUser.name}
+                                </span>
+                            </button>
                             <button
                                 onClick={handleLogout}
                                 title="Sair"
@@ -2150,7 +2164,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                 onUpdate={onUpdateCompany}
 
-                onRemove={(id) => { setDb(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id), activeCompanyId: prev.activeCompanyId === id ? null : prev.activeCompanyId })); }}
+                onRemove={(id) => { setDb(prev => ({ ...prev, companies: prev.companies.filter(c => String(c.id) !== String(id)), activeCompanyId: String(prev.activeCompanyId) === String(id) ? null : prev.activeCompanyId })); }}
 
                 onReorder={(newCompanies) => setDb(prev => ({ ...prev, companies: newCompanies }))}
 
@@ -2202,7 +2216,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                 companyName={activeCompany?.name || ''}
 
-                projects={db.projects.filter(p => p.companyId === db.activeCompanyId)}
+                projects={db.projects.filter(p => String(p.companyId) === String(db.activeCompanyId))}
 
                 onClose={() => setShowProjectModal(false)}
 
@@ -2269,6 +2283,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                 userId={currentUser?.id || 'demo_user'}
                 currentEmail={currentUser?.name}
                 onSubmit={handleProfileComplete}
+                onClose={() => setShowProfileModal(false)}
             />
 
 

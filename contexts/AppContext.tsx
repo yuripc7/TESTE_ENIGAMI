@@ -6,6 +6,7 @@ import { readFileAsText } from '../utils/fileReaderUtils';
 import { useConfirm } from '../components/ConfirmDialog';
 import { getIndexedDBItem, setIndexedDBItem } from '../utils/indexedDbHelper';
 import { useCollaboration, CollaborationUser } from '../hooks/useCollaboration';
+import { decodeAvatarUrl } from '../utils/avatarHelper';
 
 const USER_KEY = 'enigami_user_v1';
 
@@ -15,6 +16,7 @@ interface User {
   avatar?: string;
   role?: string;
   profileCompleted?: boolean;
+  companyTime?: string;
 }
 
 // Helpers
@@ -56,6 +58,8 @@ interface AppContextType {
   setCollaborationToast: (toast: { message: string; author: string; avatarUrl: string } | null) => void;
   activeTab: string;
   setActiveTab: (tab: any) => void;
+  showProfileModal: boolean;
+  setShowProfileModal: (show: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -132,6 +136,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   // Collaboration & Real-Time Sync States
   const [activeTab, setActiveTab] = useState<string>('timeline');
   const [collaborationToast, setCollaborationToast] = useState<{ message: string; author: string; avatarUrl: string } | null>(null);
+
+  // Profile Completion Modal State
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(() => {
+    return localStorage.getItem('enigami_profile_completed') !== 'true';
+  });
   
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const showToast = useCallback((message: string, author: string, avatarUrl: string) => {
@@ -164,21 +173,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     const isCompleted = metadata?.profile_completed === true;
 
     if (data) {
+      const decoded = decodeAvatarUrl(data.avatar_url);
       setCurrentUser({
         id: data.id,
         name: data.name,
-        avatar: data.avatar_url ?? buildAvatar(data.name),
+        avatar: decoded.avatarUrl || buildAvatar(data.name),
         role: metadata?.role || 'Colaborador',
         profileCompleted: isCompleted,
+        companyTime: decoded.companyTime || metadata?.company_time || '',
       });
     } else {
       if (ud?.user) {
+        const decoded = decodeAvatarUrl(metadata?.avatar_url);
         setCurrentUser({
           id: ud.user.id,
           name: ud.user.email?.split('@')[0] ?? 'Usuário',
-          avatar: metadata?.avatar_url ?? buildAvatar(ud.user.email?.split('@')[0] ?? 'Usuário'),
+          avatar: decoded.avatarUrl || buildAvatar(ud.user.email?.split('@')[0] ?? 'Usuário'),
           role: metadata?.role,
           profileCompleted: isCompleted,
+          companyTime: decoded.companyTime || metadata?.company_time || '',
         });
       }
     }
@@ -290,18 +303,39 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     };
   }, []);
 
-  // Garante que o próprio usuário ativo esteja sempre adicionado à equipe local imediatamente
+  // Garante que o próprio usuário ativo esteja sempre adicionado à equipe local imediatamente,
+  // substituindo o nome anterior se houver alteração para evitar duplicados.
+  const prevNameRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentUser?.name && currentUser.profileCompleted) {
+      const newName = currentUser.name;
+      const oldName = prevNameRef.current;
+
       setDb(prev => {
-        if (prev.team && !prev.team.includes(currentUser.name)) {
+        let updatedTeam = prev.team ? [...prev.team] : [];
+        
+        if (oldName && oldName !== newName) {
+          updatedTeam = updatedTeam.filter(m => m !== oldName);
+        }
+        
+        if (!updatedTeam.includes(newName)) {
+          updatedTeam.push(newName);
+        }
+
+        const isDifferent = !prev.team || 
+                            prev.team.length !== updatedTeam.length || 
+                            prev.team.some((val, i) => val !== updatedTeam[i]);
+
+        if (isDifferent) {
           return {
             ...prev,
-            team: [...prev.team, currentUser.name]
+            team: updatedTeam
           };
         }
         return prev;
       });
+
+      prevNameRef.current = newName;
     }
   }, [currentUser]);
 
@@ -315,11 +349,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
 
   // Computed values
   const activeProject = useMemo(() => {
-    return db.projects.find(p => p.id === db.activeProjectId) || null;
+    return db.projects.find(p => String(p.id) === String(db.activeProjectId)) || null;
   }, [db.projects, db.activeProjectId]);
 
   const activeCompany = useMemo(() => {
-    return db.companies.find(c => c.id === db.activeCompanyId) || null;
+    return db.companies.find(c => String(c.id) === String(db.activeCompanyId)) || null;
   }, [db.companies, db.activeCompanyId]);
 
   // Helper function to get current timestamp
@@ -522,6 +556,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     setCollaborationToast,
     activeTab,
     setActiveTab,
+    showProfileModal,
+    setShowProfileModal,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

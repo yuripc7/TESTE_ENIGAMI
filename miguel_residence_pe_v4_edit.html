@@ -1,0 +1,609 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@300;400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--k:#0a0a0a;--g1:#1c1c1c;--g2:#333;--g3:#555;--g4:#888;--g5:#bbb;--g6:#e2e2e2;--g7:#efefed;--g8:#f8f8f6;--w:#fcfcfb;--f:'DM Sans',system-ui,sans-serif;--m:'DM Mono',monospace}
+body{background:var(--w);font-family:var(--f);color:var(--k);-webkit-font-smoothing:antialiased}
+.R{max-width:740px;margin:0 auto}
+/* MAST */
+.mast{padding:18px 24px 0;border-bottom:2px solid var(--k)}
+.mast-top{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px;padding-bottom:14px}
+.mast-ey{font-family:var(--m);font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--g3);margin-bottom:5px}
+.mast-nm{font-size:30px;font-weight:300;letter-spacing:-.04em;line-height:1}
+.mast-nm b{font-weight:500}
+.mast-r{text-align:right}
+.mast-ph{font-family:var(--m);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--g3);margin-bottom:3px}
+.mast-pct{font-family:var(--m);font-size:28px;font-weight:400;letter-spacing:-.02em;line-height:1}
+.mast-sb{font-family:var(--m);font-size:9px;color:var(--g4);margin-top:3px}
+.prog{height:1px;background:var(--g6)}.pf{height:1px;background:var(--k);transition:width .55s}
+/* TABS */
+.mtabs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--g6)}
+.mt{padding:13px 20px;cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;font-family:var(--f);text-align:left;transition:all .12s}
+.mt.on{border-bottom-color:var(--k);background:var(--g8)}.mt:not(.on){opacity:.48}.mt:not(.on):hover{opacity:.75}
+.mt-co{font-family:var(--m);font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--g3);display:block;margin-bottom:3px}
+.mt-nm{font-size:12.5px;color:var(--g1);display:block;margin-bottom:6px}
+.mt-br{height:1px;background:var(--g6);overflow:hidden}.mt-bf{height:1px;background:var(--k);transition:width .4s}
+.mt-mt{display:flex;justify-content:space-between;margin-top:4px}
+.mt-pc{font-family:var(--m);font-size:10px;color:var(--g4)}.mt.on .mt-pc,.mt.on .mt-co{color:var(--k)}
+.mt-ct{font-family:var(--m);font-size:9.5px;color:var(--g5)}
+/* LEGEND */
+.leg-t{display:flex;align-items:center;gap:6px;padding:7px 22px;border-bottom:1px solid var(--g6);cursor:pointer;background:transparent;border-top:none;border-left:none;border-right:none;font-family:var(--m);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--g3);width:100%;transition:background .1s;justify-content:space-between}
+.leg-t:hover{background:var(--g8)}
+.leg-p{border-bottom:1px solid var(--g6);background:var(--g8);padding:10px 22px}
+.leg-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:4px}
+.leg-i{display:flex;align-items:center;gap:5px;padding:3px 0}
+.leg-sw{width:9px;height:9px;flex-shrink:0;border-radius:1px}
+.leg-c{font-family:var(--m);font-size:8.5px;font-weight:500;min-width:26px}
+.leg-n{font-size:9px;color:var(--g3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ZONE */
+.ztabs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--g6)}
+.zt{padding:11px 20px;cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;font-family:var(--f);text-align:left;transition:all .12s}
+.zt.on{border-bottom-color:var(--k);background:var(--g8)}.zt:not(.on){opacity:.45}.zt:not(.on):hover{opacity:.75}
+.zt-co{font-family:var(--m);font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--g3);display:block;margin-bottom:2px}
+.zt-nm{font-size:12px;color:var(--g1);display:block;margin-bottom:5px}
+.zt-br{height:1px;background:var(--g6);overflow:hidden}.zt-bf{height:1px;background:var(--k);transition:width .35s}
+.zt-mt{display:flex;justify-content:space-between;margin-top:4px}
+.zt-pc{font-family:var(--m);font-size:9.5px;color:var(--g4)}.zt.on .zt-pc{color:var(--k)}
+.zt-ct{font-family:var(--m);font-size:9px;color:var(--g5)}
+/* MODE */
+.modes{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--g6)}
+.mb{padding:8px 20px;border:none;background:transparent;cursor:pointer;font-family:var(--m);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--g4);position:relative;transition:all .1s}
+.mb.on{color:var(--k);background:var(--g7)}.mb.on::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--k)}
+.mb:first-child{border-right:1px solid var(--g6)}
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--g6)}
+.sc{padding:8px 10px;border-right:1px solid var(--g6)}.sc:last-child{border-right:none}
+.sc-n{font-family:var(--m);font-size:14px;line-height:1;margin-bottom:2px}
+.sc-l{font-size:7.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--g4);font-family:var(--m)}
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--g6)}
+.srch-w{flex:1;display:flex;align-items:center;gap:7px;padding:7px 14px;border-right:1px solid var(--g6)}
+.srch-ic{color:var(--g4);font-size:10px;font-family:var(--m)}
+.srch-in{border:none;background:transparent;font-family:var(--m);font-size:10.5px;color:var(--k);outline:none;flex:1}
+.srch-in::placeholder{color:var(--g5)}
+.srch-ct{font-family:var(--m);font-size:8.5px;color:var(--g4);white-space:nowrap}
+.btn-add{flex:none;display:flex;align-items:center;gap:5px;padding:7px 14px;border:none;background:transparent;cursor:pointer;font-family:var(--m);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--g3);transition:all .1s;white-space:nowrap}
+.btn-add:hover{color:var(--k);background:var(--g7)}
+.btn-add.active{color:var(--k);background:var(--g7)}
+.btn-add-dot{width:14px;height:14px;border:1px solid var(--g4);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1}
+/* CATS */
+.cats{display:flex;border-bottom:1px solid var(--g6);overflow-x:auto;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.cb{flex:none;padding:6px 11px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border:none;border-right:1px solid var(--g6);background:transparent;color:var(--g4);font-family:var(--m);white-space:nowrap;position:relative;transition:all .1s}
+.cb:last-child{border-right:none}.cb.on{color:var(--k);background:var(--g7)}
+.cb.on::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--k)}
+/* ADD FORM */
+.af{border-bottom:2px solid var(--k);padding:16px 22px;background:var(--g8)}
+.af-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.af-title{font-size:13px;font-weight:500;letter-spacing:-.01em}
+.af-close{border:none;background:transparent;cursor:pointer;font-size:18px;color:var(--g3);line-height:1;padding:0 4px}
+.af-close:hover{color:var(--k)}
+.af-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.af-f{display:flex;flex-direction:column;gap:4px}
+.af-lbl{font-family:var(--m);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--g3)}
+.af-sel,.af-in,.af-ta{border:1px solid var(--g6);background:var(--w);font-family:var(--m);font-size:11px;color:var(--k);padding:6px 8px;width:100%;outline:none;border-radius:0;transition:border-color .1s}
+.af-sel:focus,.af-in:focus,.af-ta:focus{border-color:var(--k)}
+.af-ta{resize:vertical;min-height:60px;font-family:var(--f);font-size:12px}
+.af-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.af-btn{margin-top:10px;padding:8px 18px;border:1px solid var(--k);background:var(--k);color:var(--w);font-family:var(--m);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .1s}
+.af-btn:hover{background:var(--g1)}.af-btn:disabled{opacity:.35;cursor:not-allowed}
+.af-note{font-family:var(--m);font-size:8px;color:var(--g4);margin-top:6px}
+/* ITEMS */
+.cblk{border-bottom:1px solid var(--g6)}
+.chd{display:flex;align-items:center;justify-content:space-between;padding:9px 20px 9px 13px;cursor:pointer;gap:8px;transition:background .08s}
+.chd:hover{background:var(--g8)}
+.chd-l{display:flex;align-items:center;gap:7px}
+.csq{width:7px;height:7px;flex-shrink:0}
+.clbl{font-size:11px;font-weight:500;color:var(--g2)}
+.cr{display:flex;align-items:center;gap:7px}
+.cprog{font-family:var(--m);font-size:9px;color:var(--g4)}
+.carr{font-size:9px;color:var(--g5);font-family:var(--m);transition:transform .15s}
+.ci{border-top:1px solid var(--g6)}
+.item{display:grid;grid-template-columns:1fr auto;align-items:start;padding:9px 14px 9px 12px;border-bottom:1px solid var(--g6);gap:10px;cursor:pointer;transition:background .07s}
+.item:hover{background:var(--g8)}.item:last-of-type{border-bottom:none}
+.il{display:flex;align-items:flex-start;gap:7px;min-width:0}
+.iline{width:2px;align-self:stretch;flex-shrink:0;min-height:14px}
+.inn{min-width:0;flex:1}
+.itw{display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap}
+.itg{font-family:var(--m);font-size:7px;font-weight:500;letter-spacing:.12em;padding:1px 5px;border-left:2px solid;display:inline-flex}
+.itxt{font-size:12px;line-height:1.45;color:var(--k)}
+.iobs{font-size:10px;color:var(--g3);margin-top:2px;font-style:italic;line-height:1.4}
+.idet-badge{font-family:var(--m);font-size:7.5px;color:var(--g4);border:1px solid var(--g6);padding:1px 5px;margin-top:3px;display:inline-block}
+.ir{display:flex;align-items:flex-start;gap:5px;flex-shrink:0}
+.iexp{font-size:9px;color:var(--g5);cursor:pointer;padding:2px;font-family:var(--m);transition:all .1s;line-height:1;border:none;background:transparent}
+.iexp:hover{color:var(--g2)}
+.pill{display:flex;align-items:center;gap:3px;padding:2px 7px;border:1px solid;font-size:7.5px;letter-spacing:.07em;text-transform:uppercase;font-family:var(--m);white-space:nowrap;cursor:pointer}
+.pd{width:4px;height:4px;border-radius:50%}
+.p-pendente{color:#7a5000;border-color:#e0c870;background:#fffbef}
+.p-andamento{color:#1a3060;border-color:#a8c0e8;background:#f0f4fc}
+.p-concluido{color:#1a5c38;border-color:#9fcfb5;background:#f0faf5}
+.p-critico{color:#800000;border-color:#e8b0a8;background:#fdf2f0}
+.p-na{color:var(--g4);border-color:var(--g6);background:var(--g7)}
+.l-pendente{background:#d4a830}.l-andamento{background:#5a7ec0}.l-concluido{background:#2d9460}.l-critico{background:#c04840}.l-na{background:var(--g5)}
+.d-pendente{background:#d4a830}.d-andamento{background:#5a7ec0}.d-concluido{background:#2d9460}.d-critico{background:#c04840}.d-na{background:var(--g5)}
+.s-idle{background:var(--g6)}.s-done{background:#2d9460}.s-wip{background:#d4a830}.s-crit{background:#c04840}
+/* DETAIL PANEL */
+.det{padding:12px 20px 14px 20px;background:var(--g8);border-bottom:1px solid var(--g6);border-top:1px dashed var(--g5)}
+.det-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.det-f{display:flex;flex-direction:column;gap:3px}
+.det-lbl{font-family:var(--m);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--g4)}
+.det-in{border:none;border-bottom:1px solid var(--g6);background:transparent;font-family:var(--m);font-size:11px;color:var(--k);padding:4px 0;width:100%;outline:none;transition:border-color .1s}
+.det-in:focus{border-bottom-color:var(--k)}
+.det-ta{border:1px solid var(--g6);background:var(--w);font-family:var(--f);font-size:11.5px;color:var(--k);padding:6px 8px;width:100%;outline:none;resize:vertical;min-height:52px;margin-bottom:6px;transition:border-color .1s}
+.det-ta:focus{border-color:var(--k)}
+.det-ft{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.det-hint{font-family:var(--m);font-size:7.5px;color:var(--g4)}
+.det-del{border:none;background:transparent;cursor:pointer;font-family:var(--m);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#aa3333;padding:3px 0;text-decoration:underline}
+.det-del:hover{color:#cc0000}
+.det-saved{font-family:var(--m);font-size:7.5px;color:var(--green,#2d9460)}
+.det-link{font-family:var(--m);font-size:10.5px;color:#2A5A90;word-break:break-all}
+.empty{padding:30px;text-align:center;color:var(--g4);font-family:var(--m);font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+.cust-badge{font-family:var(--m);font-size:7px;letter-spacing:.08em;color:var(--g3);border:1px solid var(--g5);padding:1px 4px;border-radius:2px}
+</style>
+
+<div class="R" id="root"></div>
+<script>
+const DISC={AIT:{n:"Arq. Interiores",h:"#646464"},ARQ:{n:"Arquitetura",h:"#FF8000"},AUT:{n:"Automação",h:"#C49A20"},CLI:{n:"Climatização",h:"#3382D0"},ELE:{n:"Elétrica",h:"#3A985B"},EST:{n:"Estrutura",h:"#7070CC"},GER:{n:"Gerenciadora",h:"#CC5555"},HID:{n:"Hidráulica",h:"#3A9AC0"},LMT:{n:"Luminotécnico",h:"#B03880"},PCI:{n:"Prev. Incêndio",h:"#CC0000"},PLE:{n:"Proj. Legal",h:"#804000"},PSG:{n:"Paisagismo",h:"#5A8820"},FTV:{n:"Fotovoltaico",h:"#800080"},STM:{n:"Estr. Metálica",h:"#8A2A00"},TEL:{n:"Telecomunicações",h:"#2A5A90"},DRY:{n:"Drywall",h:"#A05A20"},IMP:{n:"Impermeabiliz.",h:"#6A4010"},BIM:{n:"Coord. BIM",h:"#1A4080"},MEP:{n:"MEP / Compat.",h:"#305060"},MEC:{n:"Mecânica",h:"#3A6050"},SEG:{n:"Segurança/CFTV",h:"#333333"}};
+const CYCLE=["pendente","andamento","concluido","critico","na"];
+const PL={pendente:"Pendente",andamento:"Andamento",concluido:"Concluído",critico:"Crítico",na:"N/A"};
+let uid=0;
+const mk=(z,c,tp,tg,txt,obs="")=>({id:`i${uid++}`,z,c,tp,tg,txt,obs});
+const D=[
+mk("gar","Cotas e Geometria","exec","ARQ","Dimensões exatas das vagas padrão","Mín. 2,30m × 4,50m — verificar código de obras"),
+mk("gar","Cotas e Geometria","exec","ARQ","Dimensões das vagas PCD","3,50m × 5,00m + espaço de transferência lateral"),
+mk("gar","Cotas e Geometria","exec","ARQ","Vagas de moto e utilitário dimensionadas"),
+mk("gar","Cotas e Geometria","exec","ARQ","Largura das faixas de circulação","Mín. 5,00m sentido único; 7,00m dupla mão"),
+mk("gar","Cotas e Geometria","exec","ARQ","Raios de giro das curvas cotados"),
+mk("gar","Cotas e Geometria","exec","ARQ","Recuos entre vagas e pilares cotados"),
+mk("gar","Cotas e Geometria","exec","ARQ","Largura e comprimento da rampa cotados"),
+mk("gar","Cotas e Geometria","exec","ARQ","Posição e cota da cancela / portão de acesso"),
+mk("gar","Tabela de Vagas","exec","ARQ","Tabela completa: número, tipo, unidade vinculada, pavimento","Padrão / PCD / Moto / Utilitário / Visitante"),
+mk("gar","Tabela de Vagas","exec","ARQ","Numeração de cada vaga na planta e na tabela"),
+mk("gar","Tabela de Vagas","exec","ARQ","Quadro-resumo: total por tipo e total geral"),
+mk("gar","Tabela de Vagas","exec","ARQ","Vagas de visitante e paraciclos locados"),
+mk("gar","Tabela de Vagas","exec","ARQ","Conformidade taxa mínima PCD — NBR 9050 + código municipal"),
+mk("gar","Níveis e Caimentos","exec","ARQ","Cotas de nível em osso e acabado — todos os setores"),
+mk("gar","Níveis e Caimentos","exec","ARQ","Inclinação da rampa indicada (%)","Máx. 20% fechada; 15% descoberta — NBR 9050"),
+mk("gar","Níveis e Caimentos","exec","ARQ","Curvas de transição superior e inferior da rampa"),
+mk("gar","Níveis e Caimentos","exec","ARQ","Caimento de piso com setas e % por setor","Mín. 0,5% → ralos e grelhas"),
+mk("gar","Níveis e Caimentos","exec","ARQ","Pé-direito livre verificado — pontos críticos","Mín. 2,20m — indicar abaixo de vigas e dutos"),
+mk("gar","Estrutura","exec","EST","Locação precisa dos pilares — dimensões reais + cotas"),
+mk("gar","Estrutura","exec","EST","Paredes estruturais e muros de arrimo representados"),
+mk("gar","Estrutura","exec","EST","Interface pilar × bloco / sapata geometricamente cotada"),
+mk("gar","Estrutura","exec","IMP","Impermeabilização do muro de arrimo detalhada"),
+mk("gar","Pintura de Pilares","exec","ARQ","Especificação completa da tinta — tipo, cor e brilho","Esmalte, epóxi ou tinta borracha"),
+mk("gar","Pintura de Pilares","exec","ARQ","Faixas de atenção preto/amarelo nos pilares de circulação"),
+mk("gar","Pintura de Pilares","exec","ARQ","Numeração dos pilares — fonte, tamanho, posição"),
+mk("gar","Pintura de Pilares","exec","ARQ","Tinta retrorrefletiva nos pilares em área de manobra"),
+mk("gar","Pintura de Pilares","exec","ARQ","Cantoneiras protetoras nos pilares de ângulo"),
+mk("gar","Sinalização Horizontal","exec","ARQ","Demarcação das faixas de vagas — especificar tinta e demãos"),
+mk("gar","Sinalização Horizontal","exec","ARQ","Zebrado PCD e rotas de pedestres","Faixas preto/amarelo 45°"),
+mk("gar","Sinalização Horizontal","exec","ARQ","Setas direcionais de fluxo no piso"),
+mk("gar","Sinalização Horizontal","exec","ARQ","Faixa de pedestres em cor contrastante"),
+mk("gar","Sinalização Horizontal","exec","ARQ","Numeração de vagas e símbolo PCD no piso — NBR 9050"),
+mk("gar","Sinalização Horizontal","exec","ARQ","STOP pintado antes da rampa / saída"),
+mk("gar","Sinalização Vertical","exec","ARQ","Placa de altura máxima na entrada — cota exata de gabarito"),
+mk("gar","Sinalização Vertical","exec","ARQ","Placas de limite de velocidade, sentido e saídas"),
+mk("gar","Sinalização Vertical","exec","ARQ","Placa de reserva PCD — altura regulamentar"),
+mk("gar","Detalhamentos","exec","ARQ","Rampa — corte longitudinal e transversal completo"),
+mk("gar","Detalhamentos","exec","ARQ","Guarda-corpo da rampa — seção, ancoragem, norma"),
+mk("gar","Detalhamentos","exec","ARQ","Portão / cancela — tipo, vão, folha, acionamento"),
+mk("gar","Detalhamentos","exec","HID","Calha de drenagem da rampa — seção, grelha, material"),
+mk("gar","Detalhamentos","exec","ARQ","Bate-rodas — seção, material, fixação, cor"),
+mk("gar","Detalhamentos","exec","ARQ","Limitadores de altura — perfil, fixação, sinalização"),
+mk("gar","Detalhamentos","exec","ARQ","Junta de dilatação do piso — perfil e material"),
+mk("gar","Compat. PPCI","exec","PCI","Sprinklers — raio de cobertura e cota de instalação"),
+mk("gar","Compat. PPCI","exec","PCI","Hidrantes e extintores — posição, tipo, acessibilidade"),
+mk("gar","Compat. PPCI","exec","PCI","Iluminação de emergência — circuito, autonomia e cota"),
+mk("gar","Compat. PPCI","exec","PCI","Rota de fuga sinalizada — horizontal e vertical"),
+mk("gar","Compat. PPCI","exec","PCI","Detector de CO/fumaça — posição e cota"),
+mk("gar","Compat. Hidráulica","exec","HID","Ralos secos, sifonados, grelhas e calhas — posição e DN"),
+mk("gar","Compat. Hidráulica","exec","HID","Caimento de piso por setor direcionado aos ralos"),
+mk("gar","Compat. Hidráulica","exec","HID","Sistema de recalque — bombas e registros locados"),
+mk("gar","Compat. Hidráulica","exec","HID","Ramal pluvial da rampa — calha ou ralo lateral"),
+mk("gar","Compat. Elétrica","exec","ELE","Quadros de força e distribuição — posição na planta"),
+mk("gar","Compat. Elétrica","exec","ELE","Luminárias e iluminação de emergência locadas"),
+mk("gar","Compat. Elétrica","exec","ELE","Infraestrutura para carregadores VE — conduite e pontos"),
+mk("gar","Compat. Elétrica","exec","ELE","Tomadas de uso geral com IP adequado"),
+mk("gar","Compat. Telecom","exec","TEL","Câmeras CFTV — posição, ângulo, cota"),
+mk("gar","Compat. Telecom","exec","TEL","Interfone e controle de acesso — leitores de tag"),
+mk("gar","Compat. Telecom","exec","AUT","Cancela integrada ao sistema de automação predial"),
+mk("gar","Compat. Mecânica","exec","MEC","Dutos de exaustão mecânica — pé-direito livre"),
+mk("gar","Compat. Mecânica","exec","MEC","Ventiladores de exaustão — clearance de manutenção"),
+mk("gar","Compat. Mecânica","exec","MEC","Sensor CO/NOx — posição e cota"),
+mk("gar","Acabamentos","exec","ARQ","Especificação completa do piso","Concreto desempenado, epóxi, polido ou intertravado"),
+mk("gar","Acabamentos","exec","ARQ","Piso da rampa antiderrapante — coeficiente de atrito mínimo"),
+mk("gar","Acabamentos","exec","ARQ","Juntas de dilatação — espaçamento, perfil, material"),
+mk("gar","Acabamentos","exec","ARQ","Pintura de paredes e teto — sistema e cor"),
+mk("gar","Geometria e Vagas","bim","BIM","Vagas como elementos paramétricos com tipo, número, unidade"),
+mk("gar","Geometria e Vagas","bim","BIM","Tabela de vagas extraída do modelo — sem tabela manual"),
+mk("gar","Geometria e Vagas","bim","BIM","Cancela / portão modelado com folha e caixa de acionamento"),
+mk("gar","Geometria e Vagas","bim","BIM","Bate-rodas como famílias com fabricante e dimensões"),
+mk("gar","Pilares e Sinalização","bim","BIM","Pilares com material de pintura — extrair m² por pilar"),
+mk("gar","Pilares e Sinalização","bim","BIM","Faixas de atenção: piso 2mm + material 'Tinta Epóxi Amarela'"),
+mk("gar","Pilares e Sinalização","bim","BIM","Sinalização horizontal: piso 2mm por tipo de tinta","Amarela/Branca/Azul PCD — m² por material"),
+mk("gar","Pilares e Sinalização","bim","BIM","Cantoneiras como famílias com comprimento parametrizado"),
+mk("gar","Suportes MEP","bim","MEP","Tirantes e abraçadeiras de tubulações modelados na laje"),
+mk("gar","Suportes MEP","bim","MEP","Clearance 1,0m de frente dos painéis elétricos modelado"),
+mk("gar","Suportes MEP","bim","MEP","Clearance de manutenção dos ventiladores modelado"),
+mk("gar","Caimentos e Juntas","bim","EST","Contrapiso com caimento real via shape editing","Altera volume de concreto no quantitativo"),
+mk("gar","Caimentos e Juntas","bim","EST","Rampa com inclinação real — juntas de dilatação modeladas"),
+mk("gar","Quantitativos","bim","BIM","Extintores: tipo, capacidade, fabricante como instâncias"),
+mk("gar","Quantitativos","bim","BIM","Câmeras CFTV com ângulo de cobertura parametrizado"),
+mk("gar","Quantitativos","bim","BIM","Schedule de materiais de piso por tipo em m²"),
+mk("lixo","Layout","exec","ARQ","Dimensões internas com medidas reais dos contêineres adotados"),
+mk("lixo","Layout","exec","ARQ","Área de circulação e manobra para retirada dos contêineres"),
+mk("lixo","Layout","exec","ARQ","Separação orgânico × reciclável — divisória ou faixa"),
+mk("lixo","Layout","exec","ARQ","Número e capacidade dos contêineres indicados na planta"),
+mk("lixo","Layout","exec","ARQ","Rota de acesso dos coletores até a via pública"),
+mk("lixo","Revestimentos","exec","ARQ","Cerâmica piso e paredes até o teto — PEI mín. 4"),
+mk("lixo","Revestimentos","exec","IMP","Impermeabilização do piso com sobreposição 30cm nas paredes"),
+mk("lixo","Revestimentos","exec","ARQ","Rodapé em meia-cana especificado"),
+mk("lixo","Revestimentos","exec","ARQ","Composição exata das paredes definida","Bloco + chapisco + emboço + arg. colante + cerâmica"),
+mk("lixo","Hidrossanitário","exec","HID","Torneira de lavagem com cota de altura — 0,80m do piso"),
+mk("lixo","Hidrossanitário","exec","HID","Ralo sifonado 100mm — caimento mín. 1,5% para ralo"),
+mk("lixo","Hidrossanitário","exec","HID","Ramal de esgoto do ralo — interligado à rede (não pluvial)"),
+mk("lixo","Hidrossanitário","exec","HID","Caixa de inspeção de saída de esgoto locada"),
+mk("lixo","Esquadrias","exec","ARQ","Porta metálica — abrir para fora, veneziana fixa","Chapa galvanizada ou inox — espessura especificada"),
+mk("lixo","Esquadrias","exec","ARQ","Vão livre cotado para passagem do maior contêiner"),
+mk("lixo","Esquadrias","exec","ARQ","Batente, portal, marco — fixação na alvenaria"),
+mk("lixo","Esquadrias","exec","ARQ","Veneziana — área livre mínima calculada, tela anti-inseto"),
+mk("lixo","Proteção","exec","ARQ","Bate-macas no percurso dos contêineres"),
+mk("lixo","Proteção","exec","ARQ","Cantoneiras protetoras nas arestas — material e altura"),
+mk("lixo","Níveis","exec","ARQ","Desnível / soleira na porta — 2–5cm"),
+mk("lixo","Níveis","exec","ARQ","Cotas de nível em osso e acabado"),
+mk("lixo","Instalações","exec","ELE","Luminária IP65 — 200 lux mínimo"),
+mk("lixo","Instalações","exec","ELE","Interruptor externo — posição cotada"),
+mk("lixo","Instalações","exec","PCI","Extintor — localização e tipo"),
+mk("lixo","Instalações","exec","TEL","Câmera CFTV se exigido"),
+mk("lixo","Conexões","bim","HID","Ralo sifonado com conector MEP ligado à rede de esgoto"),
+mk("lixo","Conexões","bim","HID","Torneira com conector MEP e ramal modelado"),
+mk("lixo","Conexões","bim","HID","Caimento real do contrapiso via shape editing"),
+mk("lixo","Esquadrias BIM","bim","ARQ","Porta metálica: batente, dobradiças, veneziana modelados"),
+mk("lixo","Esquadrias BIM","bim","ARQ","Vão livre verificado no modelo com folga real"),
+mk("lixo","Quantitativos","bim","BIM","Paredes multicamada com composição exata no tipo"),
+mk("lixo","Quantitativos","bim","BIM","Contêineres como instâncias: tipo, capacidade, fabricante"),
+mk("lixo","Quantitativos","bim","BIM","Schedule de cerâmica: m² por ambiente e por material"),
+mk("dry","Planta e Locação","exec","DRY","Planta de locação das paredes drywall cotadas — todos os ambientes"),
+mk("dry","Planta e Locação","exec","ARQ","Compatibilização com planta ARQ — revisão mais recente"),
+mk("dry","Planta e Locação","exec","DRY","Identificação de cada tipo de parede por código na planta"),
+mk("dry","Planta e Locação","exec","ARQ","Cota interna de todos os ambientes — área mínima verificada"),
+mk("dry","Planta e Locação","exec","DRY","Nível de piso acabado e teto por setor indicados"),
+mk("dry","Tipos de Parede","exec","DRY","ST 98 — 1 guia + 1 montante + 1 chapa cada face = 98mm","Áreas secas — uso geral"),
+mk("dry","Tipos de Parede","exec","DRY","ST 78 — 1 guia + 1 montante + 1 chapa cada face = 78mm","Divisórias leves internas"),
+mk("dry","Tipos de Parede","exec","DRY","DT 148 — guia dupla + 2 montantes + 2 chapas cada face","Maior desempenho acústico"),
+mk("dry","Tipos de Parede","exec","DRY","Parede shaft — estrutura para encapsulamento de prumadas","Alçapão obrigatório para acesso"),
+mk("dry","Tipos de Parede","exec","DRY","Parede hidrofugada (chapa RU) — banheiros e lavanderia","Revestimento cerâmico sobre RU"),
+mk("dry","Tipos de Parede","exec","DRY","Parede acústica com lã mineral 50 ou 70mm","Rw mínimo por ambiente — NBR 15575"),
+mk("dry","Tipos de Parede","exec","DRY","Tabela de tipos: código, composição, espessura total, Rw (dB)"),
+mk("dry","Tipos de Parede","exec","ARQ","Forro de gesso liso — pendurais, espaçamento, alturas"),
+mk("dry","Tipos de Parede","exec","ARQ","Forro drywall com instalações — alçapões locados"),
+mk("dry","Reforços","exec","DRY","Reforço para TV — chapa 4mm ou OSB — todos os dormitórios e sala","Posição e dimensões na planta"),
+mk("dry","Reforços","exec","DRY","Reforço para louças sanitárias — bacia e lavatório","Compatível com projeto de interiores"),
+mk("dry","Reforços","exec","DRY","Reforço para barras de apoio PCD (quando aplicável)"),
+mk("dry","Reforços","exec","DRY","Reforço para armários fixos — cozinha, lavanderia, home office"),
+mk("dry","Reforços","exec","DRY","Reforço para espelhos acima de 0,60m × 0,60m"),
+mk("dry","Reforços","exec","DRY","Reforço para split — suporte interno e externo por ambiente"),
+mk("dry","Reforços","exec","DRY","Reforço para QDL — abertura e estrutura do nicho do quadro"),
+mk("dry","Reforços","exec","DRY","Reforço para boxe de vidro — perfil e dobradiça fixos"),
+mk("dry","Reforços","exec","DRY","Reforço para toalheiro, saboneteira e papel higiênico"),
+mk("dry","Reforços","exec","DRY","Chumbadores e parafusos especificados por tipo e substrato"),
+mk("dry","Compat. Elétrica","exec","ELE","Pontos elétricos nas paredes drywall — alturas padrão NBR 5410"),
+mk("dry","Compat. Elétrica","exec","ELE","Nichos para QDL — abertura correta no drywall"),
+mk("dry","Compat. Elétrica","exec","ELE","Caixas elétricas 4×4 e 4×2 compatibilizadas com espessura"),
+mk("dry","Compat. Elétrica","exec","ELE","Posição das luminárias embutidas no forro"),
+mk("dry","Compat. Elétrica","exec","LMT","Esperas de LED nas sancas compatibilizadas com drywall"),
+mk("dry","Compat. Hidráulica","exec","HID","Shaft de prumadas HID encapsulado — alçapão obrigatório"),
+mk("dry","Compat. Hidráulica","exec","HID","Passagem de tubulações internas compatibilizada"),
+mk("dry","Compat. Hidráulica","exec","HID","Dreno de AC na parede — canaleta ou tubo embutido"),
+mk("dry","Compat. Hidráulica","exec","HID","Ramal de gás no shaft — requisitos de ventilação"),
+mk("dry","Compat. Clima","exec","CLI","Nicho de split — dimensões do suporte e passagem de tubulação"),
+mk("dry","Compat. Clima","exec","CLI","Duto de exaustão de banheiros internos pelo forro","Diâmetro, caminhamento e saída especificados"),
+mk("dry","Compat. Clima","exec","MEC","Caixa de exaustão no forro — abertura e alçapão"),
+mk("dry","Compat. Telecom","exec","TEL","Pontos de TV, internet e telefone nas paredes drywall"),
+mk("dry","Compat. Telecom","exec","TEL","Pontos de automação e sensores nos dormitórios e sala"),
+mk("dry","Compat. Telecom","exec","TEL","Conduit dentro do drywall — DN mínimo 25mm"),
+mk("dry","Compat. Telecom","exec","AUT","Painéis de automação — profundidade do nicho"),
+mk("dry","Compat. PPCI","exec","PCI","Sprinklers no forro — abertura e detalhe do bocal","Espaçamento máximo — ABNT 13714"),
+mk("dry","Compat. PPCI","exec","PCI","Detectores de fumaça no forro — posição e compat."),
+mk("dry","Compat. PPCI","exec","PCI","Vedação corta-fogo nas passagens de tubulação","Golas intumescentes por DN"),
+mk("dry","Compat. Interiores","exec","AIT","Paredes compat. com projeto AIT — nichos e sancas","Verificar profundidade com projeto AIT"),
+mk("dry","Compat. Interiores","exec","AIT","Revestimentos especiais sobre drywall — carga e reforço"),
+mk("dry","Compat. Interiores","exec","AIT","Sancas e rebaixos de gesso — corte com posição de LED"),
+mk("dry","Aberturas","exec","ARQ","Vãos de portas — largura + folga para batente"),
+mk("dry","Aberturas","exec","DRY","Vergas drywall — montante duplo ambos os lados"),
+mk("dry","Aberturas","exec","ARQ","Contramarcos especificados por tipo de porta"),
+mk("dry","Aberturas","exec","ARQ","Nichos decorativos — dimensões e composição"),
+mk("dry","Vedações e Acústica","exec","DRY","Juntas de controle a cada 10m ou em mudanças de plano"),
+mk("dry","Vedações e Acústica","exec","DRY","Gaxeta acústica na guia inferior e superior"),
+mk("dry","Vedações e Acústica","exec","DRY","Fita telada e massa nas juntas entre chapas"),
+mk("dry","Vedações e Acústica","exec","DRY","Selante acrílico perimetral — parede × teto e piso"),
+mk("dry","Vedações e Acústica","exec","DRY","Lã mineral — espessura e densidade especificadas"),
+mk("dry","Vedações e Acústica","exec","DRY","Rw mínimo por ambiente — NBR 15575"),
+mk("dry","Forros","exec","DRY","Planta de forro cotada com alturas por ambiente"),
+mk("dry","Forros","exec","DRY","Tipos: liso, com sanca, rebaixado, curvo — tabela de tipos"),
+mk("dry","Forros","exec","DRY","Pendurais — diâmetro, espaçamento, fixação na laje"),
+mk("dry","Forros","exec","DRY","Alçapões de manutenção locados sobre cada shaft"),
+mk("dry","Documentação","exec","ARQ","Memorial descritivo — todos os sistemas"),
+mk("dry","Documentação","exec","DRY","Quantitativo de chapas por tipo e ambiente (m²)"),
+mk("dry","Documentação","exec","DRY","Quantitativo de perfis — montantes e guias (m linear)"),
+mk("dry","Documentação","exec","DRY","Lista de reforços por unidade e localização"),
+mk("dry","Documentação","exec","ARQ","ART ou RRT do responsável técnico"),
+mk("dry","Famílias e Tipos","bim","BIM","Tipos de parede multicamada com composição exata","m² por material: chapa, lã, revestimento"),
+mk("dry","Famílias e Tipos","bim","BIM","Rw (dB) e fabricante associados ao tipo de parede"),
+mk("dry","Famílias e Tipos","bim","BIM","Categorias BIM corretas para export de quantitativos"),
+mk("dry","Reforços BIM","bim","BIM","Reforços modelados fisicamente — não como texto"),
+mk("dry","Reforços BIM","bim","BIM","Schedule de reforços por unidade extraível do modelo"),
+mk("dry","Clash Detection","bim","MEP","Clash: drywall × instalações elétricas — caixas e eletrodutos"),
+mk("dry","Clash Detection","bim","MEP","Clash: drywall × instalações hidráulicas"),
+mk("dry","Clash Detection","bim","MEP","Clash: drywall × dutos de climatização e exaustão"),
+mk("dry","Clash Detection","bim","MEP","Clash: forro × sprinklers, luminárias e detectores"),
+mk("dry","Clash Detection","bim","MEP","Shafts com encapsulamento correto e alçapão posicionado"),
+mk("dry","Clash Detection","bim","PCI","Vedação corta-fogo modelada nas passagens pelo shaft"),
+mk("dry","Quantitativos BIM","bim","BIM","Schedule de chapas por tipo — m² por ambiente e total"),
+mk("dry","Quantitativos BIM","bim","BIM","Schedule de perfis — m linear por tipo"),
+mk("dry","Quantitativos BIM","bim","BIM","Schedule de lã mineral — m² por espessura"),
+mk("dry","Quantitativos BIM","bim","BIM","Schedule de reforços — unidades por tipo"),
+mk("dry","Quantitativos BIM","bim","BIM","Schedule de esquadrias com parâmetros completos"),
+];
+
+const CAT={
+  gar:{exec:["Cotas e Geometria","Tabela de Vagas","Níveis e Caimentos","Estrutura","Pintura de Pilares","Sinalização Horizontal","Sinalização Vertical","Detalhamentos","Compat. PPCI","Compat. Hidráulica","Compat. Elétrica","Compat. Telecom","Compat. Mecânica","Acabamentos"],bim:["Geometria e Vagas","Pilares e Sinalização","Suportes MEP","Caimentos e Juntas","Quantitativos"]},
+  lixo:{exec:["Layout","Revestimentos","Hidrossanitário","Esquadrias","Proteção","Níveis","Instalações"],bim:["Conexões","Esquadrias BIM","Quantitativos"]},
+  dry:{exec:["Planta e Locação","Tipos de Parede","Reforços","Compat. Elétrica","Compat. Hidráulica","Compat. Clima","Compat. Telecom","Compat. PPCI","Compat. Interiores","Aberturas","Vedações e Acústica","Forros","Documentação"],bim:["Famílias e Tipos","Reforços BIM","Clash Detection","Quantitativos BIM"]}
+};
+
+const state={tab:"ter",zone:"gar",type:"exec",cat:"TODOS",q:"",leg:false,
+  st:Object.fromEntries(D.map(d=>[d.id,"pendente"])),
+  det:{},exp:{},customItems:[],col:{},
+  addForm:false,
+  af:{zone:"gar",type:"exec",cat:"",catNew:"",tg:"ARQ",txt:"",obs:""}
+};
+
+const SKEY='mr_pe_v4';
+async function saveAll(){try{await window.storage.set(SKEY,JSON.stringify({st:state.st,det:state.det,customItems:state.customItems}));}catch(e){}}
+async function loadAll(){
+  try{
+    const r=await window.storage.get(SKEY);
+    if(r&&r.value){
+      const s=JSON.parse(r.value);
+      if(s.st)Object.assign(state.st,s.st);
+      if(s.det)state.det=s.det;
+      if(s.customItems){
+        state.customItems=s.customItems;
+        state.customItems.forEach(i=>{if(!state.st[i.id])state.st[i.id]="pendente";});
+        state.customItems.forEach(i=>{
+          const z=i.z,tp=i.tp;
+          if(CAT[z]&&CAT[z][tp]&&!CAT[z][tp].includes(i.c))CAT[z][tp].push(i.c);
+        });
+      }
+    }
+  }catch(e){}
+  render();
+}
+
+function allItems(){return[...D,...state.customItems];}
+function zD(z){return allItems().filter(i=>i.z===z);}
+function zPct(z){const a=zD(z);const d=a.filter(i=>state.st[i.id]==="concluido").length;return a.length?Math.round(d/a.length*100):0;}
+function gPct(){const d=allItems().filter(i=>state.st[i.id]==="concluido").length;return Math.round(d/allItems().length*100);}
+function tSt(){const z=state.tab==="dry"?"dry":state.zone;const a=allItems().filter(i=>i.z===z&&i.tp===state.type);const d=a.filter(i=>state.st[i.id]==="concluido").length,p=a.filter(i=>state.st[i.id]==="pendente").length,cr=a.filter(i=>state.st[i.id]==="critico").length,an=a.filter(i=>state.st[i.id]==="andamento").length;return{tot:a.length,d,p,cr,an};}
+function vis(){const z=state.tab==="dry"?"dry":state.zone,q=state.q.toLowerCase();return allItems().filter(i=>i.z===z&&i.tp===state.type&&(state.cat==="TODOS"||i.c===state.cat)&&(!q||i.txt.toLowerCase().includes(q)||i.obs.toLowerCase().includes(q)||i.c.toLowerCase().includes(q)||i.tg.toLowerCase().includes(q)));}
+function getCats(){const z=state.tab==="dry"?"dry":state.zone;return["TODOS",...(CAT[z]?.[state.type]||[])];}
+function csq(c){const z=state.tab==="dry"?"dry":state.zone;const a=allItems().filter(i=>i.z===z&&i.tp===state.type&&i.c===c);if(!a.length)return"s-idle";if(a.every(i=>state.st[i.id]==="concluido"))return"s-done";if(a.some(i=>state.st[i.id]==="critico"))return"s-crit";if(a.some(i=>["andamento","concluido"].includes(state.st[i.id])))return"s-wip";return"s-idle";}
+function dc(tg){return(DISC[tg]||{h:"#888"}).h;}
+function tagH(tg){const c=dc(tg);return`<span class="itg" style="color:${c};background:${c}1a;border-left-color:${c}">${tg}</span>`;}
+function hasDet(id){const d=state.det[id];return d&&Object.values(d).some(v=>v&&v.toString().trim());}
+
+window.cycle=function(e,id){e.stopPropagation();state.st[id]=CYCLE[(CYCLE.indexOf(state.st[id])+1)%CYCLE.length];render();saveAll();};
+window.toggleExp=function(id){state.exp[id]=!state.exp[id];render();};
+window.setDet=function(id,key,val){if(!state.det[id])state.det[id]={};state.det[id][key]=val;saveAll();};
+window.setTab=t=>{state.tab=t;state.cat="TODOS";state.q="";render();};
+window.setZone=z=>{state.zone=z;state.cat="TODOS";render();};
+window.setType=t=>{state.type=t;state.cat="TODOS";render();};
+window.setCat=c=>{state.cat=c;render();};
+window.setQ=v=>{state.q=v;state.cat="TODOS";render();};
+window.togLeg=()=>{state.leg=!state.leg;render();};
+window.togCol=c=>{state.col[c]=!state.col[c];render();};
+window.togAdd=()=>{state.addForm=!state.addForm;render();};
+window.setAF=function(key,val){state.af[key]=val;if(['zone','type','cat','tg'].includes(key))render();};
+window.addItem=function(){
+  const af={...state.af};
+  if(!af.txt.trim())return;
+  const cat=af.cat==='__new__'?af.catNew.trim():af.cat;
+  if(!cat)return;
+  if(af.cat==='__new__'&&cat){if(!CAT[af.zone])CAT[af.zone]={exec:[],bim:[]};if(!CAT[af.zone][af.type])CAT[af.zone][af.type]=[];if(!CAT[af.zone][af.type].includes(cat))CAT[af.zone][af.type].push(cat);}
+  const nid='c'+Date.now();
+  state.customItems.push({id:nid,z:af.zone,c:cat,tp:af.type,tg:af.tg,txt:af.txt.trim(),obs:af.obs.trim(),custom:true});
+  state.st[nid]="pendente";
+  if(af.zone==='dry')state.tab='dry';else{state.tab='ter';state.zone=af.zone;}
+  state.type=af.type;state.cat=cat;
+  state.af={zone:af.zone,type:af.type,cat:af.cat,catNew:'',tg:af.tg,txt:'',obs:''};
+  state.addForm=false;
+  render();saveAll();
+};
+window.delItem=function(id){
+  state.customItems=state.customItems.filter(i=>i.id!==id);
+  delete state.st[id];delete state.det[id];delete state.exp[id];
+  render();saveAll();
+};
+
+function detPanel(item){
+  const d=state.det[item.id]||{};
+  const esc=v=>(v||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+  return`<div class="det">
+    <div class="det-grid">
+      <div class="det-f"><label class="det-lbl">Responsável</label><input class="det-in" value="${esc(d.resp)}" placeholder="Nome do responsável" oninput="setDet('${item.id}','resp',this.value)"></div>
+      <div class="det-f"><label class="det-lbl">Data Limite</label><input class="det-in" type="date" value="${d.date||''}" onchange="setDet('${item.id}','date',this.value)"></div>
+      <div class="det-f"><label class="det-lbl">Revisão</label><input class="det-in" value="${esc(d.rev)}" placeholder="R00, R01…" oninput="setDet('${item.id}','rev',this.value)"></div>
+    </div>
+    <div class="det-f" style="margin-bottom:6px"><label class="det-lbl">Notas / Apontamentos</label><textarea class="det-ta" placeholder="Registrar revisões, dúvidas, links, decisões de projeto…" oninput="setDet('${item.id}','notes',this.value)">${d.notes||''}</textarea></div>
+    <div class="det-f"><label class="det-lbl">Arquivo / Link</label><input class="det-in" value="${esc(d.link)}" placeholder="Caminho ou URL do arquivo…" oninput="setDet('${item.id}','link',this.value)"></div>
+    <div class="det-ft">
+      <span class="det-hint">Dados salvos automaticamente</span>
+      ${item.custom?`<button class="det-del" onclick="delItem('${item.id}')">Excluir item personalizado</button>`:''}
+    </div>
+  </div>`;
+}
+
+function addFormHTML(){
+  const cats=CAT[state.af.zone]?.[state.af.type]||[];
+  const valid=state.af.txt.trim()&&state.af.cat&&(state.af.cat!=='__new__'||state.af.catNew.trim());
+  return`<div class="af">
+    <div class="af-hd"><span class="af-title">Adicionar novo item</span><button class="af-close" onclick="togAdd()">×</button></div>
+    <div class="af-grid">
+      <div class="af-f"><label class="af-lbl">Aba / Zona</label>
+        <select class="af-sel" onchange="setAF('zone',this.value)">
+          <option value="gar" ${state.af.zone==="gar"?"selected":""}>Garagem</option>
+          <option value="lixo" ${state.af.zone==="lixo"?"selected":""}>Casa de Lixo</option>
+          <option value="dry" ${state.af.zone==="dry"?"selected":""}>Drywall</option>
+        </select></div>
+      <div class="af-f"><label class="af-lbl">Modo</label>
+        <select class="af-sel" onchange="setAF('type',this.value)">
+          <option value="exec" ${state.af.type==="exec"?"selected":""}>Proj. Executivo</option>
+          <option value="bim" ${state.af.type==="bim"?"selected":""}>BIM LOD 350</option>
+        </select></div>
+      <div class="af-f"><label class="af-lbl">Categoria</label>
+        <select class="af-sel" onchange="setAF('cat',this.value)">
+          <option value="">— Selecionar —</option>
+          ${cats.map(c=>`<option value="${c}" ${state.af.cat===c?"selected":""}>${c}</option>`).join("")}
+          <option value="__new__" ${state.af.cat==='__new__'?"selected":""}>+ Nova categoria</option>
+        </select></div>
+      <div class="af-f"><label class="af-lbl">Disciplina</label>
+        <select class="af-sel" onchange="setAF('tg',this.value)">
+          ${Object.keys(DISC).map(k=>`<option value="${k}" ${state.af.tg===k?"selected":""}>${k} · ${DISC[k].n}</option>`).join("")}
+        </select></div>
+    </div>
+    ${state.af.cat==='__new__'?`<div class="af-f" style="margin-bottom:8px"><label class="af-lbl">Nome da nova categoria</label><input class="af-in" placeholder="Ex: Compat. Automação" oninput="setAF('catNew',this.value)" value="${(state.af.catNew||'').replace(/"/g,'&quot;')}"></div>`:''}
+    <div class="af-f" style="margin-bottom:8px"><label class="af-lbl">Descrição do item *</label><textarea class="af-ta" placeholder="Descreva o entregável ou verificação…" oninput="setAF('txt',this.value)">${state.af.txt||''}</textarea></div>
+    <div class="af-f"><label class="af-lbl">Observação / Referência</label><input class="af-in" placeholder="Norma, nota técnica, requisito…" oninput="setAF('obs',this.value)" value="${(state.af.obs||'').replace(/"/g,'&quot;')}"></div>
+    <button class="af-btn" onclick="addItem()" ${valid?'':'disabled'}>Adicionar ao Checklist</button>
+    <p class="af-note">* Campo obrigatório · O item aparecerá na categoria selecionada com badge personalizado</p>
+  </div>`;
+}
+
+function render(){
+  const gp=gPct();
+  const garP=zPct("gar"),lixP=zPct("lixo"),dryP=zPct("dry");
+  const garAll=zD("gar"),lixAll=zD("lixo"),dryAll=zD("dry");
+  const garD=garAll.filter(i=>state.st[i.id]==="concluido").length;
+  const lixD=lixAll.filter(i=>state.st[i.id]==="concluido").length;
+  const dryD=dryAll.filter(i=>state.st[i.id]==="concluido").length;
+  const terPct=Math.round((garP+lixP)/2);
+  const ts=tSt();const cats=getCats();const vl=vis();
+  const z=state.tab==="dry"?"dry":state.zone;
+  const groups={};
+  (CAT[z]?.[state.type]||[]).forEach(c=>{const items=vl.filter(i=>i.c===c);if(items.length)groups[c]=items;});
+  if(state.cat!=="TODOS")Object.keys(groups).forEach(c=>{if(c!==state.cat)delete groups[c];});
+
+  document.getElementById("root").innerHTML=`
+<div class="mast">
+  <div class="mast-top">
+    <div>
+      <div class="mast-ey">BIM Manager · Fase Executiva · PATH</div>
+      <div class="mast-nm">MIGUEL <b>RESIDENCE</b></div>
+    </div>
+    <div class="mast-r">
+      <div class="mast-ph">Projeto Executivo</div>
+      <div class="mast-pct">${gp}%</div>
+      <div class="mast-sb">${allItems().filter(i=>state.st[i.id]==="concluido").length} / ${allItems().length} itens</div>
+    </div>
+  </div>
+  <div class="prog"><div class="pf" style="width:${gp}%"></div></div>
+</div>
+
+<div class="mtabs">
+  <button class="mt${state.tab==="ter"?" on":""}" onclick="setTab('ter')">
+    <span class="mt-co">01 · TÉRREO</span><span class="mt-nm">Garagem &amp; Casa de Lixo</span>
+    <div class="mt-br"><div class="mt-bf" style="width:${terPct}%"></div></div>
+    <div class="mt-mt"><span class="mt-pc">${terPct}%</span><span class="mt-ct">${garD+lixD}/${garAll.length+lixAll.length}</span></div>
+  </button>
+  <button class="mt${state.tab==="dry"?" on":""}" onclick="setTab('dry')" style="border-left:1px solid var(--g6)">
+    <span class="mt-co">02 · TIPO · EM PARALELO</span><span class="mt-nm">Drywall</span>
+    <div class="mt-br"><div class="mt-bf" style="width:${dryP}%"></div></div>
+    <div class="mt-mt"><span class="mt-pc">${dryP}%</span><span class="mt-ct">${dryD}/${dryAll.length}</span></div>
+  </button>
+</div>
+
+<button class="leg-t" onclick="togLeg()">
+  <span>▸ Legenda de Disciplinas — ${Object.keys(DISC).length} códigos PATH</span>
+  <span style="font-family:var(--m);font-size:8px">${state.leg?"▲ fechar":"▼ expandir"}</span>
+</button>
+${state.leg?`<div class="leg-p"><div class="leg-g">${Object.entries(DISC).map(([k,v])=>`<div class="leg-i"><div class="leg-sw" style="background:${v.h}"></div><span class="leg-c" style="color:${v.h}">${k}</span><span class="leg-n">${v.n}</span></div>`).join("")}</div></div>`:''}
+
+${state.tab==="ter"?`<div class="ztabs">
+  <button class="zt${state.zone==="gar"?" on":""}" onclick="setZone('gar')">
+    <span class="zt-co">01 · GAR</span><span class="zt-nm">Garagem</span>
+    <div class="zt-br"><div class="zt-bf" style="width:${garP}%"></div></div>
+    <div class="zt-mt"><span class="zt-pc">${garP}%</span><span class="zt-ct">${garD}/${garAll.length}</span></div>
+  </button>
+  <button class="zt${state.zone==="lixo"?" on":""}" onclick="setZone('lixo')" style="border-left:1px solid var(--g6)">
+    <span class="zt-co">02 · RES</span><span class="zt-nm">Casa de Lixo</span>
+    <div class="zt-br"><div class="zt-bf" style="width:${lixP}%"></div></div>
+    <div class="zt-mt"><span class="zt-pc">${lixP}%</span><span class="zt-ct">${lixD}/${lixAll.length}</span></div>
+  </button>
+</div>`:`<div style="padding:9px 22px;border-bottom:1px solid var(--g6);background:var(--g8)"><span style="font-family:var(--m);font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--g3)">Pavimento Tipo · Em execução paralela ao Térreo</span></div>`}
+
+<div class="modes">
+  <button class="mb${state.type==="exec"?" on":""}" onclick="setType('exec')">Projeto Executivo</button>
+  <button class="mb${state.type==="bim"?" on":""}" onclick="setType('bim')">Modelagem BIM · LOD 350</button>
+</div>
+
+<div class="stats">
+  <div class="sc"><div class="sc-n">${ts.tot}</div><div class="sc-l">Itens</div></div>
+  <div class="sc"><div class="sc-n" style="color:#1a5c38">${ts.d}</div><div class="sc-l">Concluídos</div></div>
+  <div class="sc"><div class="sc-n" style="color:#1a3060">${ts.an}</div><div class="sc-l">Andamento</div></div>
+  <div class="sc"><div class="sc-n" style="color:#7a5000">${ts.p}</div><div class="sc-l">Pendentes</div></div>
+  <div class="sc"><div class="sc-n" style="color:#800000">${ts.cr}</div><div class="sc-l">Críticos</div></div>
+</div>
+
+<div class="toolbar">
+  <div class="srch-w">
+    <span class="srch-ic">⌕</span>
+    <input class="srch-in" type="text" placeholder="Buscar item, disciplina, categoria…" value="${state.q}" oninput="setQ(this.value)">
+    ${state.q?`<span class="srch-ct">${vl.length}r</span>`:''}
+  </div>
+  <button class="btn-add${state.addForm?" active":""}" onclick="togAdd()">
+    <div class="btn-add-dot">${state.addForm?'×':'+'}</div>
+    ${state.addForm?"Cancelar":"Novo Item"}
+  </button>
+</div>
+
+${state.addForm?addFormHTML():''}
+
+<div class="cats">${cats.map(c=>`<button class="cb${state.cat===c?" on":""}" onclick="setCat('${c.replace(/'/g,"\\'")}'">${c}</button>`).join("")}</div>
+
+<div>
+${Object.keys(groups).length===0?`<div class="empty">Nenhum item encontrado</div>`:''}
+${Object.entries(groups).map(([cat,items])=>{
+  const done=items.filter(i=>state.st[i.id]==="concluido").length;
+  const coll=state.col[cat];
+  return`<div class="cblk">
+    <div class="chd" onclick="togCol('${cat.replace(/'/g,"\\'")}')">
+      <div class="chd-l"><div class="csq ${csq(cat)}"></div><span class="clbl">${cat}</span></div>
+      <div class="cr"><span class="cprog">${done}/${items.length}</span><span class="carr" style="transform:rotate(${coll?"180deg":"0"})">&darr;</span></div>
+    </div>
+    ${coll?'':
+    `<div class="ci">${items.map(item=>{
+      const st=state.st[item.id];const exp=state.exp[item.id];const hd=hasDet(item.id);
+      return`<div class="item" onclick="toggleExp('${item.id}')">
+        <div class="il">
+          <div class="iline l-${st}"></div>
+          <div class="inn">
+            <div class="itw">${tagH(item.tg)}${item.custom?'<span class="cust-badge">personalizado</span>':''}</div>
+            <div class="itxt">${item.txt}</div>
+            ${item.obs?`<div class="iobs">${item.obs}</div>`:''}
+            ${hd?`<div class="idet-badge">✎ com notas</div>`:''}
+          </div>
+        </div>
+        <div class="ir">
+          <button class="iexp" onclick="event.stopPropagation();toggleExp('${item.id}')">${exp?'▲':'▼'}</button>
+          <div class="pill p-${st}" onclick="cycle(event,'${item.id}')"><div class="pd d-${st}"></div>${PL[st]}</div>
+        </div>
+      </div>
+      ${exp?detPanel(item):''}`;
+    }).join('')}</div>`}
+  </div>`;}).join('')}
+</div>`;
+}
+loadAll();
+</script>

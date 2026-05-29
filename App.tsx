@@ -64,7 +64,8 @@ export const App = () => {
         collaborationToast,
         setActiveTab: ctxSetActiveTab,
         showProfileModal,
-        setShowProfileModal
+        setShowProfileModal,
+        isViewer
 
     } = useApp();
 
@@ -525,25 +526,7 @@ export const App = () => {
 
 
     const handleLogin = () => {
-
         setShowLoginModal(true);
-
-    };
-
-
-
-    const handleLoginSubmit = (name: string) => {
-
-        if (name) {
-
-            setCurrentUser({ name, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=FFB7B2&color=fff` });
-
-            setNotification(`Bem-vindo, ${name}!`);
-
-            setShowLoginModal(false);
-
-        }
-
     };
 
     const handleProfileComplete = (profile: { name: string; role: string; avatarUrl: string; companyTime?: string }) => {
@@ -631,27 +614,27 @@ export const App = () => {
 
 
 
-    const onUpdateCompany = (id: number, name: string, logoUrl?: string) => { setDb(prev => ({ ...prev, companies: prev.companies.map(c => c.id === id ? { ...c, name, logoUrl } : c) })); addLog("SISTEMA", `CLIENTE ATUALIZADO: ${name}`); };
+    const onUpdateCompany = (id: number, name: string, logoUrl?: string) => { if (isViewer) return; setDb(prev => ({ ...prev, companies: prev.companies.map(c => c.id === id ? { ...c, name, logoUrl } : c) })); addLog("SISTEMA", `CLIENTE ATUALIZADO: ${name}`); };
 
-    const onDeleteScope = useCallback((sid: string) => { if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.filter(s => s.id !== sid) } : p) })); if (selectedScopeIdForFiles === sid) setSelectedScopeIdForFiles(null); addLog("SISTEMA", `DISCIPLINA REMOVIDA`); }, [activeProject, selectedScopeIdForFiles, addLog]);
+    const onDeleteScope = useCallback((sid: string) => { if (isViewer) return; if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.filter(s => s.id !== sid) } : p) })); if (selectedScopeIdForFiles === sid) setSelectedScopeIdForFiles(null); addLog("SISTEMA", `DISCIPLINA REMOVIDA`); }, [activeProject, selectedScopeIdForFiles, addLog, isViewer]);
 
-    const onDeleteFile = (sid: string, fidx: number) => { if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, fileLinks: s.fileLinks?.filter((_, i) => i !== fidx) } : s) } : p) })); addLog("SISTEMA", `ARQUIVO REMOVIDO`); };
+    const onDeleteFile = (sid: string, fidx: number) => { if (isViewer) return; if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, fileLinks: s.fileLinks?.filter((_, i) => i !== fidx) } : s) } : p) })); addLog("SISTEMA", `ARQUIVO REMOVIDO`); };
 
-    const onUpdatePowerBiUrl = (url: string) => { if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, powerBiUrl: url } : p) })); };
+    const onUpdatePowerBiUrl = (url: string) => { if (isViewer) return; if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, powerBiUrl: url } : p) })); };
 
 
 
-    const onDeleteEvent = useCallback((sid: string, eid: string) => { if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `AÇÃO REMOVIDA`); }, [activeProject, addLog]);
+    const onDeleteEvent = useCallback((sid: string, eid: string) => { if (isViewer) return; if (!activeProject) return; const projectId = activeProject.id; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.filter(e => e.id !== eid) } : s) } : p) })); addLog("SISTEMA", `AÇÃO REMOVIDA`); }, [activeProject, addLog, isViewer]);
 
-    const onToggleDependency = (sid: string, eid: string, targetId: string) => { const projectId = activeProject?.id; if (!projectId) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies || []), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) })); };
+    const onToggleDependency = (sid: string, eid: string, targetId: string) => { if (isViewer) return; const projectId = activeProject?.id; if (!projectId) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(ev => ev.id === eid ? { ...ev, dependencies: ev.dependencies?.find(d => d.id === targetId) ? ev.dependencies.filter(d => d.id !== targetId) : [...(ev.dependencies || []), { id: targetId, type: 'FS' as const }] } : ev) } : s) } : p) })); };
 
-    const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { const projectId = activeProject?.id; if (!projectId) return; const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(e => e.id === eid ? { ...e, dependencies: (e.dependencies || []).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type) + 1) % types.length] } : d) } : e) } : s) } : p) })); };
+    const onChangeDependencyType = (sid: string, eid: string, targetId: string) => { if (isViewer) return; const projectId = activeProject?.id; if (!projectId) return; const types = ['FS', 'SS', 'FF', 'SF'] as const; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === sid ? { ...s, events: s.events.map(e => e.id === eid ? { ...e, dependencies: (e.dependencies || []).map(d => d.id === targetId ? { ...d, type: types[(types.indexOf(d.type) + 1) % types.length] } : d) } : e) } : s) } : p) })); };
 
-    const onAddDependency = useCallback((sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (!activeProject) return; const projectId = activeProject.id; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); }, [activeProject, setNotification, addLog]);
+    const onAddDependency = useCallback((sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => { if (isViewer) return; if (!activeProject) return; const projectId = activeProject.id; const sourceScope = activeProject.scopes.find(s => s.events.some(e => e.id === sourceId)); if (!sourceScope) return; const targetScope = activeProject.scopes.find(s => s.events.some(e => e.id === targetId)); if (!targetScope) return; const targetEvent = targetScope.events.find(e => e.id === targetId); if (targetEvent?.dependencies?.some(d => d.id === sourceId)) { setNotification("Vínculo já existe!"); return; } setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === targetScope.id ? { ...s, events: s.events.map(e => e.id === targetId ? { ...e, dependencies: [...(e.dependencies || []), { id: sourceId, type }] } : e) } : s) } : p) })); addLog("SISTEMA", `VÍNCULO CRIADO: ${type}`); }, [activeProject, setNotification, addLog, isViewer]);
 
-    const onDeleteProject = (id: number) => { setDb(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), activeProjectId: prev.activeProjectId === id ? null : prev.activeProjectId })); };
+    const onDeleteProject = (id: number) => { if (isViewer) return; setDb(prev => ({ ...prev, projects: prev.projects.filter(p => p.id !== id), activeProjectId: prev.activeProjectId === id ? null : prev.activeProjectId })); };
 
-    const onEditProject = (id: number, name: string, logo?: string, cover?: string) => { setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, name, logoUrl: logo, coverUrl: cover, updatedAt: new Date().toISOString() } : p) })); };
+    const onEditProject = (id: number, name: string, logo?: string, cover?: string) => { if (isViewer) return; setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === id ? { ...p, name, logoUrl: logo, coverUrl: cover, updatedAt: new Date().toISOString() } : p) })); };
 
 
 
@@ -771,6 +754,7 @@ export const App = () => {
     }, [activeProject?.id, activeProject?.updatedAt]);
 
     const onUpdateProjectDetails = useCallback((field: keyof ProjectDetails, value: ProjectDetails[keyof ProjectDetails]) => {
+        if (isViewer) return;
         if (!activeProject) return;
         const projectId = activeProject.id;
         setDb(prev => ({
@@ -784,7 +768,7 @@ export const App = () => {
                 updatedAt: new Date().toISOString()
             } : p)
         }));
-    }, [activeProject]);
+    }, [activeProject, isViewer]);
 
     const progressPercentage = useMemo(() => { if (!activeProject) return 0; const start = new Date(activeProject.createdAt); const end = new Date(projectBounds.end); const today = new Date(); if (today < start) return 0; if (today > end) return 100; const totalDuration = end.getTime() - start.getTime(); const elapsed = today.getTime() - start.getTime(); if (totalDuration <= 0) return 0; return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100); }, [activeProject, projectBounds]);
 
@@ -2168,6 +2152,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onReorder={(newCompanies) => setDb(prev => ({ ...prev, companies: newCompanies }))}
 
+                isViewer={isViewer}
+
             />
 
 
@@ -2193,6 +2179,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 onReorder={(newLods) => setDb(prev => ({ ...prev, lods: newLods }))}
 
                 onUpdatePhase={(lodCode, info) => {
+                    if (isViewer) return;
                     if (!activeProject) return;
                     const projectId = activeProject.id;
                     setDb(prev => ({
@@ -2205,6 +2192,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                     }));
                     addLog("SISTEMA", `FASE ${lodCode}: ${info.status === 'done' ? 'CONCLUÍDA' : info.status === 'active' ? 'INICIADA' : 'RESETADA'}`);
                 }}
+
+                isViewer={isViewer}
 
             />
 
@@ -2219,6 +2208,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 projects={db.projects.filter(p => String(p.companyId) === String(db.activeCompanyId))}
 
                 onClose={() => setShowProjectModal(false)}
+
+                isViewer={isViewer}
 
                 onSelect={(id) => { setDb(prev => ({ ...prev, activeProjectId: id })); setShowProjectModal(false); }}
 
@@ -2269,13 +2260,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
             <LoginModal
-
                 isOpen={showLoginModal}
-
                 onClose={() => setShowLoginModal(false)}
-
-                onLogin={handleLoginSubmit}
-
             />
 
             <ProfileCompletionModal
@@ -2445,79 +2431,35 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
             <ChecklistModal
-
                 isOpen={showChecklistModal}
-
                 event={activeChecklistIds ? activeProject?.scopes.find(s => s.id === activeChecklistIds.sid)?.events.find(e => e.id === activeChecklistIds.eid) || null : null}
-
                 project={activeProject}
-
                 onClose={() => setShowChecklistModal(false)}
-
                 onEdit={() => {
-
+                    if (isViewer) return;
                     if (activeChecklistIds) {
-
                         setActiveScopeIdForEvent(activeChecklistIds.sid);
-
                         setEditingEventId(activeChecklistIds.eid);
-
                         setShowChecklistModal(false);
-
                         setShowEventModal(true);
-
                     }
-
                 }}
-
-                onToggleCheck={(idx) => {
-
+                onUpdateChecklist={(updatedChecklist) => {
+                    if (isViewer) return;
                     if (!activeProject || !activeChecklistIds) return;
-
                     const projectId = activeProject.id;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: e.checklist.map((it, i) => i === idx ? { ...it, done: !it.done } : it) } : e) } : s) } : p) }));
-
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: updatedChecklist } : e) } : s) } : p) }));
                 }}
-
                 onComplete={() => {
-
+                    if (isViewer) return;
                     if (!activeProject || !activeChecklistIds) return;
-
                     const projectId = activeProject.id;
                     setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, completed: !e.completed } : e) } : s) } : p) }));
-
                     setShowChecklistModal(false);
-
                 }}
-
                 onToggleLink={(targetId) => onAddDependency(activeChecklistIds!.eid, targetId, 'FS')}
-
                 onChangeType={(targetId) => onChangeDependencyType(activeChecklistIds!.sid, activeChecklistIds!.eid, targetId)}
-
-                onAddItem={(text) => {
-                    if (!activeProject || !activeChecklistIds) return;
-                    const projectId = activeProject.id;
-                    const cleanText = text.replace(/^[\s\-\*•]+(\[[\sx]\]\s*)?/i, '').trim() || text;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? {
-                        ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? {
-                            ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? {
-                                ...e, checklist: [...(e.checklist || []), { text: cleanText, done: false }]
-                            } : e)
-                        } : s)
-                    } : p) }));
-                }}
-
-                onDeleteItem={(idx) => {
-                    if (!activeProject || !activeChecklistIds) return;
-                    const projectId = activeProject.id;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? {
-                        ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? {
-                            ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? {
-                                ...e, checklist: e.checklist.filter((_, i) => i !== idx)
-                            } : e)
-                        } : s)
-                    } : p) }));
-                }}
+                isViewer={isViewer}
 
             />
 
@@ -2531,9 +2473,11 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onClose={() => setShowTeamModal(false)}
 
-                onAdd={(name) => setDb(prev => ({ ...prev, team: [...prev.team, name] }))}
+                onAdd={(name) => { if (isViewer) return; setDb(prev => ({ ...prev, team: [...prev.team, name] })); }}
 
-                onRemove={(idx) => setDb(prev => ({ ...prev, team: prev.team.filter((_, i) => i !== idx) }))}
+                onRemove={(idx) => { if (isViewer) return; setDb(prev => ({ ...prev, team: prev.team.filter((_, i) => i !== idx) })); }}
+
+                isViewer={isViewer}
 
             />
 
@@ -2548,6 +2492,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 onClose={() => setShowSettingsModal(false)}
 
                 onSave={(start, end) => {
+
+                    if (isViewer) return;
 
                     if (!activeProject) return;
 
@@ -2578,6 +2524,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onImportJSON={handleImportJSON}
 
+                isViewer={isViewer}
+
             />
 
 
@@ -2590,13 +2538,15 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 onClose={() => setShowDisciplinesModal(false)}
 
-                onAdd={(d) => setDb(prev => ({ ...prev, disciplines: [...prev.disciplines, d] }))}
+                onAdd={(d) => { if (isViewer) return; setDb(prev => ({ ...prev, disciplines: [...prev.disciplines, d] })); }}
 
-                onUpdate={(oldCode, d) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.map(item => item.code === oldCode ? d : item) }))}
+                onUpdate={(oldCode, d) => { if (isViewer) return; setDb(prev => ({ ...prev, disciplines: prev.disciplines.map(item => item.code === oldCode ? d : item) })); }}
 
-                onRemove={(code) => setDb(prev => ({ ...prev, disciplines: prev.disciplines.filter(d => d.code !== code) }))}
+                onRemove={(code) => { if (isViewer) return; setDb(prev => ({ ...prev, disciplines: prev.disciplines.filter(d => d.code !== code) })); }}
 
-                onReorder={(list) => setDb(prev => ({ ...prev, disciplines: list }))}
+                onReorder={(list) => { if (isViewer) return; setDb(prev => ({ ...prev, disciplines: list })); }}
+
+                isViewer={isViewer}
 
             />
 
@@ -2713,60 +2663,87 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                         {/* Stats Panel - tabs */}
                         {hasProject && (
-                        <div className="ds-card p-5 flex flex-col gap-4 relative overflow-hidden">
+                        <div className="ds-card p-6 flex flex-col gap-5 relative overflow-hidden bg-theme-card/65 backdrop-blur-xl border border-theme-divider/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.06)] rounded-3xl">
 
                             {/* Tab buttons */}
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="grid grid-cols-4 gap-2.5">
                                 {[
-                                    { id: 'total',      label: 'Total',      value: activeProject?.scopes.length || 0, color: 'indigo' },
-                                    { id: 'progress',   label: 'Andamento',  value: stats.inProgress,                  color: 'orange' },
-                                    { id: 'done',       label: 'Feito',      value: stats.don,                         color: 'emerald' },
-                                    { id: 'efficiency', label: 'Tempo',      value: `${Math.round(stats.totalTime / 3600)}h`, color: 'pink' },
+                                    { id: 'total',      label: 'Total',      value: activeProject?.scopes.length || 0, color: 'indigo', icon: 'folder_open' },
+                                    { id: 'progress',   label: 'Andamento',  value: stats.inProgress,                  color: 'orange', icon: 'trending_up' },
+                                    { id: 'done',       label: 'Feito',      value: stats.don,                         color: 'emerald', icon: 'check_circle' },
+                                    { id: 'efficiency', label: 'Tempo',      value: `${Math.round(stats.totalTime / 3600)}h`, color: 'pink', icon: 'timer' },
                                 ].map(tab => {
                                     const active = activeHealthTab === tab.id;
-                                    const colors: Record<string, { num: string; bg: string; border: string; activeBg: string }> = {
-                                        indigo:  { num: 'text-indigo-500',  bg: 'bg-theme-card',       border: 'border-indigo-300',  activeBg: 'bg-indigo-500/10'  },
-                                        orange:  { num: 'text-theme-orange',bg: 'bg-theme-card',       border: 'border-orange-300',  activeBg: 'bg-orange-500/10'  },
-                                        emerald: { num: 'text-emerald-500', bg: 'bg-theme-card',       border: 'border-emerald-300', activeBg: 'bg-emerald-500/10' },
-                                        pink:    { num: 'text-pink-500',    bg: 'bg-theme-card',       border: 'border-pink-300',    activeBg: 'bg-pink-500/10'    },
+                                    const colors: Record<string, { num: string; bg: string; border: string; activeBg: string; shadow: string }> = {
+                                        indigo:  { num: 'text-indigo-500',  bg: 'bg-theme-card',       border: 'border-indigo-500/50',  activeBg: 'bg-indigo-500/10', shadow: 'shadow-[0_0_20px_rgba(99,102,241,0.15)]' },
+                                        orange:  { num: 'text-theme-orange',bg: 'bg-theme-card',       border: 'border-theme-orange/50',  activeBg: 'bg-theme-orange/10', shadow: 'shadow-[0_0_20px_rgba(232,80,40,0.15)]' },
+                                        emerald: { num: 'text-emerald-500', bg: 'bg-theme-card',       border: 'border-emerald-500/50', activeBg: 'bg-emerald-500/10', shadow: 'shadow-[0_0_20px_rgba(16,185,129,0.15)]' },
+                                        pink:    { num: 'text-pink-500',    bg: 'bg-theme-card',       border: 'border-pink-500/50',    activeBg: 'bg-pink-500/10', shadow: 'shadow-[0_0_20px_rgba(236,72,153,0.15)]' },
                                     };
                                     const c = colors[tab.color];
                                     return (
                                         <button key={tab.id} onClick={() => setActiveHealthTab(tab.id as any)}
-                                            className={`flex flex-col items-center py-3 rounded-2xl border transition-all ${active ? `${c.activeBg} ${c.border} shadow-sm scale-105` : `${c.bg} border-transparent hover:bg-theme-highlight`}`}>
-                                            <span className={`text-xl font-black ${c.num}`}>{tab.value}</span>
-                                            <span className="text-[8px] font-bold uppercase text-theme-textMuted mt-0.5 tracking-wider">{tab.label}</span>
+                                            className={`flex flex-col items-center justify-between py-3.5 px-2 rounded-2xl border transition-all duration-300 relative overflow-hidden ${
+                                                active 
+                                                    ? `${c.activeBg} ${c.border} ${c.shadow} scale-[1.03] -translate-y-0.5` 
+                                                    : 'bg-theme-bg/30 border-transparent hover:bg-theme-highlight hover:border-theme-divider/40'
+                                            }`}
+                                        >
+                                            {active && <div className={`absolute top-0 inset-x-3 h-[3px] rounded-full ${tab.color === 'indigo' ? 'bg-indigo-500' : tab.color === 'orange' ? 'bg-theme-orange' : tab.color === 'emerald' ? 'bg-emerald-500' : 'bg-pink-500'}`} />}
+                                            <span className={`material-symbols-outlined text-xs ${active ? c.num : 'text-theme-textMuted'} mb-1`}>{tab.icon}</span>
+                                            <span className={`text-lg font-black ${active ? c.num : 'text-theme-text'}`}>{tab.value}</span>
+                                            <span className="text-[7.5px] font-black uppercase text-theme-textMuted mt-1 tracking-wider">{tab.label}</span>
                                         </button>
                                     );
                                 })}
                             </div>
 
                             {/* Tab content */}
-                            <div className="border-t border-dashed border-theme-divider pt-4 min-h-[160px]">
+                            <div className="border-t border-dashed border-theme-divider/70 pt-4 min-h-[170px]">
 
                                 {/* TOTAL — disciplinas com barra */}
                                 {activeHealthTab === 'total' && (
                                     <div className="animate-fadeIn space-y-1">
-                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3">Disciplinas & Escopo</p>
+                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3.5 flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-xs">folder_open</span> Disciplinas & Escopo
+                                        </p>
                                         {activeProject?.scopes.length === 0 && <p className="text-xs text-theme-textMuted">Nenhuma disciplina cadastrada.</p>}
-                                        <div className="space-y-2.5 max-h-[130px] overflow-y-auto scroller pr-1">
+                                        <div className="space-y-3 max-h-[145px] overflow-y-auto scroller pr-1">
                                             {activeProject?.scopes.map(s => {
                                                 const evTotal = s.events.reduce((acc, ev) => acc + (ev.checklist.length || 1), 0);
                                                 const evDone  = s.events.reduce((acc, ev) => acc + (ev.checklist.length > 0 ? ev.checklist.filter(i => i.done).length : (ev.completed ? 1 : 0)), 0);
                                                 const pct = evTotal > 0 ? Math.round((evDone / evTotal) * 100) : 0;
-                                                const statusMap: Record<string, string> = { stopped: 'Parado', walking: 'Andamento', running: 'Acelerado', done: 'Concluído' };
+                                                const statusMap: Record<string, { label: string; bg: string; text: string }> = { 
+                                                    stopped: { label: 'Parado', bg: 'bg-red-500/10', text: 'text-red-500' }, 
+                                                    walking: { label: 'Andamento', bg: 'bg-orange-500/10', text: 'text-theme-orange' }, 
+                                                    running: { label: 'Acelerado', bg: 'bg-blue-500/10', text: 'text-blue-500' }, 
+                                                    done: { label: 'Concluído', bg: 'bg-emerald-500/10', text: 'text-emerald-500' } 
+                                                };
+                                                const currentStatus = statusMap[s.status] || { label: s.status, bg: 'bg-theme-bg', text: 'text-theme-textMuted' };
                                                 return (
-                                                    <div key={s.id}>
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
-                                                                <span className="text-[10px] font-bold text-theme-text uppercase">{s.name}</span>
-                                                                <span className="text-[8px] text-theme-textMuted">· {statusMap[s.status] || s.status}</span>
+                                                    <div key={s.id} className="bg-theme-bg/30 border border-theme-divider/30 rounded-xl p-2.5 hover:bg-theme-highlight/40 transition-colors">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: s.colorClass }} />
+                                                                <span className="text-[10px] font-bold text-theme-text uppercase tracking-wide">{s.name}</span>
                                                             </div>
-                                                            <span className="text-[9px] font-black text-theme-textMuted">{pct}%</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${currentStatus.bg} ${currentStatus.text}`}>
+                                                                    {currentStatus.label}
+                                                                </span>
+                                                                <span className="text-[10px] font-black text-theme-text">{pct}%</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="w-full h-1.5 rounded-full bg-theme-divider overflow-hidden">
-                                                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: s.colorClass || '#E85028' }} />
+                                                        <div className="w-full h-1.5 rounded-full bg-theme-divider overflow-hidden relative">
+                                                            <div className="h-full rounded-full transition-all duration-700 relative overflow-hidden" 
+                                                                style={{ 
+                                                                    width: `${pct}%`, 
+                                                                    backgroundColor: s.colorClass || '#E85028',
+                                                                    boxShadow: `0 0 8px ${s.colorClass || '#E85028'}`
+                                                                }} 
+                                                            >
+                                                                <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:8px_8px] animate-[progressStripes_1s_linear_infinite]" />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
@@ -2778,8 +2755,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                 {/* ANDAMENTO — tarefas ativas */}
                                 {activeHealthTab === 'progress' && (
                                     <div className="animate-fadeIn">
-                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3">Tarefas em Execução</p>
-                                        <div className="space-y-2 max-h-[130px] overflow-y-auto scroller pr-1">
+                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3.5 flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-xs">trending_up</span> Tarefas em Execução
+                                        </p>
+                                        <div className="space-y-2.5 max-h-[145px] overflow-y-auto scroller pr-1">
                                             {activeProject?.scopes.flatMap(s =>
                                                 s.events.filter(ev => !ev.completed && parseLocalDate(ev.startDate) <= new Date()).map(ev => ({ ev, scope: s }))
                                             ).length === 0 && <p className="text-xs text-theme-textMuted">Nenhuma tarefa em andamento.</p>}
@@ -2787,12 +2766,24 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                                 s.events.filter(ev => !ev.completed && parseLocalDate(ev.startDate) <= new Date()).map(ev => {
                                                     const isLate = parseLocalDate(ev.endDate) < new Date();
                                                     return (
-                                                        <div key={ev.id} className="flex items-center gap-2 p-2 rounded-xl bg-theme-highlight">
-                                                            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
-                                                            <span className="text-[10px] font-bold text-theme-text flex-1 truncate">{ev.title}</span>
-                                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${isLate ? 'bg-red-500/15 text-red-400' : 'bg-orange-500/15 text-orange-400'}`}>
-                                                                {isLate ? 'ATRASADO' : 'ATIVO'}
-                                                            </span>
+                                                        <div key={ev.id} className="flex items-center justify-between p-3 rounded-xl bg-theme-bg/40 border border-theme-divider/40 hover:border-theme-divider transition-all hover:bg-theme-highlight/40 gap-3">
+                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                <div className="w-1.5 h-10 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-[10px] font-bold text-theme-text truncate">{ev.title}</span>
+                                                                    <span className="text-[8px] text-theme-textMuted uppercase tracking-wider truncate mt-0.5 flex items-center gap-1">
+                                                                        <span className="material-symbols-outlined text-[10px]">folder</span> {s.name}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col items-end shrink-0 gap-1">
+                                                                <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${isLate ? 'bg-red-500/10 text-red-500 border border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.1)]' : 'bg-orange-500/10 text-theme-orange border border-orange-500/20'}`}>
+                                                                    {isLate ? 'ATRASADO' : 'ATIVO'}
+                                                                </span>
+                                                                <span className="text-[8px] text-theme-textMuted font-mono flex items-center gap-0.5">
+                                                                    <span className="material-symbols-outlined text-[9px]">calendar_today</span> {formatLocalDate(ev.endDate)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     );
                                                 })
@@ -2803,40 +2794,44 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                 {/* FEITO — gauge + saúde */}
                                 {activeHealthTab === 'done' && (
-                                    <div className="animate-fadeIn flex flex-col items-center gap-2">
-                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted self-start">Saúde Geral</p>
-                                        <div className="relative w-28 h-28">
-                                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                                                <defs>
-                                                    <linearGradient id="gaugeGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                        <stop offset="0%" stopColor="#2DD4BF" />
-                                                        <stop offset="100%" stopColor="#FF6B4A" />
-                                                    </linearGradient>
-                                                </defs>
-                                                <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="9" fill="transparent" className="text-theme-divider/40" />
-                                                <circle cx="50" cy="50" r="40" stroke="url(#gaugeGrad2)" strokeWidth="9" fill="transparent"
-                                                    strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * stats.rate / 100)}
-                                                    strokeLinecap="round" className="transition-all duration-1000 ease-out" />
-                                            </svg>
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <span className="text-2xl font-black text-theme-text leading-none">{stats.rate}%</span>
-                                                <span className={`text-[8px] font-bold uppercase mt-1 px-2 py-0.5 rounded-full border ${projectHealth.border} ${projectHealth.bg} ${projectHealth.color}`}>{projectHealth.label}</span>
+                                    <div className="animate-fadeIn flex flex-col items-center gap-3">
+                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted self-start flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-xs">verified_user</span> Saúde Geral do Projeto
+                                        </p>
+                                        <div className="flex items-center gap-6 w-full justify-center">
+                                            <div className="relative w-24 h-24 shrink-0">
+                                                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                                    <defs>
+                                                        <linearGradient id="gaugeGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                            <stop offset="0%" stopColor="#10b981" />
+                                                            <stop offset="100%" stopColor="#3b82f6" />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="7" fill="transparent" className="text-theme-divider/30" />
+                                                    <circle cx="50" cy="50" r="40" stroke="url(#gaugeGrad2)" strokeWidth="8" fill="transparent"
+                                                        strokeDasharray="251.2" strokeDashoffset={251.2 - (251.2 * stats.rate / 100)}
+                                                        strokeLinecap="round" className="transition-all duration-1000 ease-out" 
+                                                        style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' }}
+                                                    />
+                                                </svg>
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                    <span className="text-xl font-black text-theme-text leading-none">{stats.rate}%</span>
+                                                    <span className="text-[6.5px] font-bold text-theme-textMuted uppercase mt-1">Concluído</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-6">
-                                            <div className="text-center">
-                                                <span className="text-[9px] font-bold text-theme-textMuted block uppercase">Feito</span>
-                                                <span className="text-sm font-black text-theme-cyan">{stats.don}</span>
-                                            </div>
-                                            <div className="h-6 w-px bg-theme-divider"></div>
-                                            <div className="text-center">
-                                                <span className="text-[9px] font-bold text-theme-textMuted block uppercase">Total</span>
-                                                <span className="text-sm font-black text-theme-text">{stats.tot}</span>
-                                            </div>
-                                            <div className="h-6 w-px bg-theme-divider"></div>
-                                            <div className="text-center">
-                                                <span className="text-[9px] font-bold text-theme-textMuted block uppercase">Atrasado</span>
-                                                <span className={`text-sm font-black ${stats.lat > 0 ? 'text-red-400' : 'text-theme-textMuted'}`}>{stats.lat}</span>
+                                            <div className="flex flex-col gap-1.5 flex-1 max-w-[150px]">
+                                                <div className="flex items-center justify-between bg-theme-bg/30 border border-theme-divider/40 rounded-xl px-2.5 py-1">
+                                                    <span className="text-[7.5px] font-black text-theme-textMuted uppercase">Status</span>
+                                                    <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded border ${projectHealth.border} ${projectHealth.bg} ${projectHealth.color} tracking-wider`}>{projectHealth.label}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-theme-bg/30 border border-theme-divider/40 rounded-xl px-2.5 py-1">
+                                                    <span className="text-[7.5px] font-black text-theme-textMuted uppercase">Feito</span>
+                                                    <span className="text-[10px] font-black text-theme-text">{stats.don} / {stats.tot}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-theme-bg/30 border border-theme-divider/40 rounded-xl px-2.5 py-1">
+                                                    <span className="text-[7.5px] font-black text-theme-textMuted uppercase">Atraso</span>
+                                                    <span className={`text-[10px] font-black ${stats.lat > 0 ? 'text-red-400' : 'text-theme-textMuted'}`}>{stats.lat}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -2845,22 +2840,55 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                 {/* TEMPO — horas por disciplina */}
                                 {activeHealthTab === 'efficiency' && (
                                     <div className="animate-fadeIn">
-                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3">Tempo Investido</p>
-                                        <div className="flex items-end gap-2 mb-4">
-                                            <span className="text-4xl font-black text-pink-500 leading-none">{Math.round(stats.totalTime / 3600)}</span>
-                                            <span className="text-sm text-theme-textMuted mb-1">horas</span>
-                                            <div className="h-5 w-px bg-theme-divider mx-2 mb-1"></div>
-                                            <span className="text-sm font-bold text-theme-textMuted mb-1">{activeProject?.timeLogs?.length || 0} sessões</span>
-                                        </div>
-                                        <div className="space-y-1.5 max-h-[70px] overflow-y-auto scroller pr-1">
+                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-theme-textMuted mb-3 flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-xs">timer</span> Tempo Investido
+                                        </p>
+
+                                        {/* Running Timer Live Alert */}
+                                        {activeTimer ? (
+                                            <div className="mb-3.5 bg-pink-500/10 border border-pink-500/35 rounded-xl p-3 flex items-center justify-between gap-2 shadow-[0_0_15px_rgba(236,72,153,0.08)] animate-pulse">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-2 h-2 rounded-full bg-pink-500 shrink-0 shadow-[0_0_8px_#ec4899] animate-ping" />
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[8px] font-black text-pink-500 uppercase tracking-widest leading-none">Rastreando Agora</span>
+                                                        <span className="text-[10px] font-bold text-theme-text truncate mt-1">{activeTimer.activity}</span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs font-mono font-black text-pink-500 shrink-0 bg-pink-500/15 px-2 py-0.5 rounded border border-pink-500/25">{formatTime(elapsedTime)}</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-end gap-2 mb-3.5 bg-theme-bg/30 border border-theme-divider/40 rounded-xl p-3">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-3xl font-black text-pink-500 leading-none">{Math.round(stats.totalTime / 3600)}</span>
+                                                    <span className="text-[9px] font-black uppercase text-theme-textMuted">Horas</span>
+                                                </div>
+                                                <div className="h-6 w-px bg-theme-divider mx-2"></div>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-lg font-black text-theme-text">{activeProject?.timeLogs?.length || 0}</span>
+                                                    <span className="text-[9px] font-black uppercase text-theme-textMuted">Sessões</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2 max-h-[85px] overflow-y-auto scroller pr-1">
+                                            {activeProject?.scopes.length === 0 && <p className="text-xs text-theme-textMuted">Sem dados de tempo.</p>}
                                             {activeProject?.scopes.map(s => {
                                                 const scopeTime = activeProject.timeLogs?.filter(l => l.scopeId === s.id).reduce((a, l) => a + l.duration, 0) || 0;
+                                                const totalLoggedSec = activeProject.timeLogs?.reduce((a, l) => a + l.duration, 0) || 0;
+                                                const pct = totalLoggedSec > 0 ? Math.round((scopeTime / totalLoggedSec) * 100) : 0;
                                                 if (scopeTime === 0) return null;
                                                 return (
-                                                    <div key={s.id} className="flex items-center gap-2">
-                                                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
-                                                        <span className="text-[10px] font-bold text-theme-text uppercase flex-1">{s.name}</span>
-                                                        <span className="text-[10px] font-black text-pink-400">{Math.round(scopeTime / 3600)}h</span>
+                                                    <div key={s.id} className="flex flex-col gap-1.5">
+                                                        <div className="flex items-center justify-between text-[10px]">
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.colorClass }} />
+                                                                <span className="font-bold text-theme-text uppercase truncate">{s.name}</span>
+                                                            </div>
+                                                            <span className="font-black text-pink-500 shrink-0">{Math.round(scopeTime / 3600)}h <span className="text-theme-textMuted font-medium">({pct}%)</span></span>
+                                                        </div>
+                                                        <div className="w-full h-1 bg-theme-divider/50 rounded-full overflow-hidden">
+                                                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: s.colorClass || '#ec4899' }} />
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -3030,7 +3058,9 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                 </div>
 
-                                <button className="text-theme-textMuted hover:text-theme-orange transition-colors bg-theme-highlight p-2 rounded-full" onClick={() => { setEditingScopeId(null); setShowScopeModal(true); }}><span className="material-symbols-outlined text-xl">add</span></button>
+                                {!isViewer && (
+                                    <button className="text-theme-textMuted hover:text-theme-orange transition-colors bg-theme-highlight p-2 rounded-full" onClick={() => { setEditingScopeId(null); setShowScopeModal(true); }}><span className="material-symbols-outlined text-xl">add</span></button>
+                                )}
 
                             </div>
 
@@ -3048,17 +3078,23 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                                 <span className="text-sm font-bold text-theme-text truncate">{scope.name}</span>
 
-                                                <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-2">
+                                                {!isViewer ? (
+                                                    <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-2">
 
-                                                    <button onClick={(e) => { e.stopPropagation(); setActiveScopeIdForEvent(scope.id); setEditingEventId(null); setShowEventModal(true); }} className="text-theme-textMuted hover:text-theme-orange bg-theme-card p-1.5 rounded-lg shadow-sm" title="Nova Ação"><span className="material-symbols-outlined text-sm">add_task</span></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setActiveScopeIdForEvent(scope.id); setEditingEventId(null); setShowEventModal(true); }} className="text-theme-textMuted hover:text-theme-orange bg-theme-card p-1.5 rounded-lg shadow-sm" title="Nova Ação"><span className="material-symbols-outlined text-sm">add_task</span></button>
 
-                                                    <button onClick={(e) => { e.stopPropagation(); setEditingScopeId(scope.id); setShowScopeModal(true); }} className="text-theme-textMuted hover:text-theme-purple bg-theme-card p-1.5 rounded-lg shadow-sm" title="Editar Disciplina"><span className="material-symbols-outlined text-sm">edit</span></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); setEditingScopeId(scope.id); setShowScopeModal(true); }} className="text-theme-textMuted hover:text-theme-purple bg-theme-card p-1.5 rounded-lg shadow-sm" title="Editar Disciplina"><span className="material-symbols-outlined text-sm">edit</span></button>
 
-                                                    <button onClick={(e) => { e.stopPropagation(); handleAddLink(scope.id); }} className="text-theme-textMuted hover:text-theme-cyan bg-theme-card p-1.5 rounded-lg shadow-sm" title="Anexar Arquivos"><span className="material-symbols-outlined text-sm">link</span></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleAddLink(scope.id); }} className="text-theme-textMuted hover:text-theme-cyan bg-theme-card p-1.5 rounded-lg shadow-sm" title="Anexar Arquivos"><span className="material-symbols-outlined text-sm">link</span></button>
 
-                                                    <button onClick={async (e) => { e.stopPropagation(); if (await requestConfirm({ message: 'Apagar disciplina?', variant: 'danger', title: 'Remover Disciplina' })) onDeleteScope(scope.id); }} className="text-theme-textMuted hover:text-red-500 bg-theme-card p-1.5 rounded-lg shadow-sm" title="Remover Disciplina"><span className="material-symbols-outlined text-sm">delete</span></button>
+                                                        <button onClick={async (e) => { e.stopPropagation(); if (await requestConfirm({ message: 'Apagar disciplina?', variant: 'danger', title: 'Remover Disciplina' })) onDeleteScope(scope.id); }} className="text-theme-textMuted hover:text-red-500 bg-theme-card p-1.5 rounded-lg shadow-sm" title="Remover Disciplina"><span className="material-symbols-outlined text-sm">delete</span></button>
 
-                                                </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex gap-2">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleAddLink(scope.id); }} className="opacity-0 group-hover:opacity-100 text-theme-textMuted hover:text-theme-cyan bg-theme-card p-1.5 rounded-lg shadow-sm" title="Visualizar Arquivos"><span className="material-symbols-outlined text-sm">link</span></button>
+                                                    </div>
+                                                )}
 
                                             </div>
 
@@ -3470,6 +3506,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                                 onDeleteEvent={onDeleteEvent}
 
+                                                isViewer={isViewer}
+
                                             />
 
                                         </div>
@@ -3510,6 +3548,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                                 onDeleteEvent={onDeleteEvent}
 
+                                                isViewer={isViewer}
+
                                             />
 
                                         </div>
@@ -3540,13 +3580,25 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                         onEditEvent={(scopeId, eventId) => {
 
-                                            setActiveScopeIdForEvent(scopeId);
+                                            if (isViewer) {
 
-                                            setEditingEventId(eventId);
+                                                setActiveChecklistIds({ sid: scopeId, eid: eventId });
 
-                                            setShowEventModal(true);
+                                                setShowChecklistModal(true);
+
+                                            } else {
+
+                                                setActiveScopeIdForEvent(scopeId);
+
+                                                setEditingEventId(eventId);
+
+                                                setShowEventModal(true);
+
+                                            }
 
                                         }}
+
+                                        isViewer={isViewer}
 
                                     />
 

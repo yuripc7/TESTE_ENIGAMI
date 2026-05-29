@@ -1,7 +1,20 @@
 
 export interface ChecklistItem {
+    id?: string;
     text: string;
     done: boolean;
+    z?: string; // zone
+    c?: string; // category
+    tp?: 'exec' | 'bim'; // type/mode
+    tg?: string; // tag
+    obs?: string; // observations
+    status?: 'pendente' | 'andamento' | 'concluido' | 'critico' | 'na';
+    resp?: string;
+    date?: string;
+    rev?: string;
+    notes?: string;
+    link?: string;
+    custom?: boolean;
 }
 
 export interface Dependency {

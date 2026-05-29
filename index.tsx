@@ -9,6 +9,7 @@ import { supabase } from './lib/supabase';
 import './index.css';
 
 const Root = () => {
+  console.log("Enigami Root mounted - v2.9.3");
   const [session, setSession] = useState<any>(null); // Login aparece imediatamente
   const [useDemo, setUseDemo] = useState(false);
   const [isCleanedUp, setIsCleanedUp] = useState(false);
@@ -69,6 +70,7 @@ const Root = () => {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session ?? null);
+      setUseDemo(false);
     });
     return () => subscription.unsubscribe();
   }, [isCleanedUp]);

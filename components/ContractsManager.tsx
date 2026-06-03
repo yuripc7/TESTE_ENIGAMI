@@ -43,7 +43,7 @@ type DetailTab = 'contrato'|'financeiro'|'disciplinas'|'edicoes';
 export const ContractsManager: React.FC<ContractsManagerProps> = ({
   project, onUpdateProject, currentUser,
 }) => {
-  const { addLog, setNotification } = useApp();
+  const { addLog, setNotification, isViewer } = useApp();
   const contracts: Contract[] = project.contracts || [];
 
   /* ── List state ── */
@@ -214,11 +214,13 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
             </button>
           ))}
         </div>
-        <button onClick={()=>setShowNew(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-colors">
-          <span className="material-symbols-outlined text-sm">add</span>
-          Novo Contrato
-        </button>
+        {!isViewer && (
+          <button onClick={()=>setShowNew(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-black transition-colors">
+            <span className="material-symbols-outlined text-sm">add</span>
+            Novo Contrato
+          </button>
+        )}
       </div>
 
       {/* ── Contract list ── */}
@@ -244,18 +246,20 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${st.tw}`}>{st.label}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (window.confirm(`Deseja mesmo excluir o contrato "${c.name}"?`)) {
-                          handleDelete(c.id);
-                        }
-                      }}
-                      className="ml-auto w-6 h-6 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-all border border-red-500/20"
-                      title="Excluir Contrato"
-                    >
-                      <span className="material-symbols-outlined text-xs">delete</span>
-                    </button>
+                    {!isViewer && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Deseja mesmo excluir o contrato "${c.name}"?`)) {
+                            handleDelete(c.id);
+                          }
+                        }}
+                        className="ml-auto w-6 h-6 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-all border border-red-500/20"
+                        title="Excluir Contrato"
+                      >
+                        <span className="material-symbols-outlined text-xs">delete</span>
+                      </button>
+                    )}
                   </div>
                   <p className="font-black text-sm text-theme-text mt-1">{c.name}</p>
                   <p className="text-xs text-theme-textMuted flex items-center gap-1 mt-0.5">
@@ -361,18 +365,20 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <button onClick={()=>cycleSt(selected.id)}
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border cursor-pointer hover:opacity-70 ${STATUS[selected.status].tw}`}>
-                      {STATUS[selected.status].label} ↻
+                    <button onClick={() => !isViewer && cycleSt(selected.id)}
+                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${isViewer ? 'cursor-default' : 'cursor-pointer hover:opacity-70'} ${STATUS[selected.status].tw}`}>
+                      {STATUS[selected.status].label} {!isViewer && '↻'}
                     </button>
                   </div>
                   <h2 className="text-base font-black text-theme-text">{selected.name}</h2>
                   <p className="text-xs text-theme-textMuted">{selected.supplier} • {fmt(selected.totalValue)}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={()=>handleDelete(selected.id)} className="text-red-400/60 hover:text-red-400 transition-colors">
-                    <span className="material-symbols-outlined text-base">delete</span>
-                  </button>
+                  {!isViewer && (
+                    <button onClick={()=>handleDelete(selected.id)} className="text-red-400/60 hover:text-red-400 transition-colors">
+                      <span className="material-symbols-outlined text-base">delete</span>
+                    </button>
+                  )}
                   <button onClick={()=>setSelected(null)} className="text-theme-textMuted hover:text-theme-text text-xl leading-none">×</button>
                 </div>
               </div>
@@ -451,18 +457,20 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                         <p className="text-xs text-theme-textMuted mt-1">Nenhum PDF vinculado ainda.</p>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={()=>pdfRef.current?.click()} disabled={uploading}
-                        className="flex items-center gap-1.5 px-4 py-2 border border-theme-border rounded-xl text-xs text-theme-textMuted hover:text-theme-text transition-colors">
-                        <span className="material-symbols-outlined text-sm">upload</span>
-                        {uploading ? 'Carregando...' : 'Upload PDF'}
-                      </button>
-                      <button onClick={()=>{ setDetailTab('edicoes'); setShowEditForm(true); }}
-                        className="flex items-center gap-1.5 px-4 py-2 border border-theme-border rounded-xl text-xs text-theme-textMuted hover:text-theme-text transition-colors">
-                        <span className="material-symbols-outlined text-sm">edit_note</span>
-                        Solicitar Edição
-                      </button>
-                    </div>
+                    {!isViewer && (
+                      <div className="flex gap-2">
+                        <button onClick={()=>pdfRef.current?.click()} disabled={uploading}
+                          className="flex items-center gap-1.5 px-4 py-2 border border-theme-border rounded-xl text-xs text-theme-textMuted hover:text-theme-text transition-colors">
+                          <span className="material-symbols-outlined text-sm">upload</span>
+                          {uploading ? 'Carregando...' : 'Upload PDF'}
+                        </button>
+                        <button onClick={()=>{ setDetailTab('edicoes'); setShowEditForm(true); }}
+                          className="flex items-center gap-1.5 px-4 py-2 border border-theme-border rounded-xl text-xs text-theme-textMuted hover:text-theme-text transition-colors">
+                          <span className="material-symbols-outlined text-sm">edit_note</span>
+                          Solicitar Edição
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -507,11 +515,13 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                     <p className="text-xs font-black uppercase tracking-wide text-theme-text">
                       Parcelas ({(selected.installments||[]).length})
                     </p>
-                    <button onClick={()=>setShowInstForm(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black transition-colors">
-                      <span className="material-symbols-outlined text-sm">add_card</span>
-                      Registrar Pagamento
-                    </button>
+                    {!isViewer && (
+                      <button onClick={()=>setShowInstForm(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black transition-colors">
+                        <span className="material-symbols-outlined text-sm">add_card</span>
+                        Registrar Pagamento
+                      </button>
+                    )}
                   </div>
 
                   {/* Installment form */}
@@ -558,16 +568,18 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                           </div>
                           <p className="text-xs font-black text-theme-text shrink-0">{fmt(inst.value)}</p>
                           <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg border shrink-0 ${bd.tw}`}>{bd.label}</span>
-                          <div className="flex gap-1 shrink-0">
-                            {inst.status !== 'paid' && (
-                              <button onClick={()=>handlePayInst(inst.id)} className="text-emerald-400 hover:text-emerald-300" title="Marcar como pago">
-                                <span className="material-symbols-outlined text-base">check_circle</span>
+                          {!isViewer && (
+                            <div className="flex gap-1 shrink-0">
+                              {inst.status !== 'paid' && (
+                                <button onClick={()=>handlePayInst(inst.id)} className="text-emerald-400 hover:text-emerald-300" title="Marcar como pago">
+                                  <span className="material-symbols-outlined text-base">check_circle</span>
+                                </button>
+                              )}
+                              <button onClick={()=>handleDelInst(inst.id)} className="text-red-400/50 hover:text-red-400">
+                                <span className="material-symbols-outlined text-base">delete</span>
                               </button>
-                            )}
-                            <button onClick={()=>handleDelInst(inst.id)} className="text-red-400/50 hover:text-red-400">
-                              <span className="material-symbols-outlined text-base">delete</span>
-                            </button>
-                          </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -584,11 +596,13 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                       <p className="text-[10px] font-black uppercase tracking-widest text-theme-text">Disciplinas Vinculadas</p>
                       <p className="text-[10px] text-theme-textMuted mt-0.5">Escopo do projeto associado a este contrato.</p>
                     </div>
-                    <button onClick={()=>{ setShowScopePicker(true); setScopeSearch(''); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black shrink-0 transition-colors">
-                      <span className="material-symbols-outlined text-sm">link</span>
-                      Vincular
-                    </button>
+                    {!isViewer && (
+                      <button onClick={()=>{ setShowScopePicker(true); setScopeSearch(''); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black shrink-0 transition-colors">
+                        <span className="material-symbols-outlined text-sm">link</span>
+                        Vincular
+                      </button>
+                    )}
                   </div>
 
                   {/* Empty */}
@@ -619,24 +633,32 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                               d.progressPct>0?'text-sky-400 bg-sky-500/10 border-sky-500/30':
                               'text-theme-textMuted bg-theme-card border-theme-border'
                             }`}>{d.progressPct}%</span>
-                            <button onClick={()=>handleUnlink(d.id)} className="text-red-400/40 hover:text-red-400 transition-colors">
-                              <span className="material-symbols-outlined text-sm">link_off</span>
-                            </button>
+                            {!isViewer && (
+                              <button onClick={()=>handleUnlink(d.id)} className="text-red-400/40 hover:text-red-400 transition-colors">
+                                <span className="material-symbols-outlined text-sm">link_off</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="h-1.5 bg-theme-card rounded-full overflow-hidden mb-2">
                           <div className="h-full rounded-full transition-all"
                             style={{ width:`${d.progressPct}%`, background: d.progressPct>=100?'#10b981':`hsl(${d.progressPct*1.2},70%,50%)` }} />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input type="range" min="0" max="100" value={d.progressPct}
-                            onChange={e=>handleDiscProgress(d.id,parseInt(e.target.value))}
-                            className="flex-1 accent-emerald-500 cursor-pointer h-1" />
-                          <input type="number" min="0" max="100" value={d.progressPct}
-                            onChange={e=>handleDiscProgress(d.id,Math.min(100,Math.max(0,parseInt(e.target.value)||0)))}
-                            className="w-12 text-center text-[10px] bg-theme-card border border-theme-border rounded-lg py-1 text-theme-text outline-none focus:border-emerald-500" />
-                          <span className="text-[10px] text-theme-textMuted">%</span>
-                        </div>
+                        {!isViewer ? (
+                          <div className="flex items-center gap-2">
+                            <input type="range" min="0" max="100" value={d.progressPct}
+                              onChange={e=>handleDiscProgress(d.id,parseInt(e.target.value))}
+                              className="flex-1 accent-emerald-500 cursor-pointer h-1" />
+                            <input type="number" min="0" max="100" value={d.progressPct}
+                              onChange={e=>handleDiscProgress(d.id,Math.min(100,Math.max(0,parseInt(e.target.value)||0)))}
+                              className="w-12 text-center text-[10px] bg-theme-card border border-theme-border rounded-lg py-1 text-theme-text outline-none focus:border-emerald-500" />
+                            <span className="text-[10px] text-theme-textMuted">%</span>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-theme-textMuted font-bold flex items-center justify-end py-1">
+                            Progresso fixado por contrato
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -718,7 +740,7 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                     </div>
                   )}
 
-                  {!showEditForm && (
+                  {!isViewer && !showEditForm && (
                     <button onClick={()=>setShowEditForm(true)}
                       className="flex items-center gap-2 w-full border border-dashed border-amber-500/30 rounded-xl py-3 px-4 text-xs text-amber-400 hover:bg-amber-500/5 transition-colors">
                       <span className="material-symbols-outlined text-sm">add</span>

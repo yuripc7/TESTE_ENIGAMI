@@ -11,9 +11,10 @@ interface TimelineProps {
     onBarContextMenu: (scopeId: string, eventId: string) => void;
     onAddDependency?: (sourceId: string, targetId: string, type: 'FS' | 'SS' | 'FF' | 'SF') => void;
     onDeleteEvent?: (scopeId: string, eventId: string) => void;
+    isViewer?: boolean;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, setZoomLevel, onBarClick, onBarContextMenu, onAddDependency, onDeleteEvent }) => {
+const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, setZoomLevel, onBarClick, onBarContextMenu, onAddDependency, onDeleteEvent, isViewer = false }) => {
     const [eventCoords, setEventCoords] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
     const [scopeCoords, setScopeCoords] = useState<Record<string, { x: number; y: number }>>({});
     const [activeStartScope, setActiveStartScope] = useState<string | null>(null);
@@ -438,8 +439,8 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
                                         } else { borderColor = '#6C7A89'; bgColor = '#1A1C20'; }
 
                                         return (
-                                            <div key={ev.id} id={`${isExecuted ? 'exe' : 'pla'}-ev-${ev.id}`} className={`absolute h-9 flex flex-col items-center justify-center z-40 group/bar transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${!isExecuted ? 'pointer-events-none opacity-50 grayscale' : ''}`} style={{ left: `${l}%`, width: `${Math.max(mainBarWidth + extensionWidth, 0.5)}%`, top: `${topPos}px` }} onClick={() => { if (isExecuted && !dragState) onBarClick(s.id, ev.id); }} onContextMenu={(e) => { e.preventDefault(); if (isExecuted) onBarContextMenu(s.id, ev.id); }}>
-                                                {isExecuted && (<><div className="absolute -left-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'start')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'start')} /><div className="absolute -right-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'end')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'end')} />
+                                            <div key={ev.id} id={`${isExecuted ? 'exe' : 'pla'}-ev-${ev.id}`} className={`absolute h-9 flex flex-col items-center justify-center z-40 group/bar transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${!isExecuted ? 'pointer-events-none opacity-50 grayscale' : ''}`} style={{ left: `${l}%`, width: `${Math.max(mainBarWidth + extensionWidth, 0.5)}%`, top: `${topPos}px` }} onClick={() => { if (isExecuted && !dragState) onBarClick(s.id, ev.id); }} onContextMenu={(e) => { e.preventDefault(); if (isExecuted && !isViewer) onBarContextMenu(s.id, ev.id); }}>
+                                                {isExecuted && !isViewer && (<><div className="absolute -left-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'start')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'start')} /><div className="absolute -right-3 w-2 h-2 bg-white rotate-45 border border-theme-card opacity-0 group-hover/bar:opacity-100 hover:scale-150 transition-all cursor-crosshair z-[60]" style={{ borderColor: s.colorClass }} onMouseDown={(e) => handleDragStart(e, ev.id, 'end')} onMouseUp={(e) => handleNodeMouseUp(e, ev.id, 'end')} />
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); if (onDeleteEvent) onDeleteEvent(s.id, ev.id); }}
                                                         className="absolute -top-3 -right-3 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/bar:opacity-100 transition-all hover:scale-110 shadow-lg z-[70] text-white"

@@ -40,6 +40,7 @@ export const ColaboradorTab: React.FC<ColaboradorTabProps> = ({ project, db }) =
         if (ev.completed) collabsObj[resp].completed += 1;
 
         ev.checklist.forEach(chk => {
+          if (chk.status === 'na') return;
           totalChecklists += 1;
           if (chk.done) completedChecklists += 1;
 

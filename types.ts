@@ -198,6 +198,33 @@ export interface PhaseInfo {
     endDate?: string;
 }
 
+export interface WeeklyTask {
+  id?: string | number;
+  text: string;
+  day: string;
+  assignee: string;
+  project: string;
+  disc: string;
+  status: string;
+  weight: number;
+  time?: string;
+  dueDate?: string;
+  isCoordPoint?: boolean;
+  valid?: 'pending' | 'approved' | 'returned';
+  validBy?: string;
+  validAt?: number;
+  completed?: boolean;
+  completedAt?: number | null;
+  subtasks?: { id: string | number; text: string; done: boolean }[];
+  carriedFrom?: string;
+  postponedCount?: number;
+  coord?: string; // Integrated Database fields
+  weekOffset?: number;
+  unplanned?: boolean;
+  durationDays?: number;
+  createdAt?: number;
+}
+
 export interface Project {
     id: number;
     companyId: number;
@@ -222,6 +249,7 @@ export interface Project {
     timeLogs?: TimeLog[]; // New: Time Tracking History
     notes?: Note[]; // New: Collaboration Notes
     contracts?: Contract[]; // New: Contract Management
+    agendaTasks?: WeeklyTask[]; // New: Weekly Agenda Tasks
 }
 
 export interface TimeLog {

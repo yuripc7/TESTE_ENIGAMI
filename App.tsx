@@ -33,11 +33,12 @@ const ContractsManager = React.lazy(() => import('./components/ContractsManager'
 const FlipBook = React.lazy(() => import('./components/FlipBook').then(m => ({ default: m.FlipBook })));
 const Panorama360 = React.lazy(() => import('./components/Panorama360').then(m => ({ default: m.Panorama360 })));
 const GalleryTab = React.lazy(() => import('./components/GalleryTab').then(m => ({ default: m.GalleryTab })));
+const WeeklyAgenda = React.lazy(() => import('./components/WeeklyAgenda'));
 import { CollaborativeHub } from './components/CollaborativeHub';
 
 
 
-type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'notas' | 'colaborador';
+type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'notas' | 'colaborador' | 'agenda_semana';
 
 
 
@@ -666,9 +667,9 @@ export const App = () => {
 
                 tasks++;
 
-                const items = ev.checklist && ev.checklist.length > 0 ? ev.checklist.length : 1;
-
-                const done = ev.checklist && ev.checklist.length > 0 ? ev.checklist.filter(i => i.done).length : (ev.completed ? 1 : 0);
+                const applicableChecklist = ev.checklist ? ev.checklist.filter(i => i.status !== 'na') : [];
+                const items = applicableChecklist.length > 0 ? applicableChecklist.length : 1;
+                const done = applicableChecklist.length > 0 ? applicableChecklist.filter(i => i.done).length : (ev.completed ? 1 : 0);
 
                 totItems += items;
 
@@ -1952,11 +1953,12 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                         <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider">
                             {[
                                 { id: 'timeline', label: 'Cronograma' },
+                                { id: 'agenda_semana', label: 'Agenda' },
                                 { id: 'gallery', label: 'Galeria' },
                                 { id: 'files', label: 'Arquivos' },
                                 { id: 'data', label: 'Dados' },
                                 { id: 'viabilidade', label: 'Contratos' },
-                { id: 'financeiro', label: 'Financeiro' },
+                                { id: 'financeiro', label: 'Financeiro' },
                                 { id: 'notas', label: 'Notas' },
                                 { id: 'colaborador', label: 'Colaborador' },
                             ].map(tab => (
@@ -2404,7 +2406,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                         // Editing existing event
 
-                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeScopeIdForEvent ? { ...s, events: s.events.map(e => e.id === editingEventId ? { ...e, title, resp, startDate: start, endDate: end, checklist: checklist.map(newItem => { const existing = e.checklist.find(old => old.text === newItem.text); return existing ? { ...newItem, done: existing.done } : newItem; }), type: type || 'default' } : e) } : s) } : p) }));
+                        setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeScopeIdForEvent ? { ...s, events: s.events.map(e => e.id === editingEventId ? { ...e, title, resp, startDate: start, endDate: end, checklist: checklist.map(newItem => { const existing = e.checklist.find(old => old.text === newItem.text); return existing ? { ...existing } : newItem; }), type: type || 'default' } : e) } : s) } : p) }));
 
                     } else {
 
@@ -2710,8 +2712,14 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                         {activeProject?.scopes.length === 0 && <p className="text-xs text-theme-textMuted">Nenhuma disciplina cadastrada.</p>}
                                         <div className="space-y-3 max-h-[145px] overflow-y-auto scroller pr-1">
                                             {activeProject?.scopes.map(s => {
-                                                const evTotal = s.events.reduce((acc, ev) => acc + (ev.checklist.length || 1), 0);
-                                                const evDone  = s.events.reduce((acc, ev) => acc + (ev.checklist.length > 0 ? ev.checklist.filter(i => i.done).length : (ev.completed ? 1 : 0)), 0);
+                                                const evTotal = s.events.reduce((acc, ev) => {
+                                                    const applicableChecklist = ev.checklist ? ev.checklist.filter(i => i.status !== 'na') : [];
+                                                    return acc + (applicableChecklist.length || 1);
+                                                }, 0);
+                                                const evDone  = s.events.reduce((acc, ev) => {
+                                                    const applicableChecklist = ev.checklist ? ev.checklist.filter(i => i.status !== 'na') : [];
+                                                    return acc + (applicableChecklist.length > 0 ? applicableChecklist.filter(i => i.done).length : (ev.completed ? 1 : 0));
+                                                }, 0);
                                                 const pct = evTotal > 0 ? Math.round((evDone / evTotal) * 100) : 0;
                                                 const statusMap: Record<string, { label: string; bg: string; text: string }> = { 
                                                     stopped: { label: 'Parado', bg: 'bg-red-500/10', text: 'text-red-500' }, 
@@ -4934,6 +4942,19 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                         project={activeProject}
                                         db={db}
                                     />
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    {/* --- TAB: AGENDA DA SEMANA VIEW --- */}
+                    {
+                        activeTab === 'agenda_semana' && hasProject && (
+                            <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                                <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl min-h-[calc(100vh-140px)] shadow-neuro">
+                                    <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando agenda...</div>}>
+                                        <WeeklyAgenda />
+                                    </Suspense>
                                 </div>
                             </div>
                         )

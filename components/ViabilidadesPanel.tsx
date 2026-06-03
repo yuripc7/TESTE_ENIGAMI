@@ -81,11 +81,11 @@ export const ViabilidadesPanel: React.FC<ViabilidadesPanelProps> = ({
   companyName,
 onClose,
 }) => {
-  const { db, setDb, currentUser, setNotification, addLog } = useApp();
+  const { db, setDb, currentUser, setNotification, addLog, isViewer } = useApp();
 
   // Viabilidades desta empresa
   const viabs = ((db as any).viabilities || []).filter(
-    (v: ExtViab) => v.companyId === companyId
+    (v: ExtViab) => String(v.companyId) === String(companyId)
   ) as ExtViab[];
 
   const [showNew, setShowNew]     = useState(false);
@@ -280,13 +280,15 @@ onClose,
             />
           </div>
           {/* Botão nova */}
-          <button
-            onClick={() => { setForm(EMPTY_FORM); setErrs({}); setShowNew(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            Nova Viabilidade
-          </button>
+          {!isViewer && (
+            <button
+              onClick={() => { setForm(EMPTY_FORM); setErrs({}); setShowNew(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              Nova Viabilidade
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,9 +314,9 @@ onClose,
             <div
               key={c.id}
               className={`flex-none w-[220px] rounded-xl border border-theme-border bg-theme-card transition-colors ${dragOver === c.id ? 'ring-1 ring-emerald-500/30' : ''}`}
-              onDragOver={e => { e.preventDefault(); setDragOver(c.id); }}
+              onDragOver={e => { if (isViewer) return; e.preventDefault(); setDragOver(c.id); }}
               onDragLeave={() => setDragOver(null)}
-              onDrop={() => { if (dragId) { move(dragId, c.id); setDragId(null); setDragOver(null); } }}
+              onDrop={() => { if (!isViewer && dragId) { move(dragId, c.id); setDragId(null); setDragOver(null); } }}
             >
               {/* Cabeçalho da coluna */}
               <div className={`flex items-center justify-between px-3 py-2.5 border-b-2 ${c.headerBorder}`}>
@@ -334,8 +336,8 @@ onClose,
                 {cards.map(v => (
                   <div
                     key={v.id}
-                    draggable
-                    onDragStart={() => setDragId(v.id)}
+                    draggable={!isViewer}
+                    onDragStart={() => { if (isViewer) return; setDragId(v.id); }}
                     onDragEnd={() => { setDragId(null); setDragOver(null); }}
                     onClick={() => setDetail(v)}
                     className={`bg-theme-bg border border-l-[3px] border-theme-border rounded-lg p-2.5 cursor-pointer hover:border-theme-textMuted/40 transition-all group ${c.border}`}
@@ -381,12 +383,14 @@ onClose,
                 ))}
 
                 {/* Botão adicionar nesta coluna */}
-                <button
-                  onClick={() => { setForm({ ...EMPTY_FORM, kanbanStatus: c.id }); setErrs({}); setShowNew(true); }}
-                  className="w-full border border-dashed border-theme-border rounded-lg py-1.5 text-[11px] text-theme-textMuted hover:text-theme-text hover:border-theme-textMuted/40 transition-all"
-                >
-                  + Adicionar
-                </button>
+                {!isViewer && (
+                  <button
+                    onClick={() => { setForm({ ...EMPTY_FORM, kanbanStatus: c.id }); setErrs({}); setShowNew(true); }}
+                    className="w-full border border-dashed border-theme-border rounded-lg py-1.5 text-[11px] text-theme-textMuted hover:text-theme-text hover:border-theme-textMuted/40 transition-all"
+                  >
+                    + Adicionar
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -574,83 +578,85 @@ onClose,
                     <p className="text-theme-text text-xs italic">{detail.obs}</p>
                   </div>
                 )}
-                <div>
-                  <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Criado em</p>
-                  <p className="text-theme-text text-xs">{new Date(detail.createdAt).toLocaleDateString('pt-BR')}</p>
-                </div>
               </div>
 
               {/* Documentos */}
               <div className="border-t border-theme-border pt-3">
-                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Documentos</p>
-                {[
-                  { fl: detail.pdfConsultaPrefeitura, label: 'Consulta de Viabilidade', req: true,  colorClass: 'blue'    },
-                  { fl: detail.pdfLocalizacao,        label: 'Localização do Terreno',   req: true,  colorClass: 'emerald' },
-                  { fl: detail.pdfEstudoTerceiro,     label: 'Estudo de Outra Construtora', req: false, colorClass: 'amber' },
-                ].map(({ fl, label, req, colorClass }) => (
-                  <div
-                    key={label}
-                    className={`flex items-center gap-2 p-2.5 rounded-lg border mb-1.5 ${
-                      fl
-                        ? `bg-${colorClass}-500/5 border-${colorClass}-500/20`
-                        : 'bg-theme-bg border-theme-border opacity-40'
-                    }`}
-                  >
-                    <span className="text-base flex-none">📄</span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[11px] font-medium ${fl ? `text-${colorClass}-400` : 'text-theme-textMuted'}`}>
-                        {label}
-                      </p>
-                      {fl ? (
-                        <a
-                          href={fl.path}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-theme-textMuted hover:text-theme-text truncate block"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {fl.label}
-                        </a>
-                      ) : (
-                        <p className="text-[10px] text-theme-textMuted">Não anexado</p>
-                      )}
-                    </div>
-                    <span className={`text-[10px] shrink-0 px-1.5 py-0.5 rounded border ${
-                      req
-                        ? 'bg-red-500/10 text-red-400 border-red-400/20'
-                        : 'bg-theme-bg text-theme-textMuted border-theme-border'
-                    }`}>
-                      {req ? 'Obrig.' : 'Opcional'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Mover para */}
-              <div className="border-t border-theme-border pt-3">
-                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Mover para</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {COLS.filter(c => c.id !== detail.kanbanStatus).map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => move(detail.id, c.id)}
-                      className={`text-[11px] px-2.5 py-1 rounded-full border ${c.border.replace('border-l-', 'border-')} ${c.tw} hover:opacity-70 transition-opacity`}
+                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Documentos Anexados</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: 'Consulta Prefeitura', fl: detail.pdfConsultaPrefeitura, req: true, colorClass: 'blue' },
+                    { label: 'Localização Terreno', fl: detail.pdfLocalizacao, req: true, colorClass: 'emerald' },
+                    { label: 'Estudo Terceiro', fl: detail.pdfEstudoTerceiro, req: false, colorClass: 'amber' },
+                  ].map(({ label, fl, req, colorClass }) => (
+                    <div
+                      key={label}
+                      className={`flex items-center gap-2 p-2 rounded-lg border ${
+                        fl
+                          ? `bg-${colorClass}-500/5 border-${colorClass}-500/20`
+                          : 'bg-theme-bg border-theme-border opacity-40'
+                      }`}
                     >
-                      {c.label}
-                    </button>
+                      <span className="text-base flex-none">📄</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] font-medium ${fl ? `text-${colorClass}-400` : 'text-theme-textMuted'}`}>
+                          {label}
+                        </p>
+                        {fl ? (
+                          <a
+                            href={fl.path}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-theme-textMuted hover:text-theme-text truncate block"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {fl.label}
+                          </a>
+                        ) : (
+                          <p className="text-[10px] text-theme-textMuted">Não anexado</p>
+                        )}
+                      </div>
+                      <span className={`text-[10px] shrink-0 px-1.5 py-0.5 rounded border ${
+                        req
+                          ? 'bg-red-500/10 text-red-400 border-red-400/20'
+                          : 'bg-theme-bg text-theme-textMuted border-theme-border'
+                      }`}>
+                        {req ? 'Obrig.' : 'Opcional'}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
 
+              {/* Mover para */}
+              {!isViewer && (
+                <div className="border-t border-theme-border pt-3">
+                  <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Mover para</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COLS.filter(c => c.id !== detail.kanbanStatus).map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => move(detail.id, c.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border ${c.border.replace('border-l-', 'border-')} ${c.tw} hover:opacity-70 transition-opacity`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Excluir */}
-              <div className="border-t border-theme-border pt-3 flex justify-end">
-                <button
-                  onClick={() => del(detail.id)}
-                  className="text-xs text-red-400 border border-red-400/30 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors"
-                >
-                  Excluir viabilidade
-                </button>
-              </div>
+              {!isViewer && (
+                <div className="border-t border-theme-border pt-3 flex justify-end">
+                  <button
+                    onClick={() => del(detail.id)}
+                    className="text-xs text-red-400 border border-red-400/30 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors"
+                  >
+                    Excluir viabilidade
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

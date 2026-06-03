@@ -7,12 +7,13 @@ interface AgendaProps {
     project: Project | null;
     onAddEvent?: (date: Date) => void;
     onEditEvent?: (scopeId: string, eventId: string) => void;
+    isViewer?: boolean;
 }
 
 const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const MONTHS = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
 
-export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent }) => {
+export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent, isViewer = false }) => {
     const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
     const [selectedView, setSelectedView] = useState<'month' | 'week' | 'day'>('month');
 
@@ -141,8 +142,8 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                     return (
                         <div
                             key={idx}
-                            onClick={() => onAddEvent && onAddEvent(cell.date)}
-                            className={`border-r border-b border-theme-divider p-2.5 relative flex flex-col gap-1.5 min-h-[105px] hover:bg-theme-orange/[0.02] dark:hover:bg-theme-orange/[0.03] transition-colors duration-200 group cursor-cell ${!cell.isCurrentMonth ? 'bg-theme-card/10 text-theme-textMuted/30' : 'bg-theme-card/60 text-theme-text'}`}
+                            onClick={() => !isViewer && onAddEvent && onAddEvent(cell.date)}
+                            className={`border-r border-b border-theme-divider p-2.5 relative flex flex-col gap-1.5 min-h-[105px] hover:bg-theme-orange/[0.02] dark:hover:bg-theme-orange/[0.03] transition-colors duration-200 group ${isViewer ? 'cursor-default' : 'cursor-cell'} ${!cell.isCurrentMonth ? 'bg-theme-card/10 text-theme-textMuted/30' : 'bg-theme-card/60 text-theme-text'}`}
                         >
                             <div className="flex justify-between items-start pointer-events-none">
                                 <span className={`text-[10px] font-black font-square w-6 h-6 flex items-center justify-center rounded-lg transition-all duration-200 ${isToday ? 'bg-theme-orange text-white shadow-[0_3px_10px_rgba(255,107,0,0.4)]' : 'text-theme-text group-hover:text-theme-orange'}`}>{cell.date.getDate()}</span>
@@ -240,8 +241,9 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                 {Array.from({ length: 24 }).map((_, h) => (
                                     <div
                                         key={h}
-                                        className="h-20 border-b border-theme-divider hover:bg-theme-orange/[0.02] transition-colors cursor-cell"
+                                        className={`h-20 border-b border-theme-divider hover:bg-theme-orange/[0.02] transition-colors ${isViewer ? 'cursor-default' : 'cursor-cell'}`}
                                         onClick={() => {
+                                            if (isViewer) return;
                                             const dateWithTime = new Date(d);
                                             dateWithTime.setHours(h);
                                             onAddEvent && onAddEvent(dateWithTime);
@@ -299,8 +301,9 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                 {String(h).padStart(2, '0')}:00
                             </div>
                             <div
-                                className="flex-1 bg-transparent hover:bg-theme-orange/[0.01] transition-colors cursor-cell p-3.5 relative"
+                                className={`flex-1 bg-transparent hover:bg-theme-orange/[0.01] transition-colors p-3.5 relative ${isViewer ? 'cursor-default' : 'cursor-cell'}`}
                                 onClick={() => {
+                                    if (isViewer) return;
                                     const dateWithTime = new Date(currentDate);
                                     dateWithTime.setHours(h);
                                     onAddEvent && onAddEvent(dateWithTime);
@@ -362,9 +365,11 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                         <button onClick={() => setSelectedView('week')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${selectedView === 'week' ? 'bg-theme-card text-theme-text border border-theme-divider/50 shadow-sm' : 'text-theme-textMuted hover:text-theme-text'}`}>Semana</button>
                         <button onClick={() => setSelectedView('day')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 ${selectedView === 'day' ? 'bg-theme-card text-theme-text border border-theme-divider/50 shadow-sm' : 'text-theme-textMuted hover:text-theme-text'}`}>Dia</button>
                     </div>
-                    <button onClick={() => onAddEvent && onAddEvent(new Date())} className="bg-theme-orange text-white w-8 h-8 rounded-xl flex items-center justify-center shadow-[0_4px_12px_rgba(255,107,0,0.3)] hover:shadow-[0_4px_20px_rgba(255,107,0,0.5)] hover:scale-105 active:scale-95 transition-all duration-300">
-                        <span className="material-symbols-outlined text-base">add</span>
-                    </button>
+                    {!isViewer && (
+                        <button onClick={() => onAddEvent && onAddEvent(new Date())} className="bg-theme-orange text-white w-8 h-8 rounded-xl flex items-center justify-center shadow-[0_4px_12px_rgba(255,107,0,0.3)] hover:shadow-[0_4px_20px_rgba(255,107,0,0.5)] hover:scale-105 active:scale-95 transition-all duration-300">
+                            <span className="material-symbols-outlined text-base">add</span>
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -23,7 +23,7 @@ const PASTEL_COLORS = [
 ];
 
 export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject, currentUser }) => {
-    const { addLog, setNotification } = useApp();
+    const { addLog, setNotification, isViewer } = useApp();
     const [showModal, setShowModal] = useState(false);
 
     // Form State
@@ -144,13 +144,15 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                     <span className="material-symbols-outlined text-base text-theme-orange">note_stack</span>
                     <h2 className="font-square font-black text-[11px] uppercase tracking-[0.4em] text-theme-text">Mural de Notas</h2>
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded border border-theme-divider bg-theme-bg text-theme-textMuted hover:text-white hover:border-theme-orange hover:bg-theme-orange hover:shadow-[0_0_10px_#FF6B00] text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                    Nova Nota
-                </button>
+                {!isViewer && (
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded border border-theme-divider bg-theme-bg text-theme-textMuted hover:text-white hover:border-theme-orange hover:bg-theme-orange hover:shadow-[0_0_10px_#FF6B00] text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                        <span className="material-symbols-outlined text-sm">edit_note</span>
+                        Nova Nota
+                    </button>
+                )}
             </div>
 
             {/* Scrollable Body */}
@@ -168,14 +170,16 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
                             }}
                         >
                             {/* Status / Delete controls */}
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-theme-bg/60 border border-theme-divider hover:border-theme-orange hover:bg-theme-orange/20 text-theme-text flex items-center justify-center transition-colors" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
-                                    <span className="material-symbols-outlined text-[16px]">{note.status === 'pending' ? 'check' : 'undo'}</span>
-                                </button>
-                                <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Excluir Nota">
-                                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                                </button>
-                            </div>
+                            {!isViewer && (
+                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                    <button onClick={() => handleToggleStatus(note.id)} className="w-8 h-8 rounded-full bg-theme-bg/60 border border-theme-divider hover:border-theme-orange hover:bg-theme-orange/20 text-theme-text flex items-center justify-center transition-colors" title={note.status === 'pending' ? 'Marcar como Concluída' : 'Reabrir Nota'}>
+                                        <span className="material-symbols-outlined text-[16px]">{note.status === 'pending' ? 'check' : 'undo'}</span>
+                                    </button>
+                                    <button onClick={() => handleDeleteNote(note.id)} className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors" title="Excluir Nota">
+                                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Note Header (Avatars) */}
                             <div className="flex items-center gap-3 mb-4">

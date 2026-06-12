@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVR — Estudo Financeiro · Marginal Oeste</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+
+<style>
+/* ════════════════ ENIGAMI — UNIFIED HEADER / TOP TABS ════════════════ */
+:root {
+  --enig-primary: #FF6B4A;
+  --enig-bg: #F0F2F5;
+  --enig-card: #FFFFFF;
+  --enig-text: #111827;
+  --enig-text-muted: #9CA3AF;
+  --enig-divider: #E5E7EB;
+}
+
+/* Material Symbols baseline */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  font-size: inherit;
+  line-height: 1;
+}
+
+/* Body contour grid (ENIGAMI signature) — applied via body */
+body.has-contour {
+  background-color: var(--enig-bg);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.55) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255,255,255,0.55) 2px, transparent 2px),
+    linear-gradient(rgba(255,255,255,0.30) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.30) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+  background-attachment: fixed;
+}
+
+.app-hdr {
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--enig-divider);
+  padding: 0 32px;
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 300;
+  gap: 24px;
+}
+.app-brand { display: flex; align-items: center; gap: 12px; }
+.app-brand-mark {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--enig-primary);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900; font-size: 13px;
+  letter-spacing: 0.04em;
+  box-shadow: 0 6px 16px -6px rgba(255,107,74,0.55);
+}
+.app-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.app-brand-t1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px; font-weight: 900; letter-spacing: 0.12em;
+  color: var(--enig-text); text-transform: uppercase;
+}
+.app-brand-t2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px; font-weight: 600; color: var(--enig-text-muted);
+  text-transform: uppercase; letter-spacing: 0.18em; margin-top: 3px;
+}
+.toptabs {
+  display: flex; gap: 4px;
+  background: #F3F4F6;
+  border-radius: 12px;
+  padding: 4px;
+}
+.toptab {
+  padding: 8px 18px;
+  border: none; background: transparent;
+  color: #4b5563;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer; border-radius: 8px;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex; align-items: center; gap: 8px;
+}
+.toptab:hover { color: var(--enig-text); }
+.toptab.active {
+  background: var(--enig-text); color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(17,24,39,0.4);
+}
+.app-hdr-right { display: flex; align-items: center; gap: 22px; }
+.app-hdr-meta {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; color: var(--enig-text-muted);
+  display: flex; gap: 18px; align-items: center;
+}
+.app-hdr-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.app-hdr-meta b {
+  color: var(--enig-text); font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.01em;
+}
+.app-hdr-pill {
+  padding: 5px 12px;
+  background: var(--enig-text); color: #fff;
+  border-radius: 999px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+.app-page { display: none; }
+.app-page.active { display: block; animation: enigFade 0.35s ease-out; }
+@keyframes enigFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+
+@media (max-width: 900px) {
+  .app-hdr { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 10px; }
+  .toptabs { order: 3; width: 100%; justify-content: center; }
+  .app-hdr-meta { display: none; }
+}
+
+/* ════════════════ AUDITORIA STYLES (scoped) ════════════════ */
+
+:root {
+  --pr: #FF6B4A;
+  --pr-h: #FF5A35;
+  --pr-d: #D54A2D;
+  --pr-l: rgba(255, 107, 74,0.08);
+  --pr-m: rgba(255, 107, 74,0.18);
+
+  --bg: #f0f2f5;
+  --paper: #ffffff;
+  --paper2: #f7f8fa;
+  --paper3: #eef0f4;
+
+  --bdr: #e4e7ec;
+  --bdr2: #cdd2db;
+  --bdr3: #b8bec9;
+
+  --t1: #111827;
+  --t2: #4b5563;
+  --t3: #9ca3af;
+  --t4: #d1d5db;
+
+  --green: #059669;
+  --green-l: #ecfdf5;
+  --green-bdr: #a7f3d0;
+  --red: #dc2626;
+  --red-l: #fef2f2;
+  --red-bdr: #fecaca;
+  --amber: #d97706;
+  --amber-l: #fffbeb;
+  --amber-bdr: #fde68a;
+  --blue: #2563eb;
+  --blue-l: #eff6ff;
+  --blue-bdr: #bfdbfe;
+
+  --rad: 24px;
+  --rad-sm: 16px;
+  --rad-xs: 8px;
+
+  --sh-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --sh-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --sh-lg: 0 16px 40px rgba(0,0,0,0.10);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+
+/* ── LAYOUT ── */
+.aud-wrap { max-width: 1280px; margin: 0 auto; padding: 36px 28px 80px; }
+
+/* ── HERO ── */
+.hero { margin-bottom: 48px; }
+.hero-eyebrow { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 800; color: var(--pr); letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 18px; }
+.hero-title { font-family: 'Orbitron', sans-serif; font-size: 38px; font-weight: 800; line-height: 1.15; letter-spacing: 0.02em; text-transform: uppercase; margin-bottom: 18px; color: var(--t1); }
+.hero-title em { font-style: normal; color: var(--pr); font-weight: 800; }
+.hero-sub { font-size: 16px; color: var(--t2); max-width: 760px; line-height: 1.6; }
+.hero-meta { display: flex; gap: 32px; margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--bdr); font-size: 12px; color: var(--t3); }
+.hero-meta b { color: var(--t1); font-weight: 600; }
+
+/* ── VEREDICT BLOCK ── */
+.veredict { background: #0B0C10; border-radius: var(--rad); padding: 36px 38px; color: #fff; margin-bottom: 56px; position: relative; overflow: hidden; }
+.veredict::before {
+  content: '';
+  position: absolute; top: -120px; right: -120px;
+  width: 320px; height: 320px;
+  background: radial-gradient(circle, rgba(255, 107, 74,0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.ver-eyebrow { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; color: var(--pr); margin-bottom: 14px; }
+.ver-title { font-family: 'Orbitron', sans-serif; font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 22px; max-width: 820px; }
+.ver-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 28px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.1); }
+.ver-stat { }
+.ver-stat-l { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.ver-stat-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
+.ver-stat-v.pr { color: var(--pr); }
+.ver-stat-s { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 3px; }
+
+/* ── SECTION ── */
+.sec { margin-bottom: 56px; }
+.sec-num { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700; color: var(--pr); letter-spacing: 0.2em; text-transform: uppercase; }
+.sec-title { font-family: 'Orbitron', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.15; margin-top: 8px; margin-bottom: 14px; color: var(--t1); }
+.sec-title em { font-style: normal; color: var(--pr); font-weight: 800; }
+.sec-lead { font-size: 15px; color: var(--t2); line-height: 1.65; max-width: 760px; margin-bottom: 32px; }
+
+/* ── DATA CARDS ── */
+.dgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.dgrid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.dcard {
+  background: var(--paper);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  padding: 22px;
+  transition: all 0.18s;
+}
+.dcard:hover { box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1); transform: translateY(-3px); border-color: var(--pr-m); }
+.dcard-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+.pill-ok { background: var(--green-l); color: var(--green); border: 1px solid var(--green-bdr); }
+.pill-warn { background: var(--amber-l); color: var(--amber); border: 1px solid var(--amber-bdr); }
+.pill-info { background: var(--blue-l); color: var(--blue); border: 1px solid var(--blue-bdr); }
+.dcard-l { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 8px; }
+.dcard-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 22px; font-weight: 700; color: var(--t1); letter-spacing: -0.01em; line-height: 1.2; }
+.dcard-s { font-size: 12px; color: var(--t2); margin-top: 8px; line-height: 1.5; }
+.dcard-src { font-size: 10px; color: var(--t3); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bdr); }
+
+/* ── FORMULA TABLE ── */
+.ftable { background: var(--paper); border: 1px solid var(--bdr); border-radius: var(--rad-sm); overflow: hidden; }
+.frow { display: grid; grid-template-columns: 36px 1fr 280px 110px; gap: 18px; padding: 18px 22px; border-bottom: 1px solid var(--bdr); align-items: center; }
+.frow:last-child { border-bottom: none; }
+.frow:hover { background: var(--paper2); }
+.fnum { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--t3); font-weight: 500; }
+.fname { display: flex; flex-direction: column; }
+.fname-t { font-size: 14px; font-weight: 700; color: var(--t1); margin-bottom: 3px; }
+.fname-d { font-size: 12px; color: var(--t2); line-height: 1.5; }
+.fformula { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--t2); background: var(--paper2); padding: 8px 10px; border-radius: var(--rad-xs); border: 1px solid var(--bdr); line-height: 1.4; word-break: break-word; }
+.fstatus { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; padding: 5px 12px; border-radius: 999px; letter-spacing: 0.05em; text-transform: uppercase; justify-self: end; }
+.fstatus.ok { background: var(--green-l); color: var(--green); }
+.fstatus.warn { background: var(--amber-l); color: var(--amber); }
+
+/* ── CHART ── */
+.chart-card { background: var(--paper); border: 1px solid var(--bdr); border-radius: var(--rad-sm); padding: 28px; }
+.chart-title { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 800; color: var(--t1); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 6px; }
+.chart-sub { font-size: 12px; color: var(--t2); margin-bottom: 22px; }
+.chart-wrap { position: relative; height: 280px; }
+
+/* ── DIAGNÓSTICO ── */
+.diag { background: var(--paper);
+  border: 1px solid var(--pr-m);
+  border-radius: var(--rad);
+  padding: 32px 36px;
+  margin-bottom: 28px;
+}
+.diag-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.diag-icon { width: 36px; height: 36px; border-radius: 999px; background: var(--pr); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; font-family: 'Orbitron', sans-serif; flex-shrink: 0; }
+.diag-title { font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--t1); }
+.diag-body { font-size: 14px; color: var(--t2); line-height: 1.7; }
+.diag-body p { margin-bottom: 12px; }
+.diag-body p:last-child { margin-bottom: 0; }
+.diag-body b { color: var(--t1); font-weight: 700; }
+.diag-quote {
+  background: var(--paper);
+  border-left: 3px solid var(--pr);
+  padding: 14px 18px;
+  margin: 18px 0;
+  font-style: italic;
+  color: var(--t2);
+  border-radius: 0 var(--rad-xs) var(--rad-xs) 0;
+}
+
+/* ── BENCHMARK BARS ── */
+.bench { background: var(--paper); border: 1px solid var(--bdr); border-radius: var(--rad-sm); padding: 26px 28px; }
+.bench-row { display: grid; grid-template-columns: 160px 1fr 130px; gap: 18px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--bdr); }
+.bench-row:last-child { border-bottom: none; }
+.bench-l { font-size: 12px; font-weight: 600; color: var(--t1); }
+.bench-bar { height: 28px; border-radius: 4px; position: relative; background: var(--paper3); overflow: hidden; }
+.bench-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+.bench-bar-fill.medio { background: linear-gradient(90deg, #94a3b8, #cbd5e1); }
+.bench-bar-fill.alto { background: linear-gradient(90deg, #FF6B4A, #fbbf24); }
+.bench-bar-fill.luxo { background: linear-gradient(90deg, #a855f7, #ec4899); }
+.bench-bar-fill.atual { background: linear-gradient(90deg, #1f2937, #374151); position: relative; }
+.bench-bar-fill.atual::after { content: '◆ ATUAL'; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; }
+.bench-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700; color: var(--t1); text-align: right; }
+
+/* ── FLOOR LADDER ── */
+.fladder { background: var(--paper); border: 1px solid var(--bdr); border-radius: var(--rad-sm); padding: 28px; }
+.fladder-row { display: grid; grid-template-columns: 110px 1fr 1fr 1fr 1fr; gap: 14px; align-items: center; padding: 11px 0; border-bottom: 1px dashed var(--bdr); font-size: 12px; }
+.fladder-row.head { border-bottom: 2px solid var(--bdr2); padding-bottom: 12px; margin-bottom: 4px; font-weight: 700; color: var(--t3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; }
+.fladder-row:last-child { border-bottom: none; }
+.fladder-l { font-weight: 600; color: var(--t1); }
+.fladder-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; }
+.fladder-v.cob { color: var(--pr); font-weight: 700; }
+
+/* ── RECOMMENDATIONS ── */
+.recs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.rec {
+  background: var(--paper);
+  border: 1px solid var(--bdr);
+  border-left: 3px solid var(--pr);
+  border-radius: 0 var(--rad-sm) var(--rad-sm) 0;
+  padding: 22px 26px;
+}
+.rec-num { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--pr); font-weight: 700; letter-spacing: 0.05em; margin-bottom: 8px; }
+.rec-t { font-size: 14px; font-weight: 700; color: var(--t1); margin-bottom: 6px; line-height: 1.4; }
+.rec-d { font-size: 12px; color: var(--t2); line-height: 1.6; }
+
+/* ── USAGE GUIDE ── */
+.guide-card { background: var(--paper); border: 1px solid var(--bdr); border-radius: var(--rad-sm); margin-bottom: 14px; overflow: hidden; }
+.guide-hdr { display: grid; grid-template-columns: 60px 1fr; gap: 18px; padding: 18px 22px; border-bottom: 1px solid var(--bdr); align-items: center; }
+.guide-num { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; color: var(--pr); line-height: 1; }
+.guide-name { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 800; color: var(--t1); text-transform: uppercase; letter-spacing: 0.12em; }
+.guide-name + .guide-tag { font-size: 11px; color: var(--t3); margin-top: 3px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.guide-body { padding: 18px 22px 22px 100px; font-size: 13px; color: var(--t2); line-height: 1.65; }
+.guide-body b { color: var(--t1); font-weight: 600; }
+.guide-body code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; background: var(--paper2); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--bdr); color: var(--t1); }
+
+/* ── FOOTER ── */
+.foot { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--bdr); display: flex; justify-content: center; align-items: center; font-family: 'Orbitron', sans-serif; font-size: 10px; color: var(--t3); letter-spacing: 0.2em; text-transform: uppercase; }
+
+@media (max-width: 1024px) {
+  .ver-grid { grid-template-columns: repeat(2, 1fr); }
+  .dgrid, .dgrid-2, .recs { grid-template-columns: 1fr; }
+  .frow { grid-template-columns: 1fr; gap: 10px; }
+  .fstatus { justify-self: start; }
+  .bench-row { grid-template-columns: 1fr; gap: 6px; }
+  .fladder-row { grid-template-columns: 80px 1fr 1fr 1fr 1fr; font-size: 11px; }
+  .hero-title { font-size: 36px; }
+}
+
+
+/* ════════════════ SIMULADOR STYLES ════════════════ */
+
+:root {
+  --pr: #FF6B4A;
+  --pr-h: #FF5A35;
+  --pr-d: #D54A2D;
+  --pr-l: rgba(255, 107, 74,0.08);
+  --pr-m: rgba(255, 107, 74,0.15);
+
+  --bg: #f0f2f5;
+  --surf: #ffffff;
+  --surf2: #f7f8fa;
+  --surf3: #eef0f4;
+
+  --bdr: #e4e7ec;
+  --bdr2: #cdd2db;
+  --bdr3: #b8bec9;
+
+  --t1: #111827;
+  --t2: #4b5563;
+  --t3: #9ca3af;
+  --t4: #d1d5db;
+
+  --green: #059669;
+  --green-l: #ecfdf5;
+  --red: #dc2626;
+  --red-l: #fef2f2;
+  --blue: #2563eb;
+  --blue-l: #eff6ff;
+
+  --rad: 24px;
+  --rad-sm: 16px;
+  --rad-xs: 8px;
+
+  --sh-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --sh-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --sh-lg: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+
+/* ── LAYOUT ── */
+.wrap { display: flex; justify-content: center; padding: 24px 24px 40px; }
+.app { display: grid; grid-template-columns: 1fr 460px; gap: 20px; width: 100%; max-width: 1680px; }
+.main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad);
+  box-shadow: var(--sh-md);
+  padding: 28px;
+  position: sticky; top: 76px;
+  height: calc(100vh - 92px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdr2) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad);
+  box-shadow: var(--sh-sm);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: var(--sh-md); }
+.card-hdr {
+  padding: 14px 20px;
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--bdr);
+  cursor: pointer; user-select: none;
+  transition: background 0.15s;
+}
+.card-hdr:hover { background: var(--surf2); }
+.card-num {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--pr); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px; font-weight: 800; flex-shrink: 0;
+  letter-spacing: 0;
+  box-shadow: 0 6px 14px -6px rgba(255,107,74,0.5);
+}
+.card-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px; font-weight: 800; color: var(--t1);
+  text-transform: uppercase; letter-spacing: 0.14em; flex: 1;
+}
+.card-arrow { color: var(--t3); font-size: 12px; transition: transform 0.2s; }
+.card-arrow.open { transform: rotate(180deg); }
+.card-body { padding: 20px; }
+.card-body.hidden { display: none; }
+
+/* ── FORM ── */
+.fg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.fg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fg5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.fspan { grid-column: 1 / -1; }
+.gap { height: 14px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label {
+  font-size: 10px; font-weight: 700; color: var(--t2);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.field input, .field select {
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  color: var(--t1);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 11px;
+  transition: all 0.15s;
+  width: 100%;
+}
+.field input:focus, .field select:focus {
+  outline: none;
+  background: var(--surf);
+  border-color: var(--pr);
+  box-shadow: 0 0 0 3px var(--pr-l);
+}
+.field input::placeholder { color: var(--t4); font-weight: 400; }
+.field input[type="number"] { -moz-appearance: textfield; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.field input[type="number"]::-webkit-inner-spin-button,
+.field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+.field select {
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center; background-size: 14px; padding-right: 30px;
+}
+
+/* ── DYNAMIC TABLES ── */
+.tbl-wrap { overflow-x: auto; margin-bottom: 16px; }
+.dyn-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dyn-tbl thead tr { border-bottom: 2px solid var(--bdr2); }
+.dyn-tbl th {
+  padding: 10px 8px; text-align: left;
+  font-size: 10px; font-weight: 700; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.dyn-tbl td { padding: 5px 4px; border-bottom: 1px solid var(--bdr); vertical-align: middle; }
+.dyn-tbl tbody tr:last-child td { border-bottom: none; }
+.dyn-tbl tbody tr:hover td { background: var(--surf2); }
+.dyn-tbl input, .dyn-tbl select {
+  width: 100%;
+  background: transparent; border: 1px solid transparent; border-radius: var(--rad-xs);
+  color: var(--t1); font-family: 'Inter', system-ui, sans-serif; font-size: 12px; font-weight: 500;
+  padding: 5px 7px; transition: all 0.15s;
+}
+.dyn-tbl input[type="number"] { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.dyn-tbl input:hover, .dyn-tbl select:hover { background: var(--surf2); }
+.dyn-tbl input:focus, .dyn-tbl select:focus {
+  outline: none; border-color: var(--pr);
+  background: var(--surf); box-shadow: 0 0 0 2px var(--pr-l);
+}
+.dyn-tbl select { cursor: pointer; appearance: none; padding-right: 18px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 3px center; background-size: 12px;
+}
+td.calc { font-size: 12px; font-weight: 600; text-align: right; padding: 5px 8px; white-space: nowrap; color: var(--t1); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+td.calc.accent { color: var(--pr); }
+.btn-add {
+  border: 1px dashed var(--bdr2); border-radius: var(--rad-sm);
+  background: transparent; color: var(--t3); font-family: inherit;
+  font-size: 11px; font-weight: 600; padding: 6px 14px; cursor: pointer;
+  transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.btn-add:hover { border-color: var(--pr); color: var(--pr); background: var(--pr-l); }
+.btn-rm {
+  width: 22px; height: 22px; border-radius: var(--rad-xs); border: none;
+  background: transparent; color: var(--t4); font-size: 16px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; padding: 0;
+}
+.btn-rm:hover { background: var(--red-l); color: var(--red); }
+
+/* ── SUMÁRIO INLINE ── */
+.sum-box { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--bdr); }
+.sum-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0; border-bottom: 1px dashed var(--bdr); font-size: 12px;
+}
+.sum-row:last-child { border-bottom: none; }
+.sum-row .sl { color: var(--t2); font-weight: 400; }
+.sum-row .sv { font-weight: 600; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--t1); }
+.sum-row .sv.accent { color: var(--pr); font-size: 13px; }
+.sum-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 14px;
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  margin-top: 12px;
+}
+.sum-total .stl { font-size: 12px; font-weight: 600; color: var(--t2); }
+.sum-total .stv { font-size: 16px; font-weight: 800; color: var(--pr); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+/* ── INFO BOX ── */
+.info-box {
+  background: var(--pr-l);
+  border: 1px solid var(--pr-m);
+  border-radius: var(--rad-sm);
+  padding: 11px 14px;
+  font-size: 12px; color: var(--pr-d); font-weight: 500; line-height: 1.6;
+}
+.info-box b { font-weight: 700; }
+.nota {
+  background: var(--surf2); border-left: 3px solid var(--bdr3);
+  border-radius: 0 var(--rad-sm) var(--rad-sm) 0;
+  padding: 12px 14px; font-size: 12px; color: var(--t2); line-height: 1.6; margin-top: 14px;
+}
+
+/* ── SIDEBAR REPORT ── */
+.rep-hdr { text-align: center; padding-bottom: 20px; border-bottom: 1px solid var(--bdr); margin-bottom: 22px; }
+.rep-badge {
+  display: inline-block; background: var(--pr); color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
+  padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;
+}
+.rep-title { font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 800; color: var(--t1); letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.2; }
+.rep-sub { font-size: 12px; color: var(--t3); margin-top: 4px; font-weight: 400; }
+
+/* Chart legend */
+.chart-leg { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 12px; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t2); font-weight: 500; }
+.leg-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.ch-wrap { position: relative; width: 100%; height: 210px; margin-bottom: 24px; }
+
+/* Cenário */
+.scen-box {
+  background: linear-gradient(135deg, var(--pr-l) 0%, rgba(255, 107, 74,0.04) 100%);
+  border: 1px solid var(--pr-m);
+  border-radius: var(--rad-sm); padding: 16px; margin-bottom: 24px;
+}
+.scen-title { font-size: 10px; font-weight: 700; color: var(--pr); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 14px; }
+.scen-group { margin-bottom: 12px; }
+.scen-group:last-child { margin-bottom: 0; }
+.scen-hdr { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--pr-h); margin-bottom: 5px; }
+.scen-val { font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: rgba(255, 107, 74,0.25); border-radius: 2px; cursor: pointer; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--pr); cursor: pointer; margin-top: -5px; box-shadow: 0 0 0 3px var(--pr-l); }
+input[type=range]:focus { outline: none; }
+
+/* KPI sections */
+.kpi-sec { margin-bottom: 22px; }
+.kpi-sec-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 800; color: var(--t1); text-transform: uppercase;
+  letter-spacing: 0.18em; padding-bottom: 8px;
+  border-bottom: 2px solid var(--t1); margin-bottom: 12px;
+}
+.kpi-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--bdr);
+}
+.kpi-row:last-child { border-bottom: none; }
+.kpi-row.total { border-top: 1px solid var(--bdr2); padding-top: 8px; margin-top: 4px; border-bottom: none; }
+.kpi-lbl { font-size: 12px; color: var(--t2); font-weight: 400; }
+.kpi-val { font-size: 12px; font-weight: 700; color: var(--t1); text-align: right; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.kpi-val.big { font-size: 14px; color: var(--pr); }
+.kpi-val.green { color: var(--green); }
+.kpi-val.red { color: var(--red); }
+.kpi-row.total .kpi-lbl { font-weight: 700; color: var(--t1); }
+.kpi-row.total .kpi-val { font-size: 13px; }
+
+/* Margem bar */
+.mbar-wrap { padding: 2px 0 10px; }
+.mbar { height: 5px; background: var(--bdr); border-radius: 3px; overflow: hidden; margin: 8px 0 5px; }
+.mbar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease, background 0.3s; }
+.mbar-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--t4); }
+
+/* lucro badge */
+.lucro-badge {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-radius: var(--rad-sm); margin-bottom: 20px;
+  border: 1px solid;
+}
+.lucro-badge.pos { background: var(--green-l); border-color: #bbf7d0; }
+.lucro-badge.neg { background: var(--red-l); border-color: #fecaca; }
+.lb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.lb-val { font-size: 18px; font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.lucro-badge.pos .lb-label, .lucro-badge.pos .lb-val { color: var(--green); }
+.lucro-badge.neg .lb-label, .lucro-badge.neg .lb-val { color: var(--red); }
+
+/* Loading overlay */
+.overlay {
+  position: fixed; inset: 0; background: rgba(255,255,255,0.95);
+  z-index: 9999; display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px;
+}
+.overlay.on { display: flex; }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--bdr); border-top-color: var(--pr); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ov-txt { font-size: 12px; font-weight: 700; color: var(--t2); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* PDF export */
+.pdf-on .wrap { padding: 0; background: #fff; }
+.pdf-on .app { grid-template-columns: 1fr 440px; gap: 0; max-width: none; width: 1500px; }
+.pdf-on .main { padding: 20px 32px; }
+.pdf-on .sidebar { position: static; height: auto; border-radius: 0; border-left: 1px solid var(--bdr); border: none; border-left: 1px solid var(--bdr); max-height: none; overflow-y: visible; }
+.pdf-on .scen-box { display: none; }
+.pdf-on .hdr { display: none; }
+.pdf-on .btn-add { display: none; }
+.pdf-on .card-arrow { display: none; }
+.pdf-on .card-body.hidden { display: block; }
+.pdf-on td:last-child, .pdf-on th:last-child { display: none; }
+
+
+/* ── TABS (NEW) ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad);
+  padding: 5px;
+  box-shadow: var(--sh-sm);
+  margin-bottom: 16px;
+  position: sticky; top: 76px; z-index: 100;
+}
+.tab {
+  flex: 1;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  color: var(--t2);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.tab:hover { background: var(--surf2); color: var(--t1); }
+.tab.active { background: var(--t1); color: #fff; box-shadow: var(--sh-sm); }
+.tab-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  font-size: 9px; font-weight: 700;
+}
+.tab:not(.active) .tab-num { background: var(--bdr); color: var(--t3); }
+
+.tab-content { display: none; flex-direction: column; gap: 16px; }
+.tab-content.active { display: flex; }
+
+/* ── TABELA APTO ── */
+.apto-row {
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.apto-row-hdr {
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  background: var(--surf);
+  border-bottom: 1px solid var(--bdr);
+}
+.apto-row-name {
+  font-size: 13px; font-weight: 700; color: var(--t1);
+  letter-spacing: 0.01em;
+}
+.apto-row-name .apto-row-tag {
+  display: inline-block;
+  background: var(--pr-l); color: var(--pr-d);
+  font-size: 9px; font-weight: 700; padding: 2px 7px;
+  border-radius: 999px; margin-left: 8px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.apto-row-result {
+  display: flex; gap: 18px; align-items: center;
+  font-size: 11px;
+}
+.apto-row-result span { color: var(--t3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.apto-row-result b { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--t1); font-weight: 700; font-size: 13px; }
+.apto-row-result b.pr { color: var(--pr); font-size: 14px; }
+.apto-row-tog {
+  background: transparent; border: 1px solid var(--bdr);
+  border-radius: var(--rad-xs); padding: 5px 9px;
+  cursor: pointer; color: var(--t3); font-size: 11px;
+  transition: all 0.15s;
+}
+.apto-row-tog:hover { border-color: var(--pr); color: var(--pr); }
+
+.apto-row-body { padding: 16px 18px; }
+.apto-cfg {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.apto-cfg .field label {
+  font-size: 9px; font-weight: 700; color: var(--t2);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.apto-cfg .field input, .apto-cfg .field select {
+  background: var(--surf);
+  font-size: 12px;
+  padding: 7px 9px;
+}
+.apto-floors {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-xs);
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdr2) transparent;
+}
+.apto-floors::-webkit-scrollbar { width: 4px; }
+.apto-floors::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+.apto-floors-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.apto-floors-tbl thead {
+  position: sticky; top: 0;
+  background: var(--surf2);
+  z-index: 1;
+}
+.apto-floors-tbl th {
+  padding: 8px 10px; text-align: left;
+  font-size: 9px; font-weight: 700; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--bdr);
+}
+.apto-floors-tbl td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--bdr);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500;
+}
+.apto-floors-tbl td:first-child {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  color: var(--t1);
+}
+.apto-floors-tbl tr.cob td { background: linear-gradient(90deg, rgba(255, 107, 74,0.04), transparent); color: var(--pr-d); }
+.apto-floors-tbl tr.cob td:first-child::after { content: '★'; color: var(--pr); margin-left: 6px; font-size: 10px; }
+.apto-floors-tbl tr.tot td {
+  background: var(--surf2);
+  font-weight: 700;
+  color: var(--t1);
+  border-top: 2px solid var(--bdr2);
+  border-bottom: none;
+}
+
+.apto-mode-tabs {
+  display: inline-flex; gap: 2px;
+  background: var(--surf2); border: 1px solid var(--bdr);
+  border-radius: var(--rad-xs); padding: 2px; margin-bottom: 10px;
+}
+.apto-mode-tab {
+  padding: 5px 11px; border: none; background: transparent;
+  font-size: 10px; font-weight: 600; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; border-radius: 3px; transition: all 0.15s;
+  font-family: inherit;
+}
+.apto-mode-tab.active { background: var(--t1); color: #fff; }
+
+/* ── RESUMO TAB ── */
+.resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.resumo-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad);
+  padding: 22px 24px;
+  box-shadow: var(--sh-sm);
+}
+.resumo-card.span-2 { grid-column: 1 / -1; }
+.resumo-card-l {
+  font-size: 10px; font-weight: 700; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;
+}
+.resumo-card-v {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 26px; font-weight: 800;
+  color: var(--t1); letter-spacing: -0.02em;
+}
+.resumo-card-v.pr { color: var(--pr); }
+.resumo-card-v.gr { color: var(--green); }
+.resumo-card-s { font-size: 11px; color: var(--t2); margin-top: 6px; line-height: 1.5; }
+.resumo-section-t {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; font-weight: 800; color: var(--t1);
+  text-transform: uppercase; letter-spacing: 0.16em;
+  padding-bottom: 8px; border-bottom: 2px solid var(--t1);
+  margin: 22px 0 14px;
+}
+.resumo-section-t:first-child { margin-top: 0; }
+.resumo-row {
+  display: flex; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--bdr);
+  font-size: 13px;
+}
+.resumo-row:last-child { border-bottom: none; }
+.resumo-row-l { color: var(--t2); }
+.resumo-row-v { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; color: var(--t1); }
+
+.resumo-pies {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.resumo-pie-card {
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  padding: 14px;
+}
+.resumo-pie-t {
+  font-size: 10px; font-weight: 700; color: var(--t3);
+  text-transform: uppercase; letter-spacing: 0.07em;
+  margin-bottom: 8px; text-align: center;
+}
+.resumo-pie-w { position: relative; height: 140px; }
+
+.btn-add-apto {
+  border: 1px dashed var(--bdr2); border-radius: var(--rad-sm);
+  background: transparent; color: var(--t3); font-family: inherit;
+  font-size: 11px; font-weight: 600; padding: 9px 16px; cursor: pointer;
+  transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.05em;
+  width: 100%;
+}
+.btn-add-apto:hover { border-color: var(--pr); color: var(--pr); background: var(--pr-l); }
+
+@media (max-width: 1100px) {
+  .apto-cfg { grid-template-columns: repeat(2, 1fr); }
+  .resumo-grid { grid-template-columns: 1fr; }
+  .tabs { position: static; }
+}
+
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; max-height: none; }
+  .fg4, .fg5 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .hdr { padding: 0 16px; }
+  .hvgv { display: none; }
+  .wrap { padding: 12px; }
+  .fg, .fg3 { grid-template-columns: 1fr; }
+}
+
+
+/* Fix sticky positioning for inner tabs (the simulator's .tabs) */
+#page-simulador .tabs { top: 70px; }
+#page-simulador .sidebar { top: 70px; height: calc(100vh - 86px); }
+</style>
+</head>
+<body class="has-contour">
+
+<!-- ════════════════ UNIFIED HEADER ════════════════ -->
+<div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(128, 128, 128, 0.2); padding-bottom: 24px; margin: 24px 32px 0 32px; font-family: 'Inter', sans-serif;">
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <span class="material-symbols-outlined" style="color: #00b87c; font-size: 24px;">account_balance</span>
+    <p style="font-size: 14px; font-weight: bold; color: #9ca3af; margin: 0;" id="header-project-name">ESTUDO FINANCEIRO EVR</p>
+  </div>
+  <div style="display: flex; gap: 24px; align-items: center;">
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 10px; color: #9ca3af; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em;">
+      VGV <span id="hdr-meta-vgv" style="color: #00b87c; font-size: 16px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0;">—</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 10px; color: #9ca3af; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em;">
+      Permuta <span id="hdr-meta-perm" style="color: #00b87c; font-size: 16px; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 0;">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ APP ════════════════ -->
+<div id="page-simulador" class="app-page active">
+
+
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <div class="ov-txt">Gerando Relatório PDF...</div>
+</div>
+
+
+
+<div class="wrap" id="pdf-wrap">
+<div class="app">
+
+<!-- ════════════════════════ INPUTS ════════════════════════ -->
+<div class="main">
+
+  <!-- ════════════ TAB NAVIGATION ════════════ -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('tabela')" id="tab-btn-tabela">
+      <span class="tab-num">1</span>TABELA APTO
+    </button>
+    <button class="tab" onclick="switchTab('detalhado')" id="tab-btn-detalhado">
+      <span class="tab-num">2</span>DETALHADO
+    </button>
+    <button class="tab" onclick="switchTab('resumo')" id="tab-btn-resumo">
+      <span class="tab-num">3</span>RESUMO
+    </button>
+  </div>
+
+  <!-- ════════════ TAB 1: TABELA APTO ════════════ -->
+  <div class="tab-content active" id="tab-tabela">
+    <div class="card">
+      <div class="card-hdr" style="cursor:default">
+        <div class="card-num">★</div>
+        <div class="card-title">Tabela de Apartamentos por Andar — Valorização Vertical</div>
+      </div>
+      <div class="card-body">
+        <div class="info-box" style="margin-bottom:18px;">
+          <b>Ferramenta complementar.</b> Esta aba é onde você monta a tabela comercial REAL — preço por andar, com valorização vertical e coberturas premium. Defina, por tipologia: pm² do <b>1º andar do bloco</b>, o incremento por andar (em R$ ou %) e, se houver, <b>unidades de cobertura</b> com pm² fixo premium. Quando estiver pronto, clique em <b>↓ Aplicar à Composição</b> para sobrescrever as tipologias da aba DETALHADO com o pm² médio calculado aqui.
+        </div>
+        <div id="apto-list"></div>
+        <button class="btn-add-apto" onclick="addApto()" style="margin-bottom:12px;">+ Adicionar tipologia com valorização vertical</button>
+        <div id="apto-actions" style="display:none; padding:14px 16px; background:var(--surf2); border:1px solid var(--bdr); border-radius:var(--rad-sm);">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:18px;">
+            <div style="font-size:12px; color:var(--t2); flex:1; line-height:1.5;">
+              <b style="color:var(--t1)">Aplicar à Composição de Vendas?</b><br>
+              Substitui as tipologias atuais da aba DETALHADO pelas calculadas aqui. <b>Esta ação é destrutiva</b> e não tem undo — confirme antes de prosseguir.
+            </div>
+            <button onclick="syncAptosToUnits()" style="background:var(--pr); color:#fff; border:none; padding:11px 20px; border-radius:var(--rad-sm); font-family:inherit; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; white-space:nowrap;">↓ Aplicar à Composição</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ TAB 2: DETALHADO ════════════ -->
+  <div class="tab-content" id="tab-detalhado">
+
+  <!-- 1. IDENTIFICAÇÃO -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">1</div>
+      <div class="card-title">Identificação do Empreendimento</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="fg">
+        <div class="field fspan"><label>Nome do empreendimento</label><input type="text" id="nome" value="" placeholder="Nome do empreendimento" oninput="calc()"></div>
+        <div class="field"><label>Cidade / UF</label><input type="text" id="cidade" value="" placeholder="Cidade / UF" oninput="calc()"></div>
+        <div class="field"><label>Área do terreno (m²)</label><input type="number" id="area_terreno" value="" placeholder="m²" oninput="calc()"></div>
+        <div class="field"><label>CUB/SC Abr/2026 (R$/m²)</label><input type="number" id="cub" value="" placeholder="R$/m²" oninput="calc()"></div>
+        <div class="field"><label>Mês de referência</label><input type="month" id="mes_ref" value="" oninput="calc()"></div>
+        <div class="field fspan"><label>Localização / Link Maps</label><input type="text" id="loc" value="" placeholder="Endereço ou link" oninput="calc()"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. PARÂMETROS URBANÍSTICOS -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">2</div>
+      <div class="card-title">Parâmetros Urbanísticos</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="fg4">
+        <div class="field"><label>Coef. Básico (CA)</label><input type="number" id="ca_bas" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>CA Máx. (outorga)</label><input type="number" id="ca_out" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>% CUB / m² outorga</label><input type="number" id="out_pct" value="" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>N° de lotes</label><input type="number" id="n_lotes" value="" oninput="calc()"></div>
+      </div>
+      <div class="gap"></div>
+      <div class="fg4">
+        <div class="field"><label>TO Embasamento</label><input type="number" id="to_emb" value="" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>TO Torre</label><input type="number" id="to_torre" value="" step="0.01" oninput="calc()"></div>
+        <div class="field"><label>Vagas necessárias</label><input type="number" id="vagas" value="" oninput="calc()"></div>
+        <div class="field"><label>Origem terreno</label>
+          <select id="origem">
+            <option selected>Matrícula</option><option>Topografia</option><option>Estimado</option>
+          </select>
+        </div>
+      </div>
+      <div class="info-box" id="urb-info" style="margin-top:16px;">Preencha o quadro de áreas para calcular o CA projetado.</div>
+    </div>
+  </div>
+
+  <!-- 3. QUADRO DE ÁREAS -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">3</div>
+      <div class="card-title">Quadro de Áreas Estrutural (CUG)</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="info-box" style="margin-bottom:16px;">
+        <b>Aprimoramento CUG:</b> O algoritmo avalia a geometria (esbeltez e compacidade) ajustando dinamicamente o custo base de R$/m² para além do CUB padrão, reduzindo desvios de estimativa de até 45%.
+      </div>
+      <div class="tbl-wrap">
+        <table class="dyn-tbl" id="tbl-areas">
+          <thead><tr>
+            <th>Pavimento</th><th>Tipo</th><th>Qtd</th>
+            <th>Comp./laje</th><th>Á.cob./laje</th><th>Á.desc./laje</th>
+            <th>Total p/ custo</th><th>Coef. eq.</th>
+            <th style="text-align:right">Custo calibrado (R$)</th><th></th>
+          </tr></thead>
+          <tbody id="areas-body"></tbody>
+        </table>
+      </div>
+      <div style="margin-bottom:14px;"><button class="btn-add" onclick="addArea()">+ Novo pavimento</button></div>
+      <div class="sum-box">
+        <div class="sum-row"><span class="sl">Área total construída</span><span class="sv" id="s-area-tot">—</span></div>
+        <div class="sum-row"><span class="sl">Fator de forma CUG (multiplicador)</span><span class="sv accent" id="s-fator-cug">—</span></div>
+        <div class="sum-row"><span class="sl">CUB ajustado pelo fator CUG</span><span class="sv" id="s-cub-aj">—</span></div>
+        <div class="sum-total"><span class="stl">Total Construção (Estrutura)</span><span class="stv" id="s-tot-const">R$ 0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. UNIDADES / VGV -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">4</div>
+      <div class="card-title">Composição de Vendas (VGV)</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="tbl-wrap">
+        <table class="dyn-tbl" id="tbl-units">
+          <thead><tr>
+            <th>Unidade</th><th>Tipo</th><th>Qtd</th><th>Área (m²)</th>
+            <th>R$/m² venda</th><th style="text-align:right">Preço un.</th>
+            <th style="text-align:right">VGV bruto</th>
+            <th>Permuta (un)</th><th style="text-align:right">Vlr. permuta</th><th></th>
+          </tr></thead>
+          <tbody id="units-body"></tbody>
+        </table>
+      </div>
+      <div style="margin-bottom:14px;"><button class="btn-add" onclick="addUnit()">+ Adicionar tipologia</button></div>
+      <div class="sum-box">
+        <div class="sum-row"><span class="sl">Área privativa total vendável</span><span class="sv" id="s-priv-area">—</span></div>
+        <div class="sum-row"><span class="sl">Unidades entregues em permuta</span><span class="sv" id="s-perm-un">—</span></div>
+        <div class="sum-row"><span class="sl">Valor retido pela permuta</span><span class="sv" id="s-perm-val">—</span></div>
+        <div class="sum-total"><span class="stl">VGV Bruto Total (Com Permuta)</span><span class="stv" id="s-vgv-bruto-tot">R$ 0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. TERRENO -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">5</div>
+      <div class="card-title">Custo de Aquisição do Terreno</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="fg4">
+        <div class="field"><label>Sinal / Tornas (R$)</label><input type="number" id="t_din" value="" oninput="calc()"></div>
+        <div class="field"><label>Aluguel mensal proprietário (R$)</label><input type="number" id="t_alug" value="" oninput="calc()"></div>
+        <div class="field"><label>Prazo do aluguel (meses)</label><input type="number" id="t_prazo" value="" oninput="calc()"></div>
+        <div class="field"><label>Intermediação imobiliária (R$)</label><input type="number" id="t_inter" value="" oninput="calc()"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. DESPESAS OPERACIONAIS -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">6</div>
+      <div class="card-title">Despesas Operacionais e Aprovações</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="fg5">
+        <div class="field"><label>BDI (% s/ construção)</label><input type="number" id="bdi" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Projetos (% s/ construção)</label><input type="number" id="proj_pct" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Marketing (% s/ VGV líq.) ✓</label><input type="number" id="mkt_pct" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Pós-obra (% s/ construção)</label><input type="number" id="pos_pct" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Outras despesas (R$)</label><input type="number" id="outros" value="" oninput="calc()"></div>
+      </div>
+      <div class="nota">
+        ✓ <b>Correção aplicada:</b> Marketing agora calculado sobre o VGV Líquido (padrão de mercado). No modelo original, 8% sobre construção (~R$400M) gerava ~R$32M de verba de MKT — valor irrealista. A base correta é o VGV disponível para caixa.
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. VARIÁVEIS FINANCEIRAS -->
+  <div class="card">
+    <div class="card-hdr" onclick="togCard(this)">
+      <div class="card-num">7</div>
+      <div class="card-title">Variáveis Financeiras</div>
+      <div class="card-arrow open">▾</div>
+    </div>
+    <div class="card-body">
+      <div class="fg4">
+        <div class="field"><label>Impostos s/ venda (%)</label><input type="number" id="imp_pct" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Comissão de vendas (%)</label><input type="number" id="com_pct" value="" step="0.1" oninput="calc()"></div>
+        <div class="field"><label>Prazo obra (meses)</label><input type="number" id="prazo" value="" oninput="calc()"></div>
+        <div class="field"><label>Taxa desconto VPL (% a.a.)</label><input type="number" id="taxa" value="" step="0.1" oninput="calc()"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nota">
+    <b>Aviso Metodológico:</b> Em estudos clássicos (CUB puro), as estimativas podem desviar até 45% da realidade. Ao aplicar a metodologia do Custo Unitário Geométrico (CUG), este painel analisa a morfologia do lançamento, ajustando o R$/m² com base na relação entre perímetro estimado de paredes externas e área construída — resultando em margens de aproximação significativamente mais realistas.
+  </div>
+
+
+  </div><!-- /tab-detalhado -->
+
+  <!-- ════════════ TAB 3: RESUMO ════════════ -->
+  <div class="tab-content" id="tab-resumo">
+
+    <!-- HERO STATS -->
+    <div class="resumo-grid">
+      <div class="resumo-card">
+        <div class="resumo-card-l">Lucro Líquido Estimado</div>
+        <div class="resumo-card-v gr" id="r-lucro">—</div>
+        <div class="resumo-card-s">Após VGV caixa, despesas e terreno</div>
+      </div>
+      <div class="resumo-card">
+        <div class="resumo-card-l">Margem de Lucro</div>
+        <div class="resumo-card-v pr" id="r-margem">—</div>
+        <div class="resumo-card-s">Sobre VGV líquido (mercado: 25-28% bruta)</div>
+      </div>
+      <div class="resumo-card">
+        <div class="resumo-card-l">VGV Líq. / m² Terreno</div>
+        <div class="resumo-card-v" id="r-vgv-m2">—</div>
+        <div class="resumo-card-s">Densidade de receita por m² de terreno</div>
+      </div>
+      <div class="resumo-card">
+        <div class="resumo-card-l">CUC Total / m² Privativo</div>
+        <div class="resumo-card-v" id="r-cuc-priv">—</div>
+        <div class="resumo-card-s">Custo total dividido por área vendável</div>
+      </div>
+    </div>
+
+    <!-- COMPOSIÇÃO DO VGV + 4 PIES -->
+    <div class="card">
+      <div class="card-hdr" style="cursor:default">
+        <div class="card-num">α</div>
+        <div class="card-title">Composição do VGV e Indicadores</div>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+          <div>
+            <div class="resumo-section-t">Composição do VGV Bruto</div>
+            <div class="resumo-row"><span class="resumo-row-l">Construção e aprovações</span><span class="resumo-row-v" id="r-vgv-const">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">Terreno (VPL permuta + dinheiro)</span><span class="resumo-row-v" id="r-vgv-terr">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">Impostos e comissões</span><span class="resumo-row-v" id="r-vgv-imp">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">Marketing</span><span class="resumo-row-v" id="r-vgv-mkt">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l" style="font-weight:700;color:var(--t1)">Lucro líquido</span><span class="resumo-row-v" style="color:var(--green)" id="r-vgv-luc">—</span></div>
+
+            <div class="resumo-section-t">Eficiência de Área</div>
+            <div class="resumo-row"><span class="resumo-row-l">Área Privativa</span><span class="resumo-row-v" id="r-eff-priv">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">Área Comum (não privativa)</span><span class="resumo-row-v" id="r-eff-com">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">Eficiência (priv ÷ const)</span><span class="resumo-row-v" id="r-eff-pct">—</span></div>
+          </div>
+          <div>
+            <div class="resumo-pies">
+              <div class="resumo-pie-card">
+                <div class="resumo-pie-t">Composição do VGV</div>
+                <div class="resumo-pie-w"><canvas id="pie-vgv"></canvas></div>
+              </div>
+              <div class="resumo-pie-card">
+                <div class="resumo-pie-t">Eficiência de Área</div>
+                <div class="resumo-pie-w"><canvas id="pie-eff"></canvas></div>
+              </div>
+              <div class="resumo-pie-card">
+                <div class="resumo-pie-t">Permuta em Área</div>
+                <div class="resumo-pie-w"><canvas id="pie-perm-area"></canvas></div>
+              </div>
+              <div class="resumo-pie-card">
+                <div class="resumo-pie-t">Permuta em VGV</div>
+                <div class="resumo-pie-w"><canvas id="pie-perm-vgv"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AVALIAÇÃO TERRENO -->
+    <div class="card">
+      <div class="card-hdr" style="cursor:default">
+        <div class="card-num">β</div>
+        <div class="card-title">Análise da Permuta e Avaliação do Terreno</div>
+      </div>
+      <div class="card-body">
+        <div class="resumo-grid">
+          <div>
+            <div class="resumo-section-t">Permuta sobre Área Privativa</div>
+            <div class="resumo-row"><span class="resumo-row-l">% A. Privativa (vendida)</span><span class="resumo-row-v" id="r-pa-priv">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">% A. Permuta</span><span class="resumo-row-v" id="r-pa-perm">—</span></div>
+          </div>
+          <div>
+            <div class="resumo-section-t">Permuta sobre Receitas</div>
+            <div class="resumo-row"><span class="resumo-row-l">% Receita Vendida</span><span class="resumo-row-v" id="r-pr-priv">—</span></div>
+            <div class="resumo-row"><span class="resumo-row-l">% Receita Permutada</span><span class="resumo-row-v" id="r-pr-perm">—</span></div>
+          </div>
+        </div>
+        <div style="height:18px"></div>
+        <div class="resumo-section-t">Avaliação Final do Terreno</div>
+        <div class="resumo-row"><span class="resumo-row-l">Valor de mercado da permuta</span><span class="resumo-row-v" id="r-vm-perm">—</span></div>
+        <div class="resumo-row"><span class="resumo-row-l">VPL da permuta (descontado)</span><span class="resumo-row-v" id="r-vpl-perm">—</span></div>
+        <div class="resumo-row"><span class="resumo-row-l">Valor pago em dinheiro</span><span class="resumo-row-v" id="r-din-terr">—</span></div>
+        <div class="resumo-row"><span class="resumo-row-l" style="font-weight:700;color:var(--t1)">Avaliação final do terreno</span><span class="resumo-row-v" style="color:var(--pr);font-size:14px" id="r-aval-terr">—</span></div>
+        <div class="resumo-row"><span class="resumo-row-l">Custo do terreno por m² (terreno)</span><span class="resumo-row-v" id="r-cust-m2">—</span></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-resumo -->
+
+</div><!-- /main -->
+
+<!-- ════════════════════════ SIDEBAR ════════════════════════ -->
+<div class="sidebar">
+
+  <div class="rep-hdr">
+    <div class="rep-badge">EVR 2026</div>
+    <div class="rep-title" id="rep-nome">—</div>
+    <div class="rep-sub" id="rep-cidade">Carregando...</div>
+  </div>
+
+  <!-- GRÁFICO -->
+  <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;text-align:center;margin-bottom:10px;">Composição de Gastos vs. Lucro</div>
+  <div class="chart-leg" id="chart-leg"></div>
+  <div class="ch-wrap">
+    <canvas id="chartCustos" role="img" aria-label="Gráfico de composição de gastos e lucro do empreendimento">Distribuição percentual de custos e lucro.</canvas>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div class="scen-box">
+    <div class="scen-title">Simulador de Sensibilidade</div>
+    <div class="scen-group">
+      <div class="scen-hdr"><span>Variação de Receita (VGV)</span><span class="scen-val" id="v-scen-vgv">0%</span></div>
+      <input type="range" id="scen-vgv" min="-20" max="20" value="0" step="1" oninput="updScen()">
+    </div>
+    <div class="scen-group">
+      <div class="scen-hdr"><span>Variação de Custo Obra</span><span class="scen-val" id="v-scen-custo">0%</span></div>
+      <input type="range" id="scen-custo" min="-20" max="20" value="0" step="1" oninput="updScen()">
+    </div>
+  </div>
+
+  <!-- LUCRO DESTAQUE -->
+  <div class="lucro-badge pos" id="lucro-badge">
+    <div class="lb-label">Lucro Líquido Estimado</div>
+    <div class="lb-val" id="s-lucro-badge">—</div>
+  </div>
+
+  <!-- KPI: PERFORMANCE -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Indicadores de Performance</div>
+    <div class="kpi-row">
+      <span class="kpi-lbl">Margem de Lucro sobre Receita</span>
+      <span class="kpi-val" id="s-margem">—</span>
+    </div>
+    <div class="mbar-wrap">
+      <div class="mbar"><div class="mbar-fill" id="mbar-fill" style="width:0%"></div></div>
+      <div class="mbar-labels"><span>0%</span><span>25%</span><span>50%</span></div>
+    </div>
+    <div class="kpi-row"><span class="kpi-lbl">Retorno de Investimento (ROI)</span><span class="kpi-val" id="s-roi">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">VGV Líquido / m² de terreno</span><span class="kpi-val" id="s-vgv-m2">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Custo Total / m² privativo</span><span class="kpi-val" id="s-custo-priv">—</span></div>
+  </div>
+
+  <!-- KPI: RECEITAS -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Receitas do Projeto</div>
+    <div class="kpi-row"><span class="kpi-lbl">VGV Bruto (tabela)</span><span class="kpi-val" id="s-vgvb">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Retenção de Permuta</span><span class="kpi-val" id="s-perm">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Impostos sobre Venda</span><span class="kpi-val" id="s-imp">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Comissão sobre Vendas</span><span class="kpi-val" id="s-com">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Marketing (% s/ VGV Líq.)</span><span class="kpi-val" id="s-mkt">—</span></div>
+    <div class="kpi-row total"><span class="kpi-lbl">VGV Líquido Gerador de Caixa</span><span class="kpi-val big" id="s-vgv">—</span></div>
+  </div>
+
+  <!-- KPI: CUSTOS CONSTRUÇÃO -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Despesas com Construção</div>
+    <div class="kpi-row"><span class="kpi-lbl">Construção (CUB Calibrado CUG)</span><span class="kpi-val" id="s-const">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Outorgas Onerosas</span><span class="kpi-val" id="s-outg">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">BDI + Projetos + Pós-obra</span><span class="kpi-val" id="s-aces">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Outras despesas (fixas)</span><span class="kpi-val" id="s-out-fix">—</span></div>
+    <div class="kpi-row total"><span class="kpi-lbl">Total Despesas de Construção</span><span class="kpi-val big" id="s-tot-geral">—</span></div>
+  </div>
+
+  <!-- KPI: TERRENO -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Investimento em Terreno</div>
+    <div class="kpi-row"><span class="kpi-lbl">Total em Dinheiro (Sinal + Aluguéis)</span><span class="kpi-val" id="s-t-din">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Intermediação Imobiliária</span><span class="kpi-val" id="s-t-int">—</span></div>
+    <div class="kpi-row total"><span class="kpi-lbl">Total Investimento em Terreno</span><span class="kpi-val big" id="s-t-tot">—</span></div>
+  </div>
+
+  <!-- KPI: PERMUTA & AVALIAÇÃO -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Análise de Permuta e Avaliação</div>
+    <div class="kpi-row"><span class="kpi-lbl">Permuta Física (% Área Privativa)</span><span class="kpi-val" id="s-pct-priv">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Valor de Mercado da Permuta</span><span class="kpi-val" id="s-vlr-perm">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">VPL de Permuta (Tx. Desconto)</span><span class="kpi-val" id="s-vpl">—</span></div>
+    <div class="kpi-row total"><span class="kpi-lbl">Avaliação Final do Terreno (VPL + Din.)</span><span class="kpi-val big" id="s-aval">—</span></div>
+  </div>
+
+  <!-- KPI: EFICIÊNCIA -->
+  <div class="kpi-sec">
+    <div class="kpi-sec-title">Eficiência de Área</div>
+    <div class="kpi-row"><span class="kpi-lbl">Área Privativa Vendável</span><span class="kpi-val" id="s-ap">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">Área Total Construída</span><span class="kpi-val" id="s-ac">—</span></div>
+    <div class="kpi-row"><span class="kpi-lbl">CUC Geral s/ Terreno (R$/m²)</span><span class="kpi-val" id="s-cuc">—</span></div>
+    <div class="kpi-row total"><span class="kpi-lbl">Eficiência (Privativa / Construída)</span><span class="kpi-val big" id="s-efic">—</span></div>
+  </div>
+
+</div><!-- /sidebar -->
+
+</div><!-- /app -->
+</div><!-- /pdf-wrap -->
+
+
+</div>
+
+<script>
+// ── Top-level page switcher ──
+function switchPage(name) {
+  document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.toptab').forEach(t => t.classList.remove('active'));
+  const page = document.getElementById('page-' + name);
+  const tab  = document.querySelector('.toptab[data-page="' + name + '"]');
+  if (page) page.classList.add('active');
+  if (tab)  tab.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  // Force a chart reflow if entering the simulator (charts render at 0×0 if hidden)
+  if (name === 'simulador' && typeof calc === 'function') {
+    setTimeout(() => { try { calc(); } catch(e){} }, 50);
+  }
+}
+
+// ── Original simulator script ──
+
+// ── STATE ──
+let areas = [], units = [], aid = 0, uid = 0;
+let mVgv = 1, mCusto = 1;
+let chartInst = null;
+
+// ── HELPERS ──
+const v = id => parseFloat(document.getElementById(id)?.value) || 0;
+const $ = id => document.getElementById(id);
+const st = (id, val) => { const e = $(id); if (e) e.textContent = val; };
+const fmt = (n, d = 0) => isNaN(n) || !isFinite(n) ? '—' : 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtM2 = n => isNaN(n) || !isFinite(n) ? '—' : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m²';
+const fmtPct = n => isNaN(n) || !isFinite(n) ? '—' : (n * 100).toFixed(2).replace('.', ',') + ' %';
+
+// ── CARD TOGGLE ──
+function togCard(hdr) {
+  hdr.nextElementSibling.classList.toggle('hidden');
+  hdr.querySelector('.card-arrow').classList.toggle('open');
+}
+
+// ── SCENARIO ──
+function updScen() {
+  const sv = +$('scen-vgv').value, sc = +$('scen-custo').value;
+  st('v-scen-vgv', (sv > 0 ? '+' : '') + sv + '%');
+  st('v-scen-custo', (sc > 0 ? '+' : '') + sc + '%');
+  mVgv = 1 + sv / 100; mCusto = 1 + sc / 100;
+  calc();
+}
+
+// ── PDF EXPORT ──
+function exportPDF() {
+  document.body.classList.add('pdf-on');
+  $('overlay').classList.add('on');
+  const opt = {
+    margin: 8, filename: 'EVR_Executivo.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  };
+  setTimeout(() => {
+    html2pdf().set(opt).from($('pdf-wrap')).save().then(() => {
+      document.body.classList.remove('pdf-on');
+      $('overlay').classList.remove('on');
+    });
+  }, 600);
+}
+
+// ── CHART ──
+const CHART_COLORS = ['#374151', '#6b7280', '#d1d5db', '#FF6B4A'];
+const CHART_LABELS = ['Construção e aprovações', 'Terreno total', 'Impostos e comissões', 'Lucro líquido'];
+
+function initChart() {
+  Chart.defaults.font.family = 'Inter';
+  const ctx = $('chartCustos').getContext('2d');
+  chartInst = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: CHART_LABELS,
+      datasets: [{
+        data: [0, 0, 0, 0],
+        backgroundColor: CHART_COLORS,
+        borderWidth: 2, borderColor: '#ffffff', hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ' ' + fmt(c.raw) } }
+      }
+    }
+  });
+  // custom legend
+  const leg = $('chart-leg');
+  leg.innerHTML = CHART_LABELS.map((l, i) =>
+    `<div class="leg-item"><div class="leg-sq" style="background:${CHART_COLORS[i]}"></div>${l}</div>`
+  ).join('');
+}
+
+function updChart(c, t, ic, lu) {
+  if (!chartInst) return;
+  chartInst.data.datasets[0].data = [c, t, ic, Math.max(0, lu)];
+  chartInst.update();
+}
+
+// ── AREAS TABLE ──
+function addArea() {
+  addAreaObj({ nome: '', tipo: 'Torre', qtd: 1, comp: 0, cob: 0, desc: 0, total: 0, coef: 1.0 });
+  calc();
+}
+function addAreaObj(d) {
+  const id = aid++; areas.push({ id, ...d });
+  const tr = document.createElement('tr'); tr.id = 'ar-' + id;
+  tr.innerHTML = `
+    <td><input type="text" data-id="${id}" data-f="nome" value="${d.nome}" oninput="upArea(this)" style="min-width:120px"></td>
+    <td><select data-id="${id}" data-f="tipo" onchange="upArea(this)" style="min-width:100px">
+      <option ${d.tipo==='Embasamento'?'selected':''}>Embasamento</option>
+      <option ${d.tipo==='Torre'?'selected':''}>Torre</option>
+      <option ${d.tipo==='Telhado'?'selected':''}>Telhado</option>
+    </select></td>
+    <td><input type="number" data-id="${id}" data-f="qtd" value="${d.qtd}" oninput="upArea(this)" style="width:50px"></td>
+    <td><input type="number" data-id="${id}" data-f="comp" value="${d.comp}" oninput="upArea(this)" style="width:90px"></td>
+    <td><input type="number" data-id="${id}" data-f="cob" value="${d.cob}" oninput="autoTotArea(this)" style="width:90px"></td>
+    <td><input type="number" data-id="${id}" data-f="desc" value="${d.desc}" oninput="upArea(this)" style="width:80px"></td>
+    <td><input type="number" data-id="${id}" data-f="total" value="${d.total}" oninput="upArea(this)" style="width:90px"></td>
+    <td><input type="number" data-id="${id}" data-f="coef" value="${d.coef}" step="0.05" oninput="upArea(this)" style="width:58px"></td>
+    <td class="calc" id="ac-${id}">—</td>
+    <td style="text-align:center;padding:4px 6px"><button class="btn-rm" onclick="rmArea(${id})">×</button></td>`;
+  $('areas-body').appendChild(tr);
+}
+function autoTotArea(inp) {
+  const id = +inp.dataset.id, a = areas.find(x => x.id === id); if (!a) return;
+  const tr = inp.closest('tr');
+  const ti = tr.querySelector('[data-f="total"]');
+  const qi = tr.querySelector('[data-f="qtd"]');
+  a.cob = parseFloat(inp.value) || 0;
+  a.total = a.cob; // total per laje = cob
+  ti.value = a.total;
+  calc();
+}
+function upArea(inp) {
+  const id = +inp.dataset.id, f = inp.dataset.f, a = areas.find(x => x.id === id); if (!a) return;
+  a[f] = (f === 'nome' || f === 'tipo') ? inp.value : (parseFloat(inp.value) || 0);
+  calc();
+}
+function rmArea(id) { areas = areas.filter(a => a.id !== id); $('ar-' + id)?.remove(); calc(); }
+
+// ── UNITS TABLE ──
+function addUnit() {
+  addUnitObj({ nome: '', tipo: 'Residencial', qtd: 1, area: 0, pm2: 0, permuta: 0 });
+  calc();
+}
+function addUnitObj(d) {
+  const id = uid++; units.push({ id, ...d });
+  const tr = document.createElement('tr'); tr.id = 'ur-' + id;
+  tr.innerHTML = `
+    <td><input type="text" data-id="${id}" data-f="nome" value="${d.nome}" oninput="upUnit(this)" style="min-width:120px"></td>
+    <td><select data-id="${id}" data-f="tipo" onchange="upUnit(this)" style="min-width:100px">
+      <option ${d.tipo==='Residencial'?'selected':''}>Residencial</option>
+      <option ${d.tipo==='Comercial'?'selected':''}>Comercial</option>
+      <option ${d.tipo==='Estacionamento'?'selected':''}>Estacionamento</option>
+    </select></td>
+    <td><input type="number" data-id="${id}" data-f="qtd" value="${d.qtd}" oninput="upUnit(this)" style="width:55px"></td>
+    <td><input type="number" data-id="${id}" data-f="area" value="${d.area}" oninput="upUnit(this)" style="width:72px"></td>
+    <td><input type="number" data-id="${id}" data-f="pm2" value="${d.pm2}" oninput="upUnit(this)" style="width:90px"></td>
+    <td class="calc" id="up-${id}">—</td>
+    <td class="calc" id="uv-${id}">—</td>
+    <td><input type="number" data-id="${id}" data-f="permuta" value="${d.permuta}" oninput="upUnit(this)" style="width:55px"></td>
+    <td class="calc accent" id="upe-${id}">—</td>
+    <td style="text-align:center;padding:4px 6px"><button class="btn-rm" onclick="rmUnit(${id})">×</button></td>`;
+  $('units-body').appendChild(tr);
+}
+function upUnit(inp) {
+  const id = +inp.dataset.id, f = inp.dataset.f, u = units.find(x => x.id === id); if (!u) return;
+  u[f] = (f === 'nome' || f === 'tipo') ? inp.value : (parseFloat(inp.value) || 0);
+  calc();
+}
+function rmUnit(id) { units = units.filter(u => u.id !== id); $('ur-' + id)?.remove(); calc(); }
+
+// ── MAIN CALC ──
+function calc() {
+  const at = v('area_terreno'), cub = v('cub');
+  const ca_bas = v('ca_bas'), ca_out = v('ca_out'), out_pct = v('out_pct');
+  const bdi = v('bdi') / 100, proj = v('proj_pct') / 100;
+  const mkt_pct = v('mkt_pct') / 100, pos = v('pos_pct') / 100;
+  const outros = v('outros');
+  const imp = v('imp_pct') / 100, com = v('com_pct') / 100;
+  const prazo = v('prazo'), taxa = v('taxa') / 100;
+  const td = v('t_din'), talug = v('t_alug'), tprazo = v('t_prazo'), tint = v('t_inter');
+
+  // ── CUG ──
+  let tot_built = 0, tot_comp = 0, tot_pe = 0;
+  areas.forEach(a => {
+    tot_built += a.total * a.qtd;
+    tot_comp += (a.comp || 0) * a.qtd;
+    if (a.tipo !== 'Telhado' && a.total > 0 && a.qtd > 0) {
+      const per = 4.082 * Math.sqrt(a.total);
+      const pe = a.tipo === 'Embasamento' ? 3.5 : 3.0;
+      tot_pe += per * pe * a.qtd;
+    }
+  });
+  const x1 = tot_built > 0 ? (tot_pe / tot_built) : 0;
+  const cug_c = 481.60837 * Math.exp(0.97266795 * x1) * Math.exp(0.13635413 * 1.00) * Math.exp(-0.003251045 / 0.24);
+  const fator = cug_c > 0 ? Math.max(0.7, Math.min(1.5, cug_c / 1024.1)) : 1.0;
+  const cub_aj = cub * fator;
+
+  let custo_c = 0;
+  areas.forEach(a => {
+    const c = a.total * a.qtd * a.coef * cub_aj * mCusto;
+    custo_c += c;
+    const el = $('ac-' + a.id); if (el) el.textContent = fmt(c);
+  });
+
+  const ab = ca_bas * at, am = ca_out * at;
+  const out_area = Math.max(0, tot_comp - ab);
+  const custo_out = out_area * out_pct * cub * mCusto;
+
+  const urbInfo = $('urb-info');
+  if (urbInfo) urbInfo.innerHTML =
+    `<b>CA Básico:</b> ${fmtM2(ab)} &nbsp;|&nbsp; <b>CA Máx:</b> ${fmtM2(am)}<br>` +
+    `<b>Área acima do básico:</b> ${fmtM2(out_area)} × R$ ${(out_pct * cub).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m² = ${fmt(custo_out)}`;
+
+  // ── UNITS & VGV ──
+  let vgv_bruto = 0, perm_val = 0, priv_area = 0, perm_area = 0, tot_perm_un = 0;
+  units.forEach(u => {
+    const pun = u.area * u.pm2 * mVgv;
+    const sub = u.qtd * pun, psub = u.permuta * pun;
+    vgv_bruto += sub; perm_val += psub;
+    priv_area += u.qtd * u.area; perm_area += u.permuta * u.area;
+    tot_perm_un += u.permuta;
+    const ep = $('up-' + u.id); if (ep) ep.textContent = fmt(pun);
+    const ev = $('uv-' + u.id); if (ev) ev.textContent = fmt(sub);
+    const epe = $('upe-' + u.id); if (epe) epe.textContent = fmt(psub);
+  });
+
+  const vgv_liq = vgv_bruto - perm_val;
+  // Marketing base = VGV líquido (correção vs original)
+  const mkt_val = mkt_pct * vgv_liq;
+  const imp_val = imp * vgv_liq;
+  const com_val = com * vgv_liq;
+  const vgv_caixa = vgv_liq - imp_val - com_val - mkt_val;
+
+  const t_total = td + (talug * tprazo) + tint;
+  const aces = (bdi + proj + pos) * custo_c;
+  const tot_desp = custo_c + custo_out + aces + (outros * mCusto);
+  const lucro = vgv_caixa - tot_desp - t_total;
+  const margem = vgv_liq > 0 ? lucro / vgv_liq : 0;
+  const roi = (tot_desp + t_total) > 0 ? lucro / (tot_desp + t_total) : 0;
+  const cuc = tot_built > 0 ? custo_c / tot_built : 0;
+
+  // ── UPDATE UI ──
+  const pn = $('nome')?.value || 'Empreendimento';
+  const pc = $('cidade')?.value || '';
+  st('rep-nome', pn); st('rep-cidade', pc);
+  st('hdr-vgv', fmt(vgv_caixa));
+  st('hdr-meta-vgv', vgv_bruto>0 ? (vgv_bruto/1e6).toLocaleString('pt-BR',{maximumFractionDigits:2})+' M' : '—');
+  st('hdr-meta-perm', priv_area>0 ? ((perm_area/priv_area)*100).toFixed(2).replace('.',',')+'%' : '—');
+
+  // chart
+  updChart(tot_desp, t_total, (imp_val + com_val + mkt_val), lucro);
+
+  // lucro badge
+  const badge = $('lucro-badge');
+  if (badge) {
+    badge.className = 'lucro-badge ' + (lucro >= 0 ? 'pos' : 'neg');
+  }
+  st('s-lucro-badge', fmt(lucro));
+
+  // performance
+  const mp = margem * 100;
+  const mc = mp >= 25 ? '#059669' : (mp >= 15 ? '#FF6B4A' : '#dc2626');
+  const mf = $('mbar-fill');
+  if (mf) { mf.style.width = Math.min(100, Math.max(0, mp * 2)) + '%'; mf.style.background = mc; }
+  st('s-margem', fmtPct(margem));
+  st('s-roi', fmtPct(roi));
+  st('s-vgv-m2', fmt(at > 0 ? vgv_caixa / at : 0, 2) + ' / m²');
+  st('s-custo-priv', fmt(priv_area > 0 ? (tot_desp + t_total) / priv_area : 0, 2) + ' / m²');
+
+  // receitas
+  st('s-vgvb', fmt(vgv_bruto));
+  st('s-perm', '- ' + fmt(perm_val));
+  st('s-imp', '- ' + fmt(imp_val));
+  st('s-com', '- ' + fmt(com_val));
+  st('s-mkt', '- ' + fmt(mkt_val));
+  st('s-vgv', fmt(vgv_caixa));
+
+  // custos
+  st('s-const', fmt(custo_c));
+  st('s-outg', fmt(custo_out));
+  st('s-aces', fmt(aces));
+  st('s-out-fix', fmt(outros * mCusto));
+  st('s-tot-geral', fmt(tot_desp));
+
+  // terreno
+  st('s-t-din', fmt(td + (talug * tprazo)));
+  st('s-t-int', fmt(tint));
+  st('s-t-tot', fmt(t_total));
+
+  // permuta & avaliação
+  st('s-pct-priv', fmtPct(priv_area > 0 ? perm_area / priv_area : 0));
+  st('s-vlr-perm', fmt(perm_val));
+  const vpl = prazo > 0 ? perm_val / Math.pow(1 + taxa, prazo / 12) : perm_val;
+  st('s-vpl', fmt(vpl));
+  st('s-aval', fmt(vpl + td));
+
+  // eficiência
+  st('s-ap', fmtM2(priv_area));
+  st('s-ac', fmtM2(tot_built));
+  st('s-cuc', fmt(cuc, 2) + ' / m²');
+  st('s-efic', fmtPct(tot_built > 0 ? priv_area / tot_built : 0));
+
+  // formulários (esquerda)
+  st('s-area-tot', fmtM2(tot_built));
+  st('s-fator-cug', fator.toLocaleString('pt-BR', { minimumFractionDigits: 4 }) + '×');
+  st('s-cub-aj', fmt(cub_aj * mCusto, 2) + ' / m²');
+  st('s-tot-const', fmt(custo_c));
+  st('s-priv-area', fmtM2(priv_area));
+  st('s-perm-un', tot_perm_un + ' un.');
+  st('s-perm-val', fmt(perm_val));
+  st('s-vgv-bruto-tot', fmt(vgv_bruto));
+
+  // Resumo: re-render se aba estiver aberta
+  if (document.getElementById('tab-resumo')?.classList.contains('active')) updResumoCharts();
+}
+
+
+// ── TABS ──
+function switchTab(t) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + t).classList.add('active');
+  document.getElementById('tab-btn-' + t).classList.add('active');
+  if (t === 'resumo') updResumoCharts();
+}
+
+// ── TABELA APTO STATE ──
+let aptos = [];
+let apto_uid = 0;
+
+function addApto() {
+  addAptoObj({
+    nome: 'APTO FINAL ' + String(aptos.length + 1).padStart(2, '0'),
+    tipo: 'Residencial',
+    area: 100,
+    and_ini: 8,
+    and_fim: 26,
+    pm2_base: 10000,
+    delta_modo: 'pct',
+    delta_val: 1.0,
+    cob_qtd: 0,
+    cob_pm2: 0,
+    permuta_total: 0
+  });
+  renderAptos();
+}
+
+function addAptoObj(d) {
+  aptos.push({ id: apto_uid++, expanded: true, ...d });
+}
+
+function rmApto(id) {
+  if (!confirm('Remover esta tipologia da Tabela APTO?')) return;
+  aptos = aptos.filter(a => a.id !== id);
+  renderAptos();
+}
+
+function togApto(id) {
+  const a = aptos.find(x => x.id === id);
+  if (a) { a.expanded = !a.expanded; renderAptos(); }
+}
+
+function upApto(id, field, val) {
+  const a = aptos.find(x => x.id === id); if (!a) return;
+  a[field] = (field === 'nome' || field === 'tipo' || field === 'delta_modo') ? val : (parseFloat(val) || 0);
+  renderAptos();
+}
+
+function calcApto(a) {
+  const n_total = Math.max(0, (a.and_fim - a.and_ini + 1));
+  const n_cob = Math.min(a.cob_qtd, n_total);
+  const n_reg = n_total - n_cob;
+  const floors = [];
+  let pm2_acum = 0, vgv_acum = 0, area_acum = 0;
+  // Regular floors: linear progression
+  for (let i = 0; i < n_reg; i++) {
+    const andar = a.and_ini + i;
+    let pm2;
+    if (a.delta_modo === 'pct') {
+      pm2 = a.pm2_base * (1 + (a.delta_val / 100) * i);
+    } else { // 'abs'
+      pm2 = a.pm2_base + a.delta_val * i;
+    }
+    const total = pm2 * a.area;
+    floors.push({ andar, area: a.area, pm2, total, cobertura: false });
+    pm2_acum += pm2; vgv_acum += total; area_acum += a.area;
+  }
+  // Coberturas (premium fixed)
+  for (let i = 0; i < n_cob; i++) {
+    const andar = a.and_ini + n_reg + i;
+    const pm2 = a.cob_pm2;
+    const total = pm2 * a.area;
+    floors.push({ andar, area: a.area, pm2, total, cobertura: true });
+    pm2_acum += pm2; vgv_acum += total; area_acum += a.area;
+  }
+  const pm2_med = n_total > 0 ? pm2_acum / n_total : 0;
+  return { floors, pm2_med, vgv_total: vgv_acum, area_total: area_acum, n_total };
+}
+
+function renderAptos() {
+  const list = $('apto-list');
+  if (!list) return;
+  // Toggle do botão Aplicar
+  const actions = $('apto-actions');
+  if (actions) actions.style.display = aptos.length > 0 ? 'block' : 'none';
+  if (aptos.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--t3);font-size:12px;">Nenhuma tipologia adicionada. Clique em <b>+ Adicionar tipologia</b> abaixo.</div>';
+    return;
+  }
+  let html = '';
+  aptos.forEach(a => {
+    const r = calcApto(a);
+    const expanded = a.expanded;
+    let floorRows = '';
+    r.floors.forEach(f => {
+      floorRows += `<tr class="${f.cobertura ? 'cob' : ''}"><td>${f.andar}º</td><td>${f.area.toLocaleString('pt-BR', {minimumFractionDigits: 2})} m²</td><td>R$ ${f.pm2.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td><td>R$ ${f.total.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td></tr>`;
+    });
+    floorRows += `<tr class="tot"><td>TOTAL</td><td>${r.area_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})} m²</td><td>R$ ${r.pm2_med.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td><td>R$ ${r.vgv_total.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</td></tr>`;
+
+    html += `
+    <div class="apto-row">
+      <div class="apto-row-hdr">
+        <div class="apto-row-name">${a.nome} <span class="apto-row-tag">${a.tipo}</span></div>
+        <div class="apto-row-result">
+          <div><span>Unidades</span><br><b>${r.n_total}${a.cob_qtd>0 ? ' (' + a.cob_qtd + ' cob.)' : ''}</b></div>
+          <div><span>pm² médio</span><br><b class="pr">R$ ${r.pm2_med.toLocaleString('pt-BR', {maximumFractionDigits: 0})}</b></div>
+          <div><span>VGV Bruto</span><br><b>R$ ${(r.vgv_total/1e6).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}M</b></div>
+          <button class="apto-row-tog" onclick="togApto(${a.id})">${expanded ? '▾ Recolher' : '▸ Expandir'}</button>
+          <button class="btn-rm" onclick="rmApto(${a.id})">×</button>
+        </div>
+      </div>
+      <div class="apto-row-body" style="${expanded ? '' : 'display:none'}">
+        <div class="apto-cfg">
+          <div class="field"><label>Nome</label><input type="text" value="${a.nome}" oninput="upApto(${a.id},'nome',this.value)"></div>
+          <div class="field"><label>Tipo</label>
+            <select onchange="upApto(${a.id},'tipo',this.value)">
+              <option ${a.tipo==='Residencial'?'selected':''}>Residencial</option>
+              <option ${a.tipo==='Comercial'?'selected':''}>Comercial</option>
+              <option ${a.tipo==='Estacionamento'?'selected':''}>Estacionamento</option>
+            </select>
+          </div>
+          <div class="field"><label>Área (m²)</label><input type="number" value="${a.area}" step="0.01" oninput="upApto(${a.id},'area',this.value)"></div>
+          <div class="field"><label>Andar inicial</label><input type="number" value="${a.and_ini}" oninput="upApto(${a.id},'and_ini',this.value)"></div>
+          <div class="field"><label>Andar final</label><input type="number" value="${a.and_fim}" oninput="upApto(${a.id},'and_fim',this.value)"></div>
+        </div>
+        <div class="apto-cfg">
+          <div class="field"><label>pm² (1º andar do bloco)</label><input type="number" value="${a.pm2_base}" step="100" oninput="upApto(${a.id},'pm2_base',this.value)"></div>
+          <div class="field"><label>Modo de valorização</label>
+            <select onchange="upApto(${a.id},'delta_modo',this.value)">
+              <option value="pct" ${a.delta_modo==='pct'?'selected':''}>% por andar</option>
+              <option value="abs" ${a.delta_modo==='abs'?'selected':''}>R$/m² por andar</option>
+            </select>
+          </div>
+          <div class="field"><label>Δ ${a.delta_modo==='pct'?'(% / andar)':'(R$ / m² / andar)'}</label><input type="number" value="${a.delta_val}" step="0.1" oninput="upApto(${a.id},'delta_val',this.value)"></div>
+          <div class="field"><label>Coberturas (qtd)</label><input type="number" value="${a.cob_qtd}" oninput="upApto(${a.id},'cob_qtd',this.value)"></div>
+          <div class="field"><label>pm² cobertura (R$/m²)</label><input type="number" value="${a.cob_pm2}" step="100" oninput="upApto(${a.id},'cob_pm2',this.value)"></div>
+        </div>
+        <div class="field" style="margin-bottom:14px;"><label>Permuta TOTAL nesta tipologia (un)</label><input type="number" value="${a.permuta_total}" oninput="upApto(${a.id},'permuta_total',this.value)" style="max-width:140px"></div>
+        <div class="apto-floors">
+          <table class="apto-floors-tbl">
+            <thead><tr><th>Andar</th><th>Área</th><th>pm² venda</th><th>Preço unidade</th></tr></thead>
+            <tbody>${floorRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+// Sincroniza TABELA APTO → Composição de Vendas (DETALHADO)
+function syncAptosToUnits() {
+  if (aptos.length === 0) {
+    alert('Adicione ao menos uma tipologia na TABELA APTO antes de aplicar.');
+    return;
+  }
+  const tot_un = aptos.reduce((s,a) => s + (a.and_fim - a.and_ini + 1), 0);
+  const conf = confirm(
+    'Esta ação irá SUBSTITUIR a Composição de Vendas atual da aba DETALHADO.\n\n' +
+    'Tipologias TABELA APTO: ' + aptos.length + '\n' +
+    'Total de unidades: ' + tot_un + '\n\n' +
+    'Confirmar substituição?'
+  );
+  if (!conf) return;
+  units = [];
+  $('units-body').innerHTML = '';
+  uid = 0;
+  aptos.forEach(a => {
+    const r = calcApto(a);
+    addUnitObj({
+      nome: a.nome,
+      tipo: a.tipo,
+      qtd: r.n_total,
+      area: a.area,
+      pm2: Math.round(r.pm2_med),
+      permuta: a.permuta_total
+    });
+  });
+  calc();
+  switchTab('detalhado');
+  setTimeout(() => alert('✓ Composição de Vendas atualizada com ' + aptos.length + ' tipologias da TABELA APTO.'), 100);
+}
+
+// ── RESUMO PIES ──
+let pies = {};
+function initPies() {
+  const cols = ['#374151', '#6b7280', '#dc2626', '#FF6B4A', '#9ca3af'];
+  const opts = (labels, cols2) => ({
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: labels.map(_=>1), backgroundColor: cols2, borderWidth: 1, borderColor: '#fff' }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 9 }, boxWidth: 8, padding: 6 } },
+                 tooltip: { callbacks: { label: c => ' ' + (typeof c.raw === 'number' && c.raw > 1000 ? fmt(c.raw) : c.raw + (c.dataset.unit||'')) } } } }
+  });
+  if ($('pie-vgv'))       pies.vgv = new Chart($('pie-vgv').getContext('2d'), opts(['Construção','Terreno','Imp/Com','Marketing','Lucro'], ['#374151','#6b7280','#dc2626','#9ca3af','#FF6B4A']));
+  if ($('pie-eff'))       pies.eff = new Chart($('pie-eff').getContext('2d'), opts(['Privativa','Comum'], ['#FF6B4A','#cbd5e1']));
+  if ($('pie-perm-area')) pies.pa  = new Chart($('pie-perm-area').getContext('2d'), opts(['Vendida','Permuta'], ['#374151','#FF6B4A']));
+  if ($('pie-perm-vgv'))  pies.pv  = new Chart($('pie-perm-vgv').getContext('2d'), opts(['Vendida','Permuta'], ['#374151','#FF6B4A']));
+}
+
+function updResumoCharts() {
+  // Os dados são lidos do DOM (já calculados pelo motor calc())
+  // Composição VGV
+  const get = id => parseFloat(($(id)?.textContent || '0').replace(/[^\d,-]/g,'').replace(',','.')) || 0;
+  // Não dá pra ler do DOM facilmente — vamos recalcular aqui de forma direta
+  const at = v('area_terreno'), cub = v('cub');
+  const ca_bas = v('ca_bas'), ca_out = v('ca_out'), out_pct = v('out_pct');
+  const bdi = v('bdi') / 100, proj = v('proj_pct') / 100;
+  const mkt_pct = v('mkt_pct') / 100, pos = v('pos_pct') / 100;
+  const outros = v('outros');
+  const imp = v('imp_pct') / 100, com = v('com_pct') / 100;
+  const prazo = v('prazo'), taxa = v('taxa') / 100;
+  const td = v('t_din'), talug = v('t_alug'), tprazo = v('t_prazo'), tint = v('t_inter');
+
+  let tot_built = 0, tot_comp = 0, tot_pe = 0;
+  areas.forEach(a => {
+    tot_built += a.total * a.qtd;
+    tot_comp += (a.comp || 0) * a.qtd;
+    if (a.tipo !== 'Telhado' && a.total > 0 && a.qtd > 0) {
+      const per = 4.082 * Math.sqrt(a.total);
+      const pe = a.tipo === 'Embasamento' ? 3.5 : 3.0;
+      tot_pe += per * pe * a.qtd;
+    }
+  });
+  const x1 = tot_built > 0 ? (tot_pe / tot_built) : 0;
+  const cug_c = 481.60837 * Math.exp(0.97266795 * x1) * Math.exp(0.13635413) * Math.exp(-0.003251045 / 0.24);
+  const fator = cug_c > 0 ? Math.max(0.7, Math.min(1.5, cug_c / 1024.1)) : 1.0;
+  const cub_aj = cub * fator;
+  let custo_c = 0;
+  areas.forEach(a => { custo_c += a.total * a.qtd * a.coef * cub_aj * mCusto; });
+  const ab = ca_bas * at;
+  const out_area = Math.max(0, tot_comp - ab);
+  const custo_out = out_area * out_pct * cub * mCusto;
+
+  let vgv_bruto = 0, perm_val = 0, priv_area = 0, perm_area = 0;
+  units.forEach(u => {
+    const pun = u.area * u.pm2 * mVgv;
+    vgv_bruto += u.qtd * pun;
+    perm_val += u.permuta * pun;
+    priv_area += u.qtd * u.area;
+    perm_area += u.permuta * u.area;
+  });
+  const vgv_liq = vgv_bruto - perm_val;
+  const mkt_val = mkt_pct * vgv_liq;
+  const imp_val = imp * vgv_liq;
+  const com_val = com * vgv_liq;
+  const vgv_caixa = vgv_liq - imp_val - com_val - mkt_val;
+  const t_total = td + (talug * tprazo) + tint;
+  const aces = (bdi + proj + pos) * custo_c;
+  const tot_desp = custo_c + custo_out + aces + (outros * mCusto);
+  const lucro = vgv_caixa - tot_desp - t_total;
+  const margem = vgv_liq > 0 ? lucro / vgv_liq : 0;
+  const cuc_priv = priv_area > 0 ? (tot_desp + t_total) / priv_area : 0;
+  const vpl = prazo > 0 ? perm_val / Math.pow(1 + taxa, prazo / 12) : perm_val;
+  const ac_total = tot_built - priv_area;
+
+  // Hero stats
+  st('r-lucro', fmt(lucro));
+  st('r-margem', fmtPct(margem));
+  st('r-vgv-m2', fmt(at > 0 ? vgv_liq / at : 0, 2) + ' / m²');
+  st('r-cuc-priv', fmt(cuc_priv, 2) + ' / m²');
+
+  // Composição VGV
+  st('r-vgv-const', fmt(tot_desp));
+  st('r-vgv-terr', fmt(t_total + vpl));
+  st('r-vgv-imp', fmt(imp_val + com_val));
+  st('r-vgv-mkt', fmt(mkt_val));
+  st('r-vgv-luc', fmt(lucro));
+
+  // Eficiência
+  st('r-eff-priv', fmtM2(priv_area));
+  st('r-eff-com', fmtM2(ac_total));
+  st('r-eff-pct', fmtPct(tot_built > 0 ? priv_area / tot_built : 0));
+
+  // Permuta
+  st('r-pa-priv', fmtPct(priv_area > 0 ? (priv_area - perm_area) / priv_area : 0));
+  st('r-pa-perm', fmtPct(priv_area > 0 ? perm_area / priv_area : 0));
+  st('r-pr-priv', fmtPct(vgv_bruto > 0 ? (vgv_bruto - perm_val) / vgv_bruto : 0));
+  st('r-pr-perm', fmtPct(vgv_bruto > 0 ? perm_val / vgv_bruto : 0));
+
+  // Avaliação
+  st('r-vm-perm', fmt(perm_val));
+  st('r-vpl-perm', fmt(vpl));
+  st('r-din-terr', fmt(t_total));
+  st('r-aval-terr', fmt(vpl + t_total));
+  st('r-cust-m2', fmt(at > 0 ? (vpl + t_total) / at : 0, 2) + ' / m²');
+
+  // Pies
+  if (pies.vgv) { pies.vgv.data.datasets[0].data = [tot_desp, t_total + vpl, imp_val + com_val, mkt_val, Math.max(0, lucro)]; pies.vgv.update(); }
+  if (pies.eff) { pies.eff.data.datasets[0].data = [priv_area, ac_total]; pies.eff.update(); }
+  if (pies.pa)  { pies.pa.data.datasets[0].data  = [priv_area - perm_area, perm_area]; pies.pa.update(); }
+  if (pies.pv)  { pies.pv.data.datasets[0].data  = [vgv_bruto - perm_val, perm_val]; pies.pv.update(); }
+}
+
+// ── INIT ──
+function init() {
+  initChart();
+
+  // App em branco — usuário preenche tudo
+  // Adiciona uma linha vazia em cada tabela para o usuário começar
+  addArea();
+  addUnit();
+  renderAptos();
+  initPies();
+  calc();
+}
+
+// ── ENIGAMI INTEGRATION — recebe dados da aba Dados via postMessage ──
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'ENIGAMI_INIT') return;
+  const cfg = e.data.config;
+  if (!cfg) return;
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null && val !== '') el.value = val;
+  };
+  if (cfg.areaTerreno > 0) setVal('area_terreno', cfg.areaTerreno);
+  if (cfg.nome) {
+    setVal('nome', cfg.nome);
+    const hdrName = document.getElementById('header-project-name');
+    if (hdrName) hdrName.innerHTML = 'Estudo de Viabilidade · ' + cfg.nome;
+  }
+  if (cfg.cidade)          setVal('cidade', cfg.cidade);
+  if (cfg.caBasico > 0)   setVal('ca_bas', cfg.caBasico);
+  if (cfg.areas && cfg.areas.length > 0) {
+    areas = []; aid = 0;
+    document.getElementById('areas-body').innerHTML = '';
+    cfg.areas.forEach(a => addAreaObj(a));
+  }
+  if (cfg.units && cfg.units.length > 0) {
+    units = []; uid = 0;
+    document.getElementById('units-body').innerHTML = '';
+    cfg.units.forEach(u => addUnitObj(u));
+  }
+  calc();
+});
+
+window.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>

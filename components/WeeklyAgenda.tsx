@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { DB, Project, Discipline, WeeklyTask } from '../types';
+import { DB, Project, Discipline, WeeklyTask, TeamMember } from '../types';
+import { upsertMember, deriveTeam, pickMemberColor } from '../utils/membersHelper';
 
 // ==========================================
 // TYPES & CONTEXT INTEG
@@ -63,7 +64,7 @@ const COLOR_POOL = ['#0EA5E9','#10B981','#A770EF','#EC4899','#F59E0B','#14B8A6',
 // HELPERS
 // ==========================================
 
-function ymd(d: Date) { return d.toISOString().slice(0, 10); }
+function ymd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
 function parseYmd(s: string) {
   if (!s) return null;
@@ -159,10 +160,26 @@ function storeKey(coord: string, offset: number) {
   return coord === 'Yuri' ? STORE_PREFIX + weekKey(offset) : STORE_PREFIX + coord + '_' + weekKey(offset);
 }
 
-function loadWeek(activeProject: any, coord: string, offset: number) {
-  if (activeProject && activeProject.agendaTasks && Array.isArray(activeProject.agendaTasks)) {
-    const list = activeProject.agendaTasks.filter((t: any) => t.coord === coord && t.weekOffset === offset);
-    if (list.length > 0) return list;
+// A task belongs to a week either by absolute weekKey (preferred) or by legacy relative weekOffset
+function taskInWeek(t: any, coord: string, offset: number) {
+  if (t.coord !== coord) return false;
+  return t.weekKey ? t.weekKey === weekKey(offset) : t.weekOffset === offset;
+}
+
+// Tarefa ATIVA da semana: pertence à semana e não está em standby.
+// Tarefas em standby ficam fora das colunas e do cálculo de evolução.
+function taskActiveInWeek(t: any, coord: string, offset: number) {
+  return taskInWeek(t, coord, offset) && !t.standby;
+}
+
+// A agenda semanal é um planejamento do escritório (micro): vive na EMPRESA.
+// Mantém leitura do legado em project.agendaTasks e do localStorage como fallback.
+function loadWeek(activeCompany: any, activeProject: any, coord: string, offset: number) {
+  for (const store of [activeCompany, activeProject]) {
+    if (store && Array.isArray(store.agendaTasks)) {
+      const list = store.agendaTasks.filter((t: any) => taskActiveInWeek(t, coord, offset));
+      if (list.length > 0) return list;
+    }
   }
   try {
     const s = localStorage.getItem(storeKey(coord, offset));
@@ -176,10 +193,12 @@ function loadWeek(activeProject: any, coord: string, offset: number) {
   return (offset === 0 && coord === 'Yuri') ? seedTasks().map(t => ({ ...t, coord, weekOffset: offset })) : [];
 }
 
-function progressOfWeek(activeProject: any, coord: string, offset: number) {
-  if (activeProject && activeProject.agendaTasks && Array.isArray(activeProject.agendaTasks)) {
-    const list = activeProject.agendaTasks.filter((t: any) => t.coord === coord && t.weekOffset === offset);
-    if (list.length > 0) return weightedProgress(list);
+function progressOfWeek(activeCompany: any, activeProject: any, coord: string, offset: number) {
+  for (const store of [activeCompany, activeProject]) {
+    if (store && Array.isArray(store.agendaTasks)) {
+      const list = store.agendaTasks.filter((t: any) => taskActiveInWeek(t, coord, offset));
+      if (list.length > 0) return weightedProgress(list);
+    }
   }
   try {
     const s = localStorage.getItem(storeKey(coord, offset));
@@ -288,7 +307,7 @@ function Progress({ value, color, height = 5 }: { value: number; color?: string;
 // ==========================================
 
 export default function WeeklyAgenda() {
-  const { db, setDb, currentUser, theme, activeProject } = useApp();
+  const { db, setDb, currentUser, theme, activeProject, activeCompany } = useApp();
 
   // local configuration settings (TWEAKS)
   const [t, setTweak] = useState(() => {
@@ -332,6 +351,7 @@ export default function WeeklyAgenda() {
   const [exportScope, setExportScope] = useState<'all' | 'filtered'>('all');
   const [dropCol, setDropCol] = useState<string | null>(null);
   const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [standbyOpen, setStandbyOpen] = useState(false);
   
   const dragId = useRef<string | number | null>(null);
   const today = todayName();
@@ -364,15 +384,15 @@ export default function WeeklyAgenda() {
     setPlanLock(null);
   };
 
-  // Sync integrated databases
+  // Sync integrated databases (projetos/disciplinas custom — pessoas agora vêm de db.members)
   const custom = useMemo(() => loadCustom(), [bumpCount]);
-  const roster = useMemo(() => loadRoster(), [bumpCount]);
 
+  // Projetos da agenda: os projetos reais do workspace + extras criados na própria
+  // agenda. Mantém "Geral" para demandas internas do escritório.
   const integratedProjects = useMemo(() => {
-    const list = [...BASE_PROJECTS];
-    custom.projects.forEach((p: any) => {
-      if (!list.some(x => x.name.toLowerCase() === p.name.toLowerCase())) list.push(p);
-    });
+    const list: { name: string; code: string; color: string }[] = [
+      { name: 'Geral', code: 'GER', color: '#0EA5E9' },
+    ];
     db.projects.forEach(p => {
       if (!list.some(x => x.name.toLowerCase() === p.name.toLowerCase())) {
         list.push({
@@ -382,36 +402,28 @@ export default function WeeklyAgenda() {
         });
       }
     });
+    custom.projects.forEach((p: any) => {
+      if (!list.some(x => x.name.toLowerCase() === p.name.toLowerCase())) list.push(p);
+    });
     return list;
   }, [db.projects, custom.projects]);
 
+  // ESTRUTURA CENTRAL: as pessoas da agenda vêm de db.members — a fonte única
+  // alimentada pelos logins do Supabase (profiles) + membros adicionados à mão.
   const integratedPeople = useMemo(() => {
-    const list = [...BASE_PEOPLE];
-    custom.people.forEach((p: any) => {
-      if (!list.some(x => x.name.toLowerCase() === p.name.toLowerCase())) list.push(p);
-    });
-    db.team.forEach(name => {
-      if (!list.some(x => x.name.toLowerCase() === name.toLowerCase())) {
-        list.push({
-          name,
-          color: COLOR_POOL[(list.length + 3) % COLOR_POOL.length],
-          role: 'Colaborador',
-          capacity: 10,
-          coordinator: false
-        });
-      }
-    });
-    // Apply roster edits
-    Object.entries(roster.patch).forEach(([name, patch]: [string, any]) => {
-      const person = list.find(x => x.name === name);
-      if (person) {
-        if (patch.role != null) person.role = patch.role;
-        if (patch.coordinator != null) person.coordinator = patch.coordinator;
-      }
-    });
-    // Apply roster removals
-    return list.filter(p => !roster.removed.includes(p.name));
-  }, [db.team, custom.people, roster, bumpCount]);
+    const list = (db.members || []).map((m, i) => ({
+      name: m.name,
+      color: m.color || COLOR_POOL[(i + 3) % COLOR_POOL.length],
+      role: m.role || 'Colaborador',
+      capacity: m.capacity ?? 10,
+      coordinator: !!m.coordinator,
+    }));
+    // Entrada coletiva padrão para tarefas multidisciplinares
+    if (!list.some(p => p.name === 'Equipe')) {
+      list.push({ name: 'Equipe', color: '#64748B', role: 'Multidisciplinar', capacity: 16, coordinator: false });
+    }
+    return list;
+  }, [db.members]);
 
   const integratedDisciplines = useMemo(() => {
     const list = [...BASE_DISCIPLINES];
@@ -444,41 +456,60 @@ export default function WeeklyAgenda() {
 
   // Load and Persist tasks
   useEffect(() => {
-    setTasks(loadWeek(activeProject, coord, offset));
-  }, [offset, coord, activeProject]);
+    setTasks(loadWeek(activeCompany, activeProject, coord, offset));
+  }, [offset, coord, activeProject, activeCompany]);
+
+  // Lista completa do armazenamento atual (empresa, com migração do legado no projeto)
+  const storedAgenda = (): any[] => {
+    if (activeCompany?.agendaTasks?.length) return activeCompany.agendaTasks;
+    if (activeProject?.agendaTasks?.length) return activeProject.agendaTasks;
+    return [];
+  };
+
+  // Grava a lista completa de tarefas: na empresa (preferência) ou no projeto (legado)
+  const persistAgenda = (updatedTasks: any[]) => {
+    if (activeCompany) {
+      const companyId = activeCompany.id;
+      setDb((prev: DB) => ({
+        ...prev,
+        companies: prev.companies.map(c =>
+          c.id === companyId ? { ...c, agendaTasks: updatedTasks } : c
+        )
+      }));
+    } else if (activeProject) {
+      const projectId = activeProject.id;
+      setDb((prev: DB) => ({
+        ...prev,
+        projects: prev.projects.map(p =>
+          p.id === projectId ? { ...p, agendaTasks: updatedTasks, updatedAt: new Date().toISOString() } : p
+        )
+      }));
+    }
+  };
 
   const saveTasks = (newTasks: WeeklyTask[]) => {
     setTasks(newTasks);
-    if (!activeProject) return;
-    const otherTasks = (activeProject.agendaTasks || []).filter((t: any) => !(t.coord === coord && t.weekOffset === offset));
-    const updatedTasks = [
-      ...otherTasks,
-      ...newTasks.map(t => ({ ...t, coord, weekOffset: offset }))
-    ];
-    setDb((prev: DB) => ({
-      ...prev,
-      projects: prev.projects.map(p =>
-        p.id === activeProject.id ? { ...p, agendaTasks: updatedTasks, updatedAt: new Date().toISOString() } : p
-      )
-    }));
+    if (activeCompany || activeProject) {
+      // Mantém tudo que não é "tarefa ativa desta semana" — incluindo as em standby
+      const otherTasks = storedAgenda().filter((t: any) => !taskActiveInWeek(t, coord, offset));
+      persistAgenda([
+        ...otherTasks,
+        ...newTasks.map(t => ({ ...t, coord, weekOffset: offset, weekKey: weekKey(offset) }))
+      ]);
+    }
     try { localStorage.setItem(storeKey(coord, offset), JSON.stringify(newTasks)); } catch (e) {}
   };
 
-  const prevProgress = useMemo(() => progressOfWeek(activeProject, coord, offset - 1), [offset, coord, activeProject]);
+  const prevProgress = useMemo(() => progressOfWeek(activeCompany, activeProject, coord, offset - 1), [offset, coord, activeProject, activeCompany]);
 
   const saveNow = () => {
-    if (!activeProject) return;
-    const otherTasks = (activeProject.agendaTasks || []).filter((t: any) => !(t.coord === coord && t.weekOffset === offset));
-    const updatedTasks = [
-      ...otherTasks,
-      ...tasks.map(t => ({ ...t, coord, weekOffset: offset }))
-    ];
-    setDb((prev: DB) => ({
-      ...prev,
-      projects: prev.projects.map(p =>
-        p.id === activeProject.id ? { ...p, agendaTasks: updatedTasks, updatedAt: new Date().toISOString() } : p
-      )
-    }));
+    if (activeCompany || activeProject) {
+      const otherTasks = storedAgenda().filter((t: any) => !taskActiveInWeek(t, coord, offset));
+      persistAgenda([
+        ...otherTasks,
+        ...tasks.map(t => ({ ...t, coord, weekOffset: offset, weekKey: weekKey(offset) }))
+      ]);
+    }
     try { localStorage.setItem(storeKey(coord, offset), JSON.stringify(tasks)); } catch (e) {}
     setSaved(true); setTimeout(() => setSaved(false), 1900);
   };
@@ -492,37 +523,35 @@ export default function WeeklyAgenda() {
     }
   };
 
-  // Roster Managers
+  // Gestão de membros — opera direto na estrutura central (db.members),
+  // sincronizada com a equipe e persistida no Supabase.
+  const updateMembers = (fn: (members: TeamMember[]) => TeamMember[]) => {
+    setDb((prev: DB) => {
+      const members = fn(prev.members || []);
+      if (members === prev.members) return prev;
+      return { ...prev, members, team: deriveTeam(members) };
+    });
+  };
+
   const handleAddCoord = (nameStr: string, roleStr: string) => {
     const name = nameStr.trim();
     if (!name) return;
-    const c = loadCustom(); const r = loadRoster();
-    let p = integratedPeople.find(x => x.name.toLowerCase() === name.toLowerCase());
-    if (p) {
-      r.removed = r.removed.filter((n: string) => n !== p!.name);
-      r.patch[p.name] = { ...(r.patch[p.name] || {}), coordinator: true, ...(roleStr.trim() ? { role: roleStr.trim() } : {}) };
-      saveRoster(r);
-      const cp = c.people.find((x: any) => x.name === p!.name);
-      if (cp) { cp.coordinator = true; if (roleStr.trim()) cp.role = roleStr.trim(); saveCustom(c); }
-    } else {
-      const newP = { name, role: roleStr.trim() || 'Coordenação', color: COLOR_POOL[(integratedPeople.length + 3) % COLOR_POOL.length], capacity: 13, coordinator: true };
-      c.people.push(newP);
-      saveCustom(c);
-    }
-    setBumpCount(n => n + 1);
+    updateMembers(ms => upsertMember(ms, {
+      name,
+      coordinator: true,
+      capacity: 13,
+      ...(roleStr.trim() ? { role: roleStr.trim() } : {}),
+    }));
     switchCoord(name);
   };
 
   const handleUpdateCoordRole = (name: string, roleStr: string) => {
-    const r = loadRoster(); r.patch[name] = { ...(r.patch[name] || {}), role: roleStr }; saveRoster(r);
-    const c = loadCustom(); const cp = c.people.find((x: any) => x.name === name); if (cp) { cp.role = roleStr; saveCustom(c); }
-    setBumpCount(n => n + 1);
+    updateMembers(ms => ms.map(m => m.name === name ? { ...m, role: roleStr } : m));
   };
 
   const handleRemoveCoord = (name: string) => {
-    const r = loadRoster(); if (!r.removed.includes(name)) r.removed.push(name); delete r.patch[name]; saveRoster(r);
-    const c = loadCustom(); c.people = c.people.filter((x: any) => x.name !== name); saveCustom(c);
-    setBumpCount(n => n + 1);
+    // Remove apenas o papel de coordenador — o membro continua na equipe
+    updateMembers(ms => ms.map(m => m.name === name ? { ...m, coordinator: false } : m));
     if (name === coord) {
       const first = integratedPeople.filter(p => p.coordinator && p.name !== name)[0];
       if (first) switchCoord(first.name);
@@ -546,9 +575,8 @@ export default function WeeklyAgenda() {
     if (!clean) return null;
     const existing = integratedPeople.find(p => p.name.toLowerCase() === clean.toLowerCase());
     if (existing) return existing;
-    const p = { name: clean, role: 'Equipe', color: COLOR_POOL[(integratedPeople.length + 3) % COLOR_POOL.length], capacity: 10, coordinator: false };
-    const c = loadCustom(); c.people.push(p); saveCustom(c);
-    setBumpCount(n => n + 1);
+    const p = { name: clean, role: 'Equipe', color: pickMemberColor(db.members || []), capacity: 10, coordinator: false };
+    updateMembers(ms => upsertMember(ms, { name: clean, role: 'Equipe', color: p.color, capacity: 10, source: 'manual' }));
     return p;
   };
 
@@ -590,46 +618,93 @@ export default function WeeklyAgenda() {
   const remove = (id: string | number) => saveTasks(tasks.filter(x => x.id !== id));
   
   const postpone = (id: string | number) => {
-    if (!activeProject) return;
     const task = tasks.find(x => x.id === id);
     if (!task) return;
 
-    const updatedTasks = (activeProject.agendaTasks || []).map((t: any) => {
-      if (t.id === id) {
-        return {
-          ...t,
-          weekOffset: offset + 1,
-          dueDate: dateForDay(endDayName(t as WeeklyTask), offset + 1),
-          postponedCount: (t.postponedCount || 0) + 1,
-          carriedFrom: weekLabelFor(offset),
-        };
-      }
-      return t;
-    });
+    const remaining = tasks.filter(x => x.id !== id);
+    const movedTask = {
+      ...task,
+      coord,
+      weekOffset: offset + 1,
+      weekKey: weekKey(offset + 1),
+      dueDate: dateForDay(endDayName(task), offset + 1),
+      postponedCount: (task.postponedCount || 0) + 1,
+      carriedFrom: weekLabelFor(offset),
+    };
 
-    setDb((prev: DB) => ({
-      ...prev,
-      projects: prev.projects.map(p =>
-        p.id === activeProject.id ? { ...p, agendaTasks: updatedTasks, updatedAt: new Date().toISOString() } : p
-      )
-    }));
+    if (activeCompany || activeProject) {
+      // Reescreve a semana atual sem a tarefa e injeta a tarefa na próxima,
+      // removendo qualquer cópia antiga dela em qualquer semana.
+      const others = storedAgenda().filter((t: any) => !taskActiveInWeek(t, coord, offset) && t.id !== id);
+      persistAgenda([
+        ...others,
+        ...remaining.map(t => ({ ...t, coord, weekOffset: offset, weekKey: weekKey(offset) })),
+        movedTask
+      ]);
+    }
 
-    setTasks(tasks.filter(x => x.id !== id));
+    setTasks(remaining);
 
     try {
-      const curKey = coord === 'Yuri' ? STORE_PREFIX + weekKey(offset) : STORE_PREFIX + coord + '_' + weekKey(offset);
-      localStorage.setItem(curKey, JSON.stringify(tasks.filter(x => x.id !== id)));
-
-      const nextKey = coord === 'Yuri' ? STORE_PREFIX + weekKey(offset + 1) : STORE_PREFIX + coord + '_' + weekKey(offset + 1);
-      const nextLocal = JSON.parse(localStorage.getItem(nextKey) || '[]');
-      nextLocal.push({
-        ...task,
-        dueDate: dateForDay(endDayName(task), offset + 1),
-        postponedCount: (task.postponedCount || 0) + 1,
-        carriedFrom: weekLabelFor(offset),
-      });
-      localStorage.setItem(nextKey, JSON.stringify(nextLocal));
+      localStorage.setItem(storeKey(coord, offset), JSON.stringify(remaining));
+      const nextLocal = JSON.parse(localStorage.getItem(storeKey(coord, offset + 1)) || '[]');
+      nextLocal.push(movedTask);
+      localStorage.setItem(storeKey(coord, offset + 1), JSON.stringify(nextLocal));
     } catch (e) {}
+  };
+
+  // ── STANDBY ──────────────────────────────────────────────────────────
+  // Tarefas em espera ficam fora das colunas e da evolução da semana.
+  // Podem ser resgatadas em qualquer semana — voltam a contar nela.
+  const standbyTasks = useMemo(
+    () => storedAgenda().filter((t: any) => t.coord === coord && t.standby) as WeeklyTask[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCompany?.agendaTasks, activeProject?.agendaTasks, coord]
+  );
+
+  const toStandby = (id: string | number) => {
+    const task = tasks.find(x => x.id === id);
+    if (!task) return;
+    const remaining = tasks.filter(x => x.id !== id);
+    if (activeCompany || activeProject) {
+      const others = storedAgenda().filter((t: any) => !taskActiveInWeek(t, coord, offset) && t.id !== id);
+      persistAgenda([
+        ...others,
+        ...remaining.map(t => ({ ...t, coord, weekOffset: offset, weekKey: weekKey(offset) })),
+        { ...task, coord, standby: true, carriedFrom: weekLabelFor(offset) }
+      ]);
+    }
+    setTasks(remaining);
+    try { localStorage.setItem(storeKey(coord, offset), JSON.stringify(remaining)); } catch (e) {}
+  };
+
+  const rescueFromStandby = (id: string | number) => {
+    const task = storedAgenda().find((t: any) => t.id === id && t.standby);
+    if (!task) return;
+    const revived: WeeklyTask = {
+      ...task,
+      standby: false,
+      coord,
+      weekOffset: offset,
+      weekKey: weekKey(offset),
+      dueDate: dateForDay(endDayName(task as WeeklyTask), offset),
+    };
+    const newTasks = [...tasks, revived];
+    if (activeCompany || activeProject) {
+      const others = storedAgenda().filter((t: any) => !taskActiveInWeek(t, coord, offset) && t.id !== id);
+      persistAgenda([
+        ...others,
+        ...newTasks.map(t => ({ ...t, coord, weekOffset: offset, weekKey: weekKey(offset) }))
+      ]);
+    }
+    setTasks(newTasks);
+    try { localStorage.setItem(storeKey(coord, offset), JSON.stringify(newTasks)); } catch (e) {}
+  };
+
+  const deleteFromStandby = (id: string | number) => {
+    if (activeCompany || activeProject) {
+      persistAgenda(storedAgenda().filter((t: any) => t.id !== id));
+    }
   };
 
   const saveTask = (form: WeeklyTask) => {
@@ -731,7 +806,7 @@ export default function WeeklyAgenda() {
   }, [printTasks]);
   const printPva = useMemo(() => plannedVsActual(printTasks, offset), [printTasks, offset]);
 
-  const cardEvents = { onStatus: setStatus, onEdit: (tk: WeeklyTask) => setModal({ open: true, task: tk }), onDelete: remove, onValidate: validate, onPostpone: postpone, onDragStart, onDragEnd };
+  const cardEvents = { onStatus: setStatus, onEdit: (tk: WeeklyTask) => setModal({ open: true, task: tk }), onDelete: remove, onValidate: validate, onPostpone: postpone, onStandby: toStandby, onDragStart, onDragEnd };
 
   const isDark = theme === 'dark';
 
@@ -792,9 +867,38 @@ export default function WeeklyAgenda() {
               <Icon name={saved ? 'cloud_done' : 'save'} size={15} />{saved ? 'Salvo' : 'Salvar'}
             </button>
             <button className="btn btn-ghost" onClick={() => setTweaksOpen(true)} title="Design Tweaks"><Icon name="settings" size={15} />Ajustes</button>
+            <button className={'btn ' + (standbyOpen ? 'btn-primary' : 'btn-ghost')} onClick={() => setStandbyOpen(o => !o)} title="Tarefas em espera — fora da evolução da semana" style={standbyOpen ? { background: '#EAB308' } : {}}>
+              <Icon name="pause_circle" size={15} />Standby{standbyTasks.length > 0 ? ` (${standbyTasks.length})` : ''}
+            </button>
             <button className="btn btn-primary" onClick={() => setModal({ open: true, task: null })}><Icon name="add" size={15} />Nova Demanda</button>
           </div>
         </header>
+
+        {/* ===== STANDBY ===== */}
+        {standbyOpen && (
+          <div className="card" style={{ padding: '14px 16px', marginBottom: 'var(--gap)', border: '1px dashed #EAB30866', background: 'rgba(234,179,8,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: standbyTasks.length ? 10 : 0 }}>
+              <Icon name="pause_circle" size={16} color="#EAB308" />
+              <span className="t-h3" style={{ fontSize: 12, fontWeight: 800, color: 'var(--theme-text)' }}>Tarefas em Standby</span>
+              <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>— pausadas, fora da evolução. Resgate para a semana exibida ({wl}).</span>
+            </div>
+            {standbyTasks.length === 0 && <div style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>Nenhuma tarefa em espera. Use o botão <Icon name="pause_circle" size={12} /> no card de uma demanda para pausá-la.</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
+              {standbyTasks.map(t => (
+                <div key={String(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--theme-card)', border: '1px solid var(--theme-divider)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--theme-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.text}</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--theme-text-muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                      {t.assignee} · {t.project}{t.carriedFrom ? ` · de ${t.carriedFrom}` : ''}
+                    </div>
+                  </div>
+                  <button className="mini-btn ok" onClick={() => rescueFromStandby(t.id!)} title="Resgatar para esta semana"><Icon name="play_arrow" size={12} />Resgatar</button>
+                  <button className="row-btn danger" onClick={() => deleteFromStandby(t.id!)} title="Excluir definitivamente"><Icon name="delete" size={13} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ===== KPIs ===== */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 'var(--gap)', marginBottom: 'var(--gap)' }}>
@@ -1104,7 +1208,7 @@ function StatusControl({ value, onChange }: { value: string; onChange: (s: strin
 }
 
 // Task Card
-function TaskCard({ task, onStatus, onEdit, onDelete, onValidate, onPostpone, onDragStart, onDragEnd, showProjColor, groupBy, canValidate, getProjColor, getProjCode, getDiscMeta, getPersonMeta, span }: any) {
+function TaskCard({ task, onStatus, onEdit, onDelete, onValidate, onPostpone, onStandby, onDragStart, onDragEnd, showProjColor, groupBy, canValidate, getProjColor, getProjCode, getDiscMeta, getPersonMeta, span }: any) {
   const pc = getProjColor(task.project);
   const prog = taskProgress(task);
   const done = isDone(task);
@@ -1212,6 +1316,9 @@ function TaskCard({ task, onStatus, onEdit, onDelete, onValidate, onPostpone, on
           <button className="row-btn" onClick={() => onEdit(task)} aria-label="Editar"><Icon name="edit" size={14} /></button>
           {!done && onPostpone && (
             <button className="row-btn warn" onClick={() => onPostpone(task.id)} aria-label="Adiar para próxima semana" title="Adiar para a próxima semana"><Icon name="next_week" size={14} /></button>
+          )}
+          {!done && onStandby && (
+            <button className="row-btn" style={{ color: '#EAB308' }} onClick={() => onStandby(task.id)} aria-label="Colocar em standby" title="Standby — pausa a tarefa e tira da evolução da semana"><Icon name="pause_circle" size={14} /></button>
           )}
           <button className="row-btn danger" onClick={() => onDelete(task.id)} aria-label="Excluir"><Icon name="delete" size={14} /></button>
         </div>

@@ -19,6 +19,7 @@ import { ProfileCompletionModal } from './components/ProfileCompletionModal';
 import { TextReveal } from './components/ui/TextReveal';
 
 import { parseLocalDate, formatLocalDate } from './utils/dateUtils';
+import { upsertMember, removeMember, deriveTeam } from './utils/membersHelper';
 
 import { readFileAsDataURL } from './utils/fileReaderUtils';
 import { validateFileSize } from './utils/validation';
@@ -29,6 +30,7 @@ const Agenda = React.lazy(() => import('./components/Agenda').then(m => ({ defau
 const NotesTab = React.lazy(() => import('./components/NotesTab').then(m => ({ default: m.NotesTab })));
 const ColaboradorTab = React.lazy(() => import('./components/ColaboradorTab').then(m => ({ default: m.ColaboradorTab })));
 const FinanceiroTab = React.lazy(() => import('./components/FinanceiroTab').then(m => ({ default: m.FinanceiroTab })));
+const ComprasTab = React.lazy(() => import('./components/ComprasTab').then(m => ({ default: m.ComprasTab })));
 const ContractsManager = React.lazy(() => import('./components/ContractsManager').then(m => ({ default: m.ContractsManager })));
 const FlipBook = React.lazy(() => import('./components/FlipBook').then(m => ({ default: m.FlipBook })));
 const Panorama360 = React.lazy(() => import('./components/Panorama360').then(m => ({ default: m.Panorama360 })));
@@ -38,7 +40,7 @@ import { CollaborativeHub } from './components/CollaborativeHub';
 
 
 
-type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'notas' | 'colaborador' | 'agenda_semana';
+type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'compras' | 'notas' | 'colaborador' | 'agenda_semana';
 
 
 
@@ -551,12 +553,17 @@ export const App = () => {
             });
         }
 
-        if (!db.team.includes(profile.name)) {
-            setDb(prev => ({
-                ...prev,
-                team: [...prev.team, profile.name]
-            }));
-        }
+        setDb(prev => {
+            const members = upsertMember(prev.members || [], {
+                id: currentUser?.id && currentUser.id !== 'demo_user' ? currentUser.id : undefined,
+                name: profile.name,
+                role: profile.role,
+                avatarUrl: profile.avatarUrl,
+                source: currentUser?.id && currentUser.id !== 'demo_user' ? 'login' : 'manual',
+            });
+            if (members === prev.members) return prev;
+            return { ...prev, members, team: deriveTeam(members) };
+        });
 
         localStorage.setItem('enigami_profile_completed', 'true');
         setShowProfileModal(false);
@@ -1900,9 +1907,17 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
 
 
+    // Empresa selecionada sem projeto: s√≥ a Agenda (planejamento micro) fica
+    // dispon√≠vel ‚Äî direciona para ela automaticamente.
+    useEffect(() => {
+        if (hasCompany && !hasProject && activeTab !== 'agenda_semana') {
+            setActiveTab('agenda_semana');
+        }
+    }, [hasCompany, hasProject, activeTab, setActiveTab]);
+
     // Robust auto-scroll when tab changes
     useEffect(() => {
-        if (hasProject && activeTab !== 'timeline') {
+        if ((hasProject || hasCompany) && activeTab !== 'timeline') {
             const attemptScroll = () => {
                 const scroller = document.getElementById('main-scroller');
                 const target = document.getElementById('tab-content-area');
@@ -1947,8 +1962,9 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     </div>
                 </div>
 
-                {/* Tabs centradas */}
-                {hasProject && (
+                {/* Tabs centradas ‚Äî Agenda (planejamento micro do escrit√≥rio) libera s√≥ com a empresa;
+                    as demais abas dependem de um projeto selecionado */}
+                {(hasProject || hasCompany) && (
                     <div className="flex-1 flex justify-center">
                         <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider">
                             {[
@@ -1959,21 +1975,28 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                 { id: 'data', label: 'Dados' },
                                 { id: 'viabilidade', label: 'Contratos' },
                                 { id: 'financeiro', label: 'Financeiro' },
+                                { id: 'compras', label: 'Compras' },
                                 { id: 'notas', label: 'Notas' },
                                 { id: 'colaborador', label: 'Colaborador' },
-                            ].map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as Tab)}
-                                    className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
-                                        activeTab === tab.id
-                                            ? 'text-theme-orange border border-theme-orange bg-theme-orange/10'
-                                            : 'text-theme-textMuted hover:text-theme-text'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
+                            ].map(tab => {
+                                const enabled = hasProject || tab.id === 'agenda_semana';
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => enabled && setActiveTab(tab.id as Tab)}
+                                        title={enabled ? undefined : 'Selecione um projeto para acessar'}
+                                        className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
+                                            activeTab === tab.id
+                                                ? 'text-theme-orange border border-theme-orange bg-theme-orange/10'
+                                                : enabled
+                                                    ? 'text-theme-textMuted hover:text-theme-text'
+                                                    : 'text-theme-textMuted/40 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -2450,13 +2473,13 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     if (isViewer) return;
                     if (!activeProject || !activeChecklistIds) return;
                     const projectId = activeProject.id;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: updatedChecklist } : e) } : s) } : p) }));
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, checklist: updatedChecklist } : e) } : s) } : p) }));
                 }}
                 onComplete={() => {
                     if (isViewer) return;
                     if (!activeProject || !activeChecklistIds) return;
                     const projectId = activeProject.id;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, completed: !e.completed } : e) } : s) } : p) }));
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), scopes: p.scopes.map(s => s.id === activeChecklistIds.sid ? { ...s, events: s.events.map(e => e.id === activeChecklistIds.eid ? { ...e, completed: !e.completed } : e) } : s) } : p) }));
                     setShowChecklistModal(false);
                 }}
                 onToggleLink={(targetId) => onAddDependency(activeChecklistIds!.eid, targetId, 'FS')}
@@ -2475,9 +2498,9 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
 
                 onClose={() => setShowTeamModal(false)}
 
-                onAdd={(name) => { if (isViewer) return; setDb(prev => ({ ...prev, team: [...prev.team, name] })); }}
+                onAdd={(name) => { if (isViewer) return; setDb(prev => { const members = upsertMember(prev.members || [], { name, source: 'manual' }); return { ...prev, members, team: deriveTeam(members) }; }); }}
 
-                onRemove={(idx) => { if (isViewer) return; setDb(prev => ({ ...prev, team: prev.team.filter((_, i) => i !== idx) })); }}
+                onRemove={(idx) => { if (isViewer) return; setDb(prev => { const name = prev.team[idx]; const members = removeMember(prev.members || [], name); return { ...prev, members, team: deriveTeam(members) }; }); }}
 
                 isViewer={isViewer}
 
@@ -2500,7 +2523,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     if (!activeProject) return;
 
                     const projectId = activeProject.id;
-                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, timelineStart: start, timelineEnd: end } : p) }));
+                    setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === projectId ? { ...p, updatedAt: new Date().toISOString(), timelineStart: start, timelineEnd: end } : p) }));
 
                     setShowSettingsModal(false);
 
@@ -3726,7 +3749,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                 <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando galeria...</div>}>
                                     <GalleryTab
                                         project={activeProject}
-                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
+                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? { ...upd, updatedAt: new Date().toISOString() } : p) }))}
                                         currentUser={currentUser}
                                     />
                                 </Suspense>
@@ -4892,7 +4915,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                       <ContractsManager
                                         project={activeProject}
                                         db={db}
-                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
+                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? { ...upd, updatedAt: new Date().toISOString() } : p) }))}
                                         currentUser={currentUser}
                                     />
                                     </Suspense>
@@ -4907,13 +4930,31 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                 <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
                   <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro">
                     <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm">Carregando...</div>}>
-                      <FinanceiroTab project={activeProject} db={db} />
+                      <FinanceiroTab
+                        project={activeProject}
+                        db={db}
+                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
+                      />
                     </Suspense>
                   </div>
                 </div>
               )}
 
 
+
+                    {/* --- TAB: COMPRAS VIEW --- */}
+                    {activeTab === 'compras' && hasProject && (
+                        <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
+                            <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl h-[calc(100vh-140px)] shadow-neuro">
+                                <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando compras...</div>}>
+                                    <ComprasTab
+                                        project={activeProject}
+                                        onUpdateProject={(upd) => setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? upd : p) }))}
+                                    />
+                                </Suspense>
+                            </div>
+                        </div>
+                    )}
 
                     {/* --- TAB: NOTAS VIEW --- */}
                     {
@@ -4924,7 +4965,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                                         project={activeProject}
                                         db={db}
                                         onUpdateProject={(upd) => {
-                                            setDb({ ...db, projects: db.projects.map(p => p.id === upd.id ? upd : p) });
+                                            setDb(prev => ({ ...prev, projects: prev.projects.map(p => p.id === upd.id ? { ...upd, updatedAt: new Date().toISOString() } : p) }));
                                         }}
                                         currentUser={currentUser as { name: string; avatar: string; } | null}
                                     />
@@ -4947,9 +4988,9 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                         )
                     }
 
-                    {/* --- TAB: AGENDA DA SEMANA VIEW --- */}
+                    {/* --- TAB: AGENDA DA SEMANA VIEW (libera com empresa, sem exigir projeto) --- */}
                     {
-                        activeTab === 'agenda_semana' && hasProject && (
+                        activeTab === 'agenda_semana' && (hasProject || hasCompany) && (
                             <div className="animate-fadeIn max-w-[1920px] mx-auto w-full">
                                 <div className="ds-card bg-theme-card overflow-hidden w-full border border-theme-border rounded-3xl min-h-[calc(100vh-140px)] shadow-neuro">
                                     <Suspense fallback={<div className="flex items-center justify-center h-full text-theme-textMuted text-sm p-8">Carregando agenda...</div>}>

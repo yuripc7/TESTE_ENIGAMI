@@ -39,8 +39,8 @@ export const GalleryModal: React.FC<{
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!validateFileSize(file)) {
-            return;
+        if (validateFileSize(file)) {
+            return; // arquivo acima do limite de tamanho
         }
         try {
             let dataUrl = '';
@@ -1469,9 +1469,14 @@ export const ScopeModal: React.FC<{
                     <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Responsável</label>
-                            <select value={resp} onChange={e => setResp(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
-                                {team.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                            {team.length > 0 ? (
+                                <select value={resp} onChange={e => setResp(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
+                                    {!team.includes(resp) && resp && <option value={resp}>{resp}</option>}
+                                    {team.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            ) : (
+                                <input value={resp} onChange={e => setResp(e.target.value)} placeholder="Nome do responsável" className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange" />
+                            )}
                         </div>
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Início</label>
@@ -1637,9 +1642,14 @@ export const EventModal: React.FC<{
                     <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Responsável</label>
-                            <select value={resp} onChange={e => setResp(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
-                                {team.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                            {team.length > 0 ? (
+                                <select value={resp} onChange={e => setResp(e.target.value)} className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange">
+                                    {!team.includes(resp) && resp && <option value={resp}>{resp}</option>}
+                                    {team.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            ) : (
+                                <input value={resp} onChange={e => setResp(e.target.value)} placeholder="Nome do responsável" className="bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange" />
+                            )}
                         </div>
                         <div className="flex flex-col gap-1">
                             <label className="text-[9px] font-black text-theme-textMuted uppercase tracking-widest">Atraso (+ Dias)</label>

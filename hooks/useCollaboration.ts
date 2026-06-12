@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { DB, Project, Note, Activity, Company } from '../types';
+import { DB, Project, Note, Activity, Company, TeamMember } from '../types';
+import { fetchWorkspaceSnapshot, upsertWorkspaceItem, deleteWorkspaceItem } from '../services/workspaceService';
+import { upsertMember, deriveTeam } from '../utils/membersHelper';
 
 export interface CollaborationUser {
   userId: string;
@@ -31,7 +33,7 @@ interface UseCollaborationOptions {
 function mergeProjects(local: Project[], incoming: Project[]): Project[] {
   const merged = [...local];
   incoming.forEach(incProj => {
-    const locIdx = merged.findIndex(p => p.id === incProj.id);
+    const locIdx = merged.findIndex(p => String(p.id) === String(incProj.id));
     if (locIdx >= 0) {
       const locProj = merged[locIdx];
       const locTime = new Date(locProj.updatedAt || 0).getTime();
@@ -49,7 +51,7 @@ function mergeProjects(local: Project[], incoming: Project[]): Project[] {
 function mergeCompanies(local: Company[], incoming: Company[]): Company[] {
   const merged = [...local];
   incoming.forEach(incComp => {
-    const locIdx = merged.findIndex(c => c.id === incComp.id);
+    const locIdx = merged.findIndex(c => String(c.id) === String(incComp.id));
     if (locIdx >= 0) {
       merged[locIdx] = incComp;
     } else {
@@ -79,7 +81,7 @@ function mergeDisciplines(local: any[], incoming: any[]): any[] {
 function mergeViabilities(local: any[] = [], incoming: any[] = []): any[] {
   const merged = [...local];
   incoming.forEach(incViab => {
-    const locIdx = merged.findIndex(v => v.id === incViab.id);
+    const locIdx = merged.findIndex(v => String(v.id) === String(incViab.id));
     if (locIdx >= 0) {
       const locTime = new Date(merged[locIdx].createdAt || 0).getTime();
       const incTime = new Date(incViab.createdAt || 0).getTime();
@@ -142,6 +144,22 @@ const BOT_NOTE_MESSAGES = [
 
 const PASTEL_COLORS = ['#FFDEE9', '#B5EAEA', '#FDF2F0', '#E3E1FA', '#DFFFF0', '#FFEBB6'];
 
+function getActivityTextForTab(tab: string): string {
+  switch (tab) {
+    case 'timeline': return 'Visualizando Cronograma';
+    case 'agenda_semana': return 'Organizando a Agenda';
+    case 'gallery': return 'Navegando na Galeria';
+    case 'files': return 'Gerenciando Arquivos';
+    case 'data': return 'Analisando Dados';
+    case 'viabilidade': return 'Revisando Contratos';
+    case 'financeiro': return 'Atualizando Financeiro';
+    case 'compras': return 'Gerenciando Compras';
+    case 'notas': return 'Postando Notas';
+    case 'colaborador': return 'Visualizando Equipe';
+    default: return 'No Dashboard';
+  }
+}
+
 export function useCollaboration({
   projectId,
   projectName,
@@ -169,15 +187,17 @@ export function useCollaboration({
   const prevCompaniesRef = useRef<Company[]>(db.companies);
   const prevDisciplinesRef = useRef<any[]>(db.disciplines);
   const prevTeamRef = useRef<string[]>(db.team);
+  const prevMembersRef = useRef<TeamMember[]>(db.members || []);
   const prevViabilitiesRef = useRef<any[]>(db.viabilities || []);
   const prevLodsRef = useRef<string[]>(db.lods);
 
   // Refs for tracking network-received item IDs and list flags to prevent feedback loop
-  const receivedProjectsRef = useRef<Set<number>>(new Set());
-  const receivedCompaniesRef = useRef<Set<number>>(new Set());
+  const receivedProjectsRef = useRef<Set<string>>(new Set());
+  const receivedCompaniesRef = useRef<Set<string>>(new Set());
   const receivedViabilitiesRef = useRef<Set<string>>(new Set());
   const receivedDisciplinesRef = useRef<boolean>(false);
   const receivedTeamRef = useRef<boolean>(false);
+  const receivedMembersRef = useRef<boolean>(false);
   const receivedLodsRef = useRef<boolean>(false);
 
   // Ref to always have the latest online users inside callbacks without re-subscribing
@@ -185,6 +205,13 @@ export function useCollaboration({
   useEffect(() => {
     onlineUsersRef.current = onlineUsers;
   }, [onlineUsers]);
+
+  // Presence info refs — keep the channel subscription stable while tab/project/profile change
+  const presenceRef = useRef({ projectId, projectName, activeTab, currentName, currentAvatar });
+  useEffect(() => {
+    presenceRef.current = { projectId, projectName, activeTab, currentName, currentAvatar };
+  }, [projectId, projectName, activeTab, currentName, currentAvatar]);
+  const joinedAtRef = useRef<number>(Date.now());
 
   // Keep refs up to date
   useEffect(() => {
@@ -196,30 +223,19 @@ export function useCollaboration({
   }, [currentUserId]);
 
   // Determine current activity string
-  const getCurrentActivityText = useCallback(() => {
-    switch (activeTab) {
-      case 'timeline': return 'Visualizando Cronograma';
-      case 'gallery': return 'Navegando na Galeria';
-      case 'files': return 'Gerenciando Arquivos';
-      case 'data': return 'Analisando Dados';
-      case 'viabilidade': return 'Revisando Contratos';
-      case 'financeiro': return 'Atualizando Financeiro';
-      case 'notas': return 'Postando Notas';
-      case 'colaborador': return 'Visualizando Equipe';
-      default: return 'No Dashboard';
-    }
-  }, [activeTab]);
+  const getCurrentActivityText = useCallback(() => getActivityTextForTab(activeTab), [activeTab]);
 
   // Handle Syncing Presence
   const handlePresenceSync = useCallback((state: Record<string, unknown[]>) => {
-    const list: CollaborationUser[] = [];
+    // Keep the NEWEST meta per user — re-tracking (tab/profile updates) appends
+    // a new payload for the same key, and the older one must not win.
+    const map = new Map<string, CollaborationUser>();
     for (const presences of Object.values(state)) {
       for (const p of presences as CollaborationUser[]) {
-        if (p.userId) list.push(p);
+        if (p.userId) map.set(p.userId, p);
       }
     }
-    // Remove duplicates
-    const unique = list.filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i);
+    const unique = Array.from(map.values());
     unique.sort((a, b) => a.joinedAt - b.joinedAt);
     setOnlineUsers(unique);
   }, []);
@@ -248,10 +264,10 @@ export function useCollaboration({
         const incoming = payload.project as Project;
         
         // Add to tracking set so we skip broadcasting it back
-        receivedProjectsRef.current.add(incoming.id);
+        receivedProjectsRef.current.add(String(incoming.id));
 
         setDb(prev => {
-          const exists = prev.projects.find(p => p.id === incoming.id);
+          const exists = prev.projects.find(p => String(p.id) === String(incoming.id));
           if (!exists) {
             if (!payload.isBootstrap) {
               showToast(`Projeto criado: ${incoming.name}`, payload.senderName, payload.senderAvatar);
@@ -266,11 +282,11 @@ export function useCollaboration({
             }
             return {
               ...prev,
-              projects: prev.projects.map(p => p.id === incoming.id ? incoming : p)
+              projects: prev.projects.map(p => String(p.id) === String(incoming.id) ? incoming : p)
             };
           }
           // If state didn't change, clean from tracking set
-          receivedProjectsRef.current.delete(incoming.id);
+          receivedProjectsRef.current.delete(String(incoming.id));
           return prev;
         });
       })
@@ -278,18 +294,18 @@ export function useCollaboration({
         if (payload.senderId === currentUserIdRef.current) return;
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         
-        receivedProjectsRef.current.add(payload.projectId);
+        receivedProjectsRef.current.add(String(payload.projectId));
 
         setDb(prev => {
-          const exists = prev.projects.some(p => p.id === payload.projectId);
+          const exists = prev.projects.some(p => String(p.id) === String(payload.projectId));
           if (!exists) {
-            receivedProjectsRef.current.delete(payload.projectId);
+            receivedProjectsRef.current.delete(String(payload.projectId));
             return prev;
           }
           return {
             ...prev,
-            projects: prev.projects.filter(p => p.id !== payload.projectId),
-            activeProjectId: prev.activeProjectId === payload.projectId ? null : prev.activeProjectId
+            projects: prev.projects.filter(p => String(p.id) !== String(payload.projectId)),
+            activeProjectId: String(prev.activeProjectId) === String(payload.projectId) ? null : prev.activeProjectId
           };
         });
       })
@@ -298,16 +314,16 @@ export function useCollaboration({
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         const incoming = payload.company as Company;
         
-        receivedCompaniesRef.current.add(incoming.id);
+        receivedCompaniesRef.current.add(String(incoming.id));
 
         setDb(prev => {
-          const exists = prev.companies.some(c => c.id === incoming.id);
+          const exists = prev.companies.some(c => String(c.id) === String(incoming.id));
           if (!exists) {
             return { ...prev, companies: [...prev.companies, incoming] };
           }
           return {
             ...prev,
-            companies: prev.companies.map(c => c.id === incoming.id ? incoming : c)
+            companies: prev.companies.map(c => String(c.id) === String(incoming.id) ? incoming : c)
           };
         });
       })
@@ -315,18 +331,18 @@ export function useCollaboration({
         if (payload.senderId === currentUserIdRef.current) return;
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         
-        receivedCompaniesRef.current.add(payload.companyId);
+        receivedCompaniesRef.current.add(String(payload.companyId));
 
         setDb(prev => {
-          const exists = prev.companies.some(c => c.id === payload.companyId);
+          const exists = prev.companies.some(c => String(c.id) === String(payload.companyId));
           if (!exists) {
-            receivedCompaniesRef.current.delete(payload.companyId);
+            receivedCompaniesRef.current.delete(String(payload.companyId));
             return prev;
           }
           return {
             ...prev,
-            companies: prev.companies.filter(c => c.id !== payload.companyId),
-            activeCompanyId: prev.activeCompanyId === payload.companyId ? null : prev.activeCompanyId
+            companies: prev.companies.filter(c => String(c.id) !== String(payload.companyId)),
+            activeCompanyId: String(prev.activeCompanyId) === String(payload.companyId) ? null : prev.activeCompanyId
           };
         });
       })
@@ -343,11 +359,23 @@ export function useCollaboration({
       .on('broadcast', { event: 'WORKSPACE_TEAM_UPDATED' }, ({ payload }) => {
         if (payload.senderId === currentUserIdRef.current) return;
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
-        
+
         receivedTeamRef.current = true;
 
         setDb(prev => {
           return { ...prev, team: payload.team };
+        });
+      })
+      .on('broadcast', { event: 'WORKSPACE_MEMBERS_UPDATED' }, ({ payload }) => {
+        if (payload.senderId === currentUserIdRef.current) return;
+        if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
+
+        receivedMembersRef.current = true;
+        receivedTeamRef.current = true;
+
+        setDb(prev => {
+          const members = payload.members as TeamMember[];
+          return { ...prev, members, team: deriveTeam(members) };
         });
       })
       .on('broadcast', { event: 'WORKSPACE_VIABILITY_UPDATED' }, ({ payload }) => {
@@ -355,17 +383,17 @@ export function useCollaboration({
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         const incoming = payload.viability;
         
-        receivedViabilitiesRef.current.add(incoming.id);
+        receivedViabilitiesRef.current.add(String(incoming.id));
 
         setDb(prev => {
           const viabs = prev.viabilities || [];
-          const exists = viabs.some(v => v.id === incoming.id);
+          const exists = viabs.some(v => String(v.id) === String(incoming.id));
           if (!exists) {
             return { ...prev, viabilities: [...viabs, incoming] };
           }
           return {
             ...prev,
-            viabilities: viabs.map(v => v.id === incoming.id ? incoming : v)
+            viabilities: viabs.map(v => String(v.id) === String(incoming.id) ? incoming : v)
           };
         });
       })
@@ -373,18 +401,18 @@ export function useCollaboration({
         if (payload.senderId === currentUserIdRef.current) return;
         if (payload.targetUserId && payload.targetUserId !== currentUserIdRef.current) return;
         
-        receivedViabilitiesRef.current.add(payload.viabilityId);
+        receivedViabilitiesRef.current.add(String(payload.viabilityId));
 
         setDb(prev => {
           const viabs = prev.viabilities || [];
-          const exists = viabs.some(v => v.id === payload.viabilityId);
+          const exists = viabs.some(v => String(v.id) === String(payload.viabilityId));
           if (!exists) {
-            receivedViabilitiesRef.current.delete(payload.viabilityId);
+            receivedViabilitiesRef.current.delete(String(payload.viabilityId));
             return prev;
           }
           return {
             ...prev,
-            viabilities: viabs.filter(v => v.id !== payload.viabilityId)
+            viabilities: viabs.filter(v => String(v.id) !== String(payload.viabilityId))
           };
         });
       })
@@ -435,8 +463,8 @@ export function useCollaboration({
             event: 'WORKSPACE_PROJECT_UPDATED',
             payload: {
               senderId: currentUserIdRef.current,
-              senderName: currentName,
-              senderAvatar: currentAvatar,
+              senderName: presenceRef.current.currentName,
+              senderAvatar: presenceRef.current.currentAvatar,
               project: proj,
               isBootstrap: true,
               targetUserId: senderId
@@ -486,6 +514,19 @@ export function useCollaboration({
         });
         await new Promise(resolve => setTimeout(resolve, 30));
 
+        // Send members (estrutura central de equipe)
+        globalChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'WORKSPACE_MEMBERS_UPDATED',
+          payload: {
+            senderId: currentUserIdRef.current,
+            members: currentDb.members || [],
+            isBootstrap: true,
+            targetUserId: senderId
+          }
+        });
+        await new Promise(resolve => setTimeout(resolve, 30));
+
         // Send lods
         globalChannelRef.current?.send({
           type: 'broadcast',
@@ -518,15 +559,17 @@ export function useCollaboration({
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
+          joinedAtRef.current = Date.now();
+          const presence = presenceRef.current;
           await channel.track({
             userId: currentUserId,
-            name: currentName,
-            avatarUrl: currentAvatar,
-            activeProjectId: projectId,
-            activeProjectName: projectName,
-            activeTab: activeTab,
-            currentActivity: getCurrentActivityText(),
-            joinedAt: Date.now()
+            name: presence.currentName,
+            avatarUrl: presence.currentAvatar,
+            activeProjectId: presence.projectId,
+            activeProjectName: presence.projectName,
+            activeTab: presence.activeTab,
+            currentActivity: getActivityTextForTab(presence.activeTab),
+            joinedAt: joinedAtRef.current
           } as CollaborationUser);
 
           // Request initial database synchronization
@@ -540,6 +583,59 @@ export function useCollaboration({
         }
       });
 
+    // Load persisted workspace from Supabase and reconcile with local state
+    fetchWorkspaceSnapshot().then(snap => {
+      if (!snap) return;
+
+      const local = dbRef.current;
+
+      // Push local items that are newer than (or missing from) the cloud
+      local.projects.forEach(lp => {
+        const cp = snap.projects.find(p => String(p.id) === String(lp.id));
+        if (!cp || new Date(lp.updatedAt || 0).getTime() > new Date(cp.updatedAt || 0).getTime()) {
+          upsertWorkspaceItem('project', lp.id, lp);
+        }
+      });
+      local.companies.forEach(lc => {
+        if (!snap.companies.some(c => String(c.id) === String(lc.id))) {
+          upsertWorkspaceItem('company', lc.id, lc);
+        }
+      });
+      (local.viabilities || []).forEach(lv => {
+        if (!snap.viabilities.some(v => String(v.id) === String(lv.id))) {
+          upsertWorkspaceItem('viability', lv.id, lv);
+        }
+      });
+      if (!snap.team) upsertWorkspaceItem('team', 'team', local.team);
+      if (!snap.members && (local.members || []).length > 0) upsertWorkspaceItem('members', 'members', local.members);
+      if (!snap.disciplines) upsertWorkspaceItem('disciplines', 'disciplines', local.disciplines);
+      if (!snap.lods) upsertWorkspaceItem('lods', 'lods', local.lods);
+
+      // Mark incoming items so the change-detector doesn't echo them back
+      snap.projects.forEach(p => receivedProjectsRef.current.add(String(p.id)));
+      snap.companies.forEach(c => receivedCompaniesRef.current.add(String(c.id)));
+      snap.viabilities.forEach(v => receivedViabilitiesRef.current.add(String(v.id)));
+      if (snap.team) receivedTeamRef.current = true;
+      if (snap.members) receivedMembersRef.current = true;
+      if (snap.disciplines) receivedDisciplinesRef.current = true;
+      if (snap.lods) receivedLodsRef.current = true;
+
+      setDb(prev => {
+        let members = prev.members || [];
+        (snap.members || []).forEach(m => { members = upsertMember(members, m); });
+        return {
+          ...prev,
+          projects: mergeProjects(prev.projects, snap.projects),
+          companies: mergeCompanies(prev.companies, snap.companies),
+          viabilities: mergeViabilities(prev.viabilities || [], snap.viabilities),
+          members,
+          team: snap.members ? deriveTeam(members) : (snap.team ? mergeTeam(prev.team, snap.team) : prev.team),
+          disciplines: snap.disciplines ? mergeDisciplines(prev.disciplines, snap.disciplines) : prev.disciplines,
+          lods: snap.lods ? mergeLods(prev.lods, snap.lods) : prev.lods,
+        };
+      });
+    });
+
     return () => {
       channel.untrack();
       supabase.removeChannel(channel);
@@ -547,7 +643,22 @@ export function useCollaboration({
       setIsConnected(false);
       setOnlineUsers([]);
     };
-  }, [currentUserId, currentName, currentAvatar, projectId, projectName, activeTab, getCurrentActivityText, handlePresenceSync, setDb, showToast]);
+  }, [currentUserId, handlePresenceSync, setDb, showToast]);
+
+  // Update presence payload (tab, project, name, avatar) without recreating the channel
+  useEffect(() => {
+    if (!isConnected || !globalChannelRef.current || !currentUserId) return;
+    globalChannelRef.current.track({
+      userId: currentUserId,
+      name: currentName,
+      avatarUrl: currentAvatar,
+      activeProjectId: projectId,
+      activeProjectName: projectName,
+      activeTab: activeTab,
+      currentActivity: getCurrentActivityText(),
+      joinedAt: joinedAtRef.current
+    } as CollaborationUser);
+  }, [isConnected, currentUserId, currentName, currentAvatar, projectId, projectName, activeTab, getCurrentActivityText]);
 
   // Observe all local DB changes and broadcast them
   useEffect(() => {
@@ -559,10 +670,10 @@ export function useCollaboration({
       const curr = db.projects;
 
       // 1. Check for deletions
-      const deleted = prev.filter(p => !curr.some(c => c.id === p.id));
+      const deleted = prev.filter(p => !curr.some(c => String(c.id) === String(p.id)));
       deleted.forEach(p => {
-        if (receivedProjectsRef.current.has(p.id)) {
-          receivedProjectsRef.current.delete(p.id);
+        if (receivedProjectsRef.current.has(String(p.id))) {
+          receivedProjectsRef.current.delete(String(p.id));
           return; // Skip broadcasting deletion
         }
         globalChannelRef.current?.send({
@@ -570,17 +681,26 @@ export function useCollaboration({
           event: 'WORKSPACE_PROJECT_DELETED',
           payload: { senderId: currentUserId, projectId: p.id }
         });
+        deleteWorkspaceItem('project', p.id);
       });
 
       // 2. Check for updates / creations
       curr.forEach(p => {
-        if (receivedProjectsRef.current.has(p.id)) {
-          receivedProjectsRef.current.delete(p.id);
+        if (receivedProjectsRef.current.has(String(p.id))) {
+          receivedProjectsRef.current.delete(String(p.id));
           return; // Skip broadcasting updates received from the network
         }
 
-        const prevProj = prev.find(pr => pr.id === p.id);
+        const prevProj = prev.find(pr => String(pr.id) === String(p.id));
+        let toSend: Project | null = null;
         if (!prevProj || new Date(p.updatedAt || 0).getTime() > new Date(prevProj.updatedAt || 0).getTime()) {
+          toSend = p;
+        } else if (p !== prevProj && JSON.stringify(p) !== JSON.stringify(prevProj)) {
+          // Content changed but the mutation forgot to bump updatedAt
+          // (e.g. checklist toggle) — stamp it so peers accept the merge
+          toSend = { ...p, updatedAt: new Date().toISOString() };
+        }
+        if (toSend) {
           globalChannelRef.current?.send({
             type: 'broadcast',
             event: 'WORKSPACE_PROJECT_UPDATED',
@@ -588,9 +708,10 @@ export function useCollaboration({
               senderId: currentUserId,
               senderName: currentName,
               senderAvatar: currentAvatar,
-              project: p
+              project: toSend
             }
           });
+          upsertWorkspaceItem('project', toSend.id, toSend);
           setLastSyncFromSelf(Date.now());
         }
       });
@@ -604,10 +725,10 @@ export function useCollaboration({
       const curr = db.companies;
 
       // Deletions
-      const deleted = prev.filter(c => !curr.some(cc => cc.id === c.id));
+      const deleted = prev.filter(c => !curr.some(cc => String(cc.id) === String(c.id)));
       deleted.forEach(c => {
-        if (receivedCompaniesRef.current.has(c.id)) {
-          receivedCompaniesRef.current.delete(c.id);
+        if (receivedCompaniesRef.current.has(String(c.id))) {
+          receivedCompaniesRef.current.delete(String(c.id));
           return;
         }
         globalChannelRef.current?.send({
@@ -615,22 +736,24 @@ export function useCollaboration({
           event: 'WORKSPACE_COMPANY_DELETED',
           payload: { senderId: currentUserId, companyId: c.id }
         });
+        deleteWorkspaceItem('company', c.id);
       });
 
       // Updates / creations
       curr.forEach(c => {
-        if (receivedCompaniesRef.current.has(c.id)) {
-          receivedCompaniesRef.current.delete(c.id);
+        if (receivedCompaniesRef.current.has(String(c.id))) {
+          receivedCompaniesRef.current.delete(String(c.id));
           return;
         }
 
-        const prevComp = prev.find(cc => cc.id === c.id);
+        const prevComp = prev.find(cc => String(cc.id) === String(c.id));
         if (!prevComp || JSON.stringify(c) !== JSON.stringify(prevComp)) {
           globalChannelRef.current?.send({
             type: 'broadcast',
             event: 'WORKSPACE_COMPANY_UPDATED',
             payload: { senderId: currentUserId, company: c }
           });
+          upsertWorkspaceItem('company', c.id, c);
         }
       });
 
@@ -649,6 +772,7 @@ export function useCollaboration({
             event: 'WORKSPACE_DISCIPLINES_UPDATED',
             payload: { senderId: currentUserId, disciplines: curr }
           });
+          upsertWorkspaceItem('disciplines', 'disciplines', curr);
         }
       }
       prevDisciplinesRef.current = curr;
@@ -666,9 +790,28 @@ export function useCollaboration({
             event: 'WORKSPACE_TEAM_UPDATED',
             payload: { senderId: currentUserId, team: curr }
           });
+          upsertWorkspaceItem('team', 'team', curr);
         }
       }
       prevTeamRef.current = curr;
+    }
+
+    // Detect Members changes (estrutura central de equipe)
+    const currMembers = db.members || [];
+    if (currMembers !== prevMembersRef.current) {
+      if (receivedMembersRef.current) {
+        receivedMembersRef.current = false;
+      } else {
+        if (JSON.stringify(currMembers) !== JSON.stringify(prevMembersRef.current)) {
+          globalChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'WORKSPACE_MEMBERS_UPDATED',
+            payload: { senderId: currentUserId, members: currMembers }
+          });
+          upsertWorkspaceItem('members', 'members', currMembers);
+        }
+      }
+      prevMembersRef.current = currMembers;
     }
 
     // Detect Viabilities changes
@@ -677,10 +820,10 @@ export function useCollaboration({
       const prev = prevViabilitiesRef.current;
       
       // Deletions
-      const deleted = prev.filter(v => !currViab.some(vv => vv.id === v.id));
+      const deleted = prev.filter(v => !currViab.some(vv => String(vv.id) === String(v.id)));
       deleted.forEach(v => {
-        if (receivedViabilitiesRef.current.has(v.id)) {
-          receivedViabilitiesRef.current.delete(v.id);
+        if (receivedViabilitiesRef.current.has(String(v.id))) {
+          receivedViabilitiesRef.current.delete(String(v.id));
           return;
         }
         globalChannelRef.current?.send({
@@ -688,22 +831,24 @@ export function useCollaboration({
           event: 'WORKSPACE_VIABILITY_DELETED',
           payload: { senderId: currentUserId, viabilityId: v.id }
         });
+        deleteWorkspaceItem('viability', v.id);
       });
 
       // Updates / creations
       currViab.forEach(v => {
-        if (receivedViabilitiesRef.current.has(v.id)) {
-          receivedViabilitiesRef.current.delete(v.id);
+        if (receivedViabilitiesRef.current.has(String(v.id))) {
+          receivedViabilitiesRef.current.delete(String(v.id));
           return;
         }
 
-        const prevV = prev.find(vv => vv.id === v.id);
+        const prevV = prev.find(vv => String(vv.id) === String(v.id));
         if (!prevV || JSON.stringify(v) !== JSON.stringify(prevV)) {
           globalChannelRef.current?.send({
             type: 'broadcast',
             event: 'WORKSPACE_VIABILITY_UPDATED',
             payload: { senderId: currentUserId, viability: v }
           });
+          upsertWorkspaceItem('viability', v.id, v);
         }
       });
 
@@ -722,6 +867,7 @@ export function useCollaboration({
             event: 'WORKSPACE_LODS_UPDATED',
             payload: { senderId: currentUserId, lods: curr }
           });
+          upsertWorkspaceItem('lods', 'lods', curr);
         }
       }
       prevLodsRef.current = curr;
@@ -769,7 +915,7 @@ export function useCollaboration({
       const actionType = Math.floor(Math.random() * 4); // 0: Change Presence, 1: Mural Log, 2: Sticky Note, 3: Task Check
 
       const currentDb = dbRef.current;
-      const project = currentDb.projects.find(p => p.id === Number(projectId));
+      const project = currentDb.projects.find(p => String(p.id) === String(projectId));
       if (!project) return;
 
       if (actionType === 0) {
@@ -803,7 +949,7 @@ export function useCollaboration({
 
         setDb(prev => ({
           ...prev,
-          projects: prev.projects.map(p => p.id === project.id ? updatedProject : p)
+          projects: prev.projects.map(p => String(p.id) === String(project.id) ? updatedProject : p)
         }));
 
         showToast(`${bot.name}: ${message}`, bot.name, bot.avatarUrl);
@@ -831,7 +977,7 @@ export function useCollaboration({
 
         setDb(prev => ({
           ...prev,
-          projects: prev.projects.map(p => p.id === project.id ? updatedProject : p)
+          projects: prev.projects.map(p => String(p.id) === String(project.id) ? updatedProject : p)
         }));
 
         showToast(`${bot.name} criou um Post-it para ${recipient}`, bot.name, bot.avatarUrl);
@@ -880,7 +1026,7 @@ export function useCollaboration({
 
             setDb(prev => ({
               ...prev,
-              projects: prev.projects.map(p => p.id === project.id ? updatedProject : p)
+              projects: prev.projects.map(p => String(p.id) === String(project.id) ? updatedProject : p)
             }));
 
             showToast(`${bot.name} concluiu a ação "${event.title}" no cronograma`, bot.name, bot.avatarUrl);

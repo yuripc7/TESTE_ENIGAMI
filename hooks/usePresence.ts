@@ -26,12 +26,14 @@ export function usePresence({
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const syncPresence = useCallback((state: Record<string, unknown[]>) => {
-    const users: PresenceUser[] = [];
+    // Keep the newest meta per user (re-tracking appends a new payload for the same key)
+    const map = new Map<string, PresenceUser>();
     for (const presences of Object.values(state)) {
       for (const p of presences as PresenceUser[]) {
-        if (p.userId) users.push(p);
+        if (p.userId) map.set(p.userId, p);
       }
     }
+    const users = Array.from(map.values());
     users.sort((a, b) => a.joinedAt - b.joinedAt);
     setOnlineUsers(users);
   }, []);

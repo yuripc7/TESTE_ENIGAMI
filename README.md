@@ -46,6 +46,19 @@ A high-performance project management dashboard built for technical teams. This 
    npm run build
    ```
 
+## ☁️ Supabase — Persistência do Workspace
+
+Por padrão, autenticação e perfis já usam o Supabase. Para que **projetos, cronogramas,
+checklists e agenda fiquem salvos na nuvem** (e não apenas no navegador de cada membro),
+execute o script [`supabase_setup.sql`](supabase_setup.sql) uma única vez:
+
+1. Abra o painel do seu projeto no [Supabase](https://supabase.com/dashboard).
+2. Vá em **SQL Editor → New query**.
+3. Cole o conteúdo de `supabase_setup.sql` e clique em **Run**.
+
+Sem a tabela, o app continua funcionando normalmente (IndexedDB local + sincronização
+em tempo real entre usuários online), mas os dados não ficam persistidos na nuvem.
+
 ## 🌐 Deployment
 
 The project is configured for **GitHub Pages**. All builds are automatically deployed via GitHub Actions when pushing to the `main` branch.

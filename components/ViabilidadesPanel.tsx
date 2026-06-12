@@ -1,666 +1,738 @@
-// ╔══════════════════════════════════════════════════════════════════╗
-// ║  ViabilidadesPanel.tsx — Kanban completo com upload de PDFs     ║
-// ║  Integrado com useApp() · Substitui o painel anterior           ║
-// ╚══════════════════════════════════════════════════════════════════╝
-
-import React, { useState, useRef, useCallback } from 'react';
-import { FileLink, DB } from '../types';
+import React, { useMemo, useRef, useState } from 'react';
+import { DB, Viability, FileLink } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { readFileAsDataURL } from '../utils/fileReaderUtils';
 import { validateFileSize } from '../utils/validation';
+import { getMember } from '../utils/membersHelper';
 
-// ── Colunas do Kanban ──────────────────────────────────────────────────────
-const COLS = [
-  { id: 'em_aberto',           label: 'Em Aberto',                tw: 'text-gray-400',    border: 'border-l-gray-400',    headerBorder: 'border-b-gray-400/60',    dot: 'bg-gray-400'    },
-  { id: 'a_fazer',             label: 'A Fazer',                  tw: 'text-blue-400',    border: 'border-l-blue-400',    headerBorder: 'border-b-blue-400/60',    dot: 'bg-blue-400'    },
-  { id: 'estudos_finalizados', label: 'Estudos Finalizados',      tw: 'text-emerald-400', border: 'border-l-emerald-400', headerBorder: 'border-b-emerald-400/60', dot: 'bg-emerald-400' },
-  { id: 'dados_permuta',       label: 'Dados Intenção Permuta',   tw: 'text-amber-400',   border: 'border-l-amber-400',   headerBorder: 'border-b-amber-400/60',   dot: 'bg-amber-400'   },
-  { id: 'contratos',           label: 'Contratos',                tw: 'text-pink-400',    border: 'border-l-pink-400',    headerBorder: 'border-b-pink-400/60',    dot: 'bg-pink-400'    },
-  { id: 'contratos_assinados', label: 'Contratos Assinados',      tw: 'text-green-400',   border: 'border-l-green-400',   headerBorder: 'border-b-green-400/60',   dot: 'bg-green-400'   },
-] as const;
+/**
+ * Painel de Viabilidades — redesign (port do Viabilidades.dc.html).
+ * Kanban por fases com tipos de estudo e prazo automático, permuta,
+ * urgência e responsável ligado à estrutura central de membros (db.members).
+ * Dados em db.viabilities — sincronizados com a equipe + Supabase.
+ */
 
-type KanbanStatus = typeof COLS[number]['id'];
-
-// ── Tipo Estendido de Viabilidade ──────────────────────────────────────────
-// Adicione estes campos à interface Viability em types.ts:
-//   titulo?: string;
-//   responsavel?: string;
-//   kanbanStatus?: KanbanStatus;
-//   pdfConsultaPrefeitura?: FileLink;  // Obrigatório ao criar
-//   pdfLocalizacao?: FileLink;          // Obrigatório ao criar
-//   pdfEstudoTerceiro?: FileLink;       // Opcional
-//   obs?: string;
-interface ExtViab {
-  id: string;
-  companyId: number;
-  address: string;
-  titulo?: string;
-  responsavel?: string;
-  date: string;
-  status: 'VIÁVEL' | 'STAND BY' | 'EM ANÁLISE' | 'NÃO INICIADO';
-  kanbanStatus?: KanbanStatus;
-  pdfConsultaPrefeitura?: FileLink;
-  pdfLocalizacao?: FileLink;
-  pdfEstudoTerceiro?: FileLink;
-  pdfSummary?: FileLink;
-  obs?: string;
-  versions: { id: string; version: number; date: string; notes?: string; pdfAttachment?: FileLink }[];
-  createdAt: string;
-}
-
-const EMPTY_FORM = {
-  titulo: '',
-  address: '',
-  responsavel: '',
-  date: new Date().toISOString().slice(0, 10),
-  kanbanStatus: 'em_aberto' as KanbanStatus,
-  pdfConsultaPrefeitura: null as FileLink | null,
-  pdfLocalizacao: null as FileLink | null,
-  pdfEstudoTerceiro: null as FileLink | null,
-  obs: '',
-};
-
-// ── Props ──────────────────────────────────────────────────────────────────
 interface ViabilidadesPanelProps {
   companyId: number;
   companyName: string;
-  // Props legadas abaixo — mantidas para compatibilidade com App.tsx atual
-  // Podem ser removidas quando App.tsx for atualizado
-  isOpen?: boolean;
   onClose?: () => void;
-  viabilities?: ExtViab[];
-  onAdd?: (v: any) => void;
+  // Props legadas — mantidas para compatibilidade
+  isOpen?: boolean;
+  viabilities?: Viability[];
+  onAdd?: (v: unknown) => void;
   onDelete?: (id: string) => void;
-  onAddVersion?: (viabilityId: string, version: any) => void;
-  onUpdateStatus?: (id: string, status: ExtViab['status']) => void;
+  onAddVersion?: (viabilityId: string, version: unknown) => void;
+  onUpdateStatus?: (id: string, status: Viability['status']) => void;
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-export const ViabilidadesPanel: React.FC<ViabilidadesPanelProps> = ({
-  companyId,
-  companyName,
-onClose,
-}) => {
+type KanbanCol = NonNullable<Viability['kanbanStatus']>;
+
+// Tipos de estudo e prazos de entrega
+const STUDY_TYPES = [
+  { id: 'viab', label: 'VIAB', nome: 'Viabilidade', days: 5, color: '#FF6B4A' },
+  { id: 'vgv', label: 'VGV', nome: 'Estudo de VGV', days: 8, color: '#A770EF' },
+  { id: 'mercado', label: 'MERCADO', nome: 'Estudo de Mercado', days: 25, color: '#4AC29A' },
+  { id: 'permuta', label: 'PERMUTA', nome: 'Análise de Permuta', days: 12, color: '#EAB308' },
+] as const;
+
+// Região de atuação do escritório — cidade fora desta lista sugere Estudo de Mercado
+const BASE_CITIES = ['balneário camboriú', 'balneario camboriu', 'camboriú', 'camboriu', 'itajaí', 'itajai', 'itapema', 'penha', 'navegantes', 'brusque'];
+
+// Fases do kanban (ids preservam os dados existentes)
+const PHASES: { phase: string; cols: { id: KanbanCol; label: string; color: string }[] }[] = [
+  { phase: 'ANÁLISE', cols: [
+    { id: 'em_aberto', label: 'Em Aberto', color: '#FF6B4A' },
+    { id: 'a_fazer', label: 'A Fazer', color: '#00B8DD' },
+  ]},
+  { phase: 'ESTUDOS', cols: [
+    { id: 'estudos_finalizados', label: 'Estudos Finalizados', color: '#A770EF' },
+    { id: 'dados_permuta', label: 'Dados de Permuta', color: '#4AC29A' },
+  ]},
+  { phase: 'CONTRATOS', cols: [
+    { id: 'contratos', label: 'Contratos', color: '#EAB308' },
+    { id: 'contratos_assinados', label: 'Assinados', color: '#10B981' },
+  ]},
+];
+const ALL_COLS = PHASES.flatMap(p => p.cols);
+const DONE_COLS: KanbanCol[] = ['estudos_finalizados', 'dados_permuta', 'contratos', 'contratos_assinados'];
+
+const typeOf = (v: Viability) => STUDY_TYPES.find(t => t.id === v.studyType) || null;
+const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fdate = (iso?: string) => { if (!iso) return ''; const p = iso.split('T')[0].split('-'); return `${p[2]}/${p[1]}/${p[0].slice(2)}`; };
+const addDays = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const moneyBR = (v?: number) => v == null || isNaN(v) ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+const needsMercado = (v: Viability) =>
+  !!v.cidade && v.studyType !== 'mercado' && !BASE_CITIES.some(c => v.cidade!.toLowerCase().includes(c));
+
+const isComplete = (v: Viability) => DONE_COLS.includes((v.kanbanStatus || 'em_aberto') as KanbanCol);
+
+const daysLeft = (v: Viability): number | null => {
+  if (!v.deadline) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dl = new Date(v.deadline + 'T00:00:00');
+  return Math.round((dl.getTime() - today.getTime()) / 86400000);
+};
+
+const progressPct = (v: Viability): number | null => {
+  const t = typeOf(v);
+  if (!t || !v.deadline || !v.createdAt) return null;
+  const start = new Date(v.createdAt).getTime();
+  const end = new Date(v.deadline + 'T23:59:59').getTime();
+  if (end <= start) return 100;
+  const pct = Math.round(((Date.now() - start) / (end - start)) * 100);
+  return Math.min(Math.max(pct, 0), 100);
+};
+
+const inputCls = "w-full bg-theme-bg border border-theme-divider rounded-xl px-4 py-2.5 text-[13px] text-theme-text outline-none focus:border-theme-orange transition-colors";
+const microLabel = "font-square font-black text-[7.5px] tracking-[0.2em] text-theme-textMuted uppercase mb-1.5 block";
+
+// Zona de upload de documento
+const DocZone = ({ label, required, file, onPick, accept, inputRef, onChange }: {
+  label: string; required?: boolean; file?: FileLink; onPick: () => void; accept: string;
+  inputRef: React.RefObject<HTMLInputElement | null>; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => (
+  <div>
+    <div className="font-square font-black text-[7px] tracking-[0.15em] text-theme-text uppercase mb-1">
+      {label} {required ? <span className="text-red-500">*</span> : <span className="text-theme-textMuted font-normal normal-case tracking-normal text-[10px]">(opcional)</span>}
+    </div>
+    <div onClick={onPick}
+      className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-[1.5px] cursor-pointer transition-all ${file ? 'border-emerald-400/50 bg-emerald-500/5' : 'border-dashed border-theme-divider bg-theme-bg hover:border-theme-orange'}`}>
+      <input type="file" ref={inputRef} accept={accept} onChange={onChange} className="hidden" />
+      <span className={`material-symbols-outlined text-base ${file ? 'text-emerald-500' : 'text-theme-textMuted'}`}>{file ? 'description' : 'upload_file'}</span>
+      <span className="text-xs text-theme-textMuted flex-1 truncate">{file ? file.label : 'Clique para enviar'}</span>
+      {file && <span className="material-symbols-outlined text-sm text-emerald-500">check_circle</span>}
+    </div>
+  </div>
+);
+
+export const ViabilidadesPanel: React.FC<ViabilidadesPanelProps> = ({ companyId, companyName, onClose }) => {
   const { db, setDb, currentUser, setNotification, addLog, isViewer } = useApp();
 
-  // Viabilidades desta empresa
-  const viabs = ((db as any).viabilities || []).filter(
-    (v: ExtViab) => String(v.companyId) === String(companyId)
-  ) as ExtViab[];
+  const viabs = useMemo(
+    () => ((db.viabilities || []) as Viability[]).filter(v => String(v.companyId) === String(companyId)),
+    [db.viabilities, companyId]
+  );
 
-  const [showNew, setShowNew]     = useState(false);
-  const [detail, setDetail]       = useState<ExtViab | null>(null);
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [errs, setErrs]           = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'viab' | 'vgv' | 'mercado' | 'permuta' | 'atrasados'>('all');
+  const [showAdd, setShowAdd] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
+  const [formErr, setFormErr] = useState('');
+
+  // form
+  const [fType, setFType] = useState<'viab' | 'vgv' | 'mercado' | 'permuta'>('viab');
+  const [fNome, setFNome] = useState('');
+  const [fAddr, setFAddr] = useState('');
+  const [fArea, setFArea] = useState('');
+  const [fCidade, setFCidade] = useState('');
+  const [fPermuta, setFPermuta] = useState(false);
+  const [fPedida, setFPedida] = useState('');
+  const [fVenda, setFVenda] = useState('');
+  const [fResp, setFResp] = useState('');
+  const [fCol, setFCol] = useState<KanbanCol>('em_aberto');
+  const [fObs, setFObs] = useState('');
+  const [fDocPref, setFDocPref] = useState<FileLink | undefined>();
+  const [fDocLoc, setFDocLoc] = useState<FileLink | undefined>();
+  const [fDocOutra, setFDocOutra] = useState<FileLink | undefined>();
+  const refPref = useRef<HTMLInputElement>(null);
+  const refLoc = useRef<HTMLInputElement>(null);
+  const refOutra = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [dragId, setDragId]       = useState<string | null>(null);
-  const [dragOver, setDragOver]   = useState<string | null>(null);
-  const [search, setSearch]       = useState('');
 
-  const refConsulta = useRef<HTMLInputElement>(null);
-  const refLoc      = useRef<HTMLInputElement>(null);
-  const refEstudo   = useRef<HTMLInputElement>(null);
+  const members = db.members || [];
+  const memberColor = (name?: string) => getMember(db as DB, name || '')?.color || '#94A3B8';
+  const initials = (name?: string) => (name || '?').replace(/^(Arq\.|Eng\.|Coord\.|Dir\.|Ger\.|Dsgn\.|Mkt)\s+/i, '').split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 
-  // Helpers
-  const col    = (id?: string) => COLS.find(c => c.id === id) || COLS[0];
-  const byCol  = (colId: string) =>
-    viabs.filter(v => {
-      const matchCol = (v.kanbanStatus || 'em_aberto') === colId;
-      const matchSearch = !search ||
-        (v.titulo || v.address).toLowerCase().includes(search.toLowerCase()) ||
-        (v.responsavel || '').toLowerCase().includes(search.toLowerCase());
-      return matchCol && matchSearch;
-    });
+  // ── stats ──
+  const stats = useMemo(() => {
+    const active = viabs.filter(v => !isComplete(v));
+    const overdue = viabs.filter(v => { const d = daysLeft(v); return !isComplete(v) && d != null && d < 0; });
+    return {
+      total: viabs.length,
+      active: active.length,
+      overdue: overdue.length,
+      needsMercado: viabs.filter(v => !isComplete(v) && needsMercado(v)).length,
+      byType: STUDY_TYPES.map(t => ({ ...t, count: viabs.filter(v => v.studyType === t.id).length })),
+    };
+  }, [viabs]);
 
-  // ── Upload de arquivo ────────────────────────────────────────────────────
-  const uploadFile = useCallback(async (
-    field: 'pdfConsultaPrefeitura' | 'pdfLocalizacao' | 'pdfEstudoTerceiro',
-    file: File
-  ) => {
+  // ── filtro/busca ──
+  const visible = useMemo(() => viabs.filter(v => {
+    if (filter === 'atrasados') { const d = daysLeft(v); if (isComplete(v) || d == null || d >= 0) return false; }
+    else if (filter !== 'all' && v.studyType !== filter) return false;
+    if (search) {
+      const t = search.toLowerCase();
+      if (!((v.titulo || '').toLowerCase().includes(t) || v.address.toLowerCase().includes(t) || (v.cidade || '').toLowerCase().includes(t) || (v.responsavel || '').toLowerCase().includes(t))) return false;
+    }
+    return true;
+  }), [viabs, filter, search]);
+
+  const detail = viabs.find(v => v.id === detailId) || null;
+
+  // ── mutações ──
+  const updateViab = (id: string, patch: Partial<Viability>, log?: string) => {
+    if (isViewer) return;
+    setDb((prev: DB) => ({
+      ...prev,
+      viabilities: (prev.viabilities || []).map(v => v.id === id ? { ...v, ...patch } : v),
+    }));
+    if (log) addLog(currentUser?.name || 'SISTEMA', log);
+  };
+
+  const moveCol = (id: string, col: KanbanCol) => {
+    updateViab(id, { kanbanStatus: col }, `VIABILIDADE MOVIDA: ${ALL_COLS.find(c => c.id === col)?.label.toUpperCase()}`);
+  };
+
+  const delViab = (id: string) => {
+    if (isViewer) return;
+    setDb((prev: DB) => ({ ...prev, viabilities: (prev.viabilities || []).filter(v => v.id !== id) }));
+    setDetailId(null);
+    addLog(currentUser?.name || 'SISTEMA', 'VIABILIDADE EXCLUÍDA');
+    setNotification('Viabilidade excluída.');
+  };
+
+  const uploadDoc = async (e: React.ChangeEvent<HTMLInputElement>, set: (f: FileLink) => void) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
     const err = validateFileSize(file, 10);
     if (err) { setNotification(err); return; }
     try {
       setUploading(true);
       const path = await readFileAsDataURL(file);
-      const fl: FileLink = {
-        label: file.name,
-        path,
-        author: currentUser?.name,
-        createdAt: new Date().toISOString(),
-      };
-      setForm(f => ({ ...f, [field]: fl }));
+      set({ label: file.name, path, author: currentUser?.name, createdAt: new Date().toISOString() });
     } catch {
-      setNotification('Erro ao carregar arquivo. Tente novamente.');
-    } finally {
-      setUploading(false);
-    }
-  }, [currentUser, setNotification]);
-
-  // ── Validação ────────────────────────────────────────────────────────────
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.titulo.trim())              e.titulo    = 'Obrigatório';
-    if (!form.address.trim())             e.address   = 'Obrigatório';
-    if (!form.pdfConsultaPrefeitura)      e.consulta  = 'Arquivo obrigatório';
-    if (!form.pdfLocalizacao)             e.localizacao = 'Arquivo obrigatório';
-    return e;
+      setNotification('Erro ao carregar arquivo.');
+    } finally { setUploading(false); }
   };
 
-  // ── Salvar nova viabilidade ──────────────────────────────────────────────
-  const handleSave = () => {
-    const e = validate();
-    if (Object.keys(e).length) { setErrs(e); return; }
+  const resetForm = () => {
+    setFType('viab'); setFNome(''); setFAddr(''); setFArea(''); setFCidade('');
+    setFPermuta(false); setFPedida(''); setFVenda(''); setFResp(''); setFCol('em_aberto'); setFObs('');
+    setFDocPref(undefined); setFDocLoc(undefined); setFDocOutra(undefined);
+    setFormErr(''); setShowTeamPicker(false);
+  };
 
-    const nova: ExtViab = {
+  const saveStudy = () => {
+    if (!fNome.trim()) { setFormErr('Informe o nome do estudo.'); return; }
+    if (!fAddr.trim()) { setFormErr('Informe a localização / endereço.'); return; }
+    if (!fDocPref) { setFormErr('Anexe o PDF da consulta de viabilidade da prefeitura.'); return; }
+    if (!fDocLoc) { setFormErr('Anexe o arquivo de localização do terreno.'); return; }
+    const t = STUDY_TYPES.find(x => x.id === fType)!;
+    const nova: Viability = {
       id: `via-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       companyId,
-      address: form.address,
-      titulo: form.titulo,
-      responsavel: form.responsavel || undefined,
-      date: form.date,
-      status: 'NÃO INICIADO',
-      kanbanStatus: form.kanbanStatus,
-      pdfConsultaPrefeitura: form.pdfConsultaPrefeitura || undefined,
-      pdfLocalizacao: form.pdfLocalizacao || undefined,
-      pdfEstudoTerceiro: form.pdfEstudoTerceiro || undefined,
-      obs: form.obs || undefined,
+      address: fAddr.trim(),
+      titulo: fNome.trim(),
+      responsavel: fResp || undefined,
+      date: isoToday(),
+      status: 'EM ANÁLISE',
+      kanbanStatus: fCol,
+      studyType: fType,
+      areaM2: fArea.trim() || undefined,
+      cidade: fCidade.trim() || undefined,
+      aceitaPermuta: fPermuta,
+      pedidaPct: fPermuta && fPedida ? parseFloat(fPedida) : undefined,
+      vendaValor: fPermuta && fVenda ? parseFloat(fVenda) : undefined,
+      deadline: addDays(t.days),
+      pdfConsultaPrefeitura: fDocPref,
+      pdfLocalizacao: fDocLoc,
+      pdfEstudoTerceiro: fDocOutra,
+      obs: fObs.trim() || undefined,
       versions: [],
       createdAt: new Date().toISOString(),
     };
-
-    setDb((prev: DB) => ({
-      ...prev,
-      viabilities: [...((prev as any).viabilities || []), nova],
-    }));
-
-    addLog(currentUser?.name || 'SISTEMA', `VIABILIDADE CRIADA: ${form.titulo}`);
-    setNotification('Viabilidade criada com sucesso!');
-    setShowNew(false);
-    setForm(EMPTY_FORM);
-    setErrs({});
+    setDb((prev: DB) => ({ ...prev, viabilities: [...(prev.viabilities || []), nova] }));
+    addLog(currentUser?.name || 'SISTEMA', `VIABILIDADE CRIADA: ${nova.titulo}`);
+    setNotification(`Viabilidade criada — prazo ${t.days}d (${fdate(nova.deadline)})`);
+    resetForm(); setShowAdd(false);
   };
 
-  // ── Mover coluna ─────────────────────────────────────────────────────────
-  const move = (id: string, to: KanbanStatus) => {
-    setDb((prev: DB) => ({
-      ...prev,
-      viabilities: ((prev as any).viabilities || []).map((v: ExtViab) =>
-        v.id === id ? { ...v, kanbanStatus: to } : v
-      ),
-    }));
-    setDetail(d => d ? { ...d, kanbanStatus: to } : null);
-    addLog(currentUser?.name || 'SISTEMA', `VIABILIDADE MOVIDA: ${col(to).label.toUpperCase()}`);
-  };
+  const suggestMercado = fType !== 'mercado' && !!fCidade && !BASE_CITIES.some(c => fCidade.toLowerCase().includes(c));
 
-  // ── Excluir ──────────────────────────────────────────────────────────────
-  const del = (id: string) => {
-    setDb((prev: DB) => ({
-      ...prev,
-      viabilities: ((prev as any).viabilities || []).filter((v: ExtViab) => v.id !== id),
-    }));
-    setDetail(null);
-    addLog(currentUser?.name || 'SISTEMA', 'VIABILIDADE EXCLUÍDA');
-    setNotification('Viabilidade excluída.');
-  };
+  const openFile = (f?: FileLink) => { if (f?.path) window.open(f.path, '_blank'); };
 
-  // ── Zona de Upload (componente interno) ───────────────────────────────────
-  const UploadZone = ({
-    label, field, refEl, required, file, error,
-  }: {
-    label: string;
-    field: 'pdfConsultaPrefeitura' | 'pdfLocalizacao' | 'pdfEstudoTerceiro';
-    refEl: React.RefObject<HTMLInputElement | null>;
-    required?: boolean;
-    file: FileLink | null;
-    error?: string;
-  }) => (
-    <div>
-      <p className="text-xs font-semibold text-theme-textMuted uppercase tracking-wide mb-1">
-        {label}
-        {required ? <span className="text-red-400 ml-1">*</span> : (
-          <span className="text-theme-textMuted font-normal normal-case tracking-normal ml-1">(opcional)</span>
-        )}
-      </p>
-      <input
-        ref={refEl} type="file" accept=".pdf,.png,.jpg,.jpeg,.kml"
-        className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(field, f); e.target.value = ''; }}
-      />
+  // ── card ──
+  const renderCard = (v: Viability) => {
+    const t = typeOf(v);
+    const dl = daysLeft(v);
+    const pct = progressPct(v);
+    const done = isComplete(v);
+    const warn = !done && needsMercado(v);
+    const overdue = !done && dl != null && dl < 0;
+    return (
       <div
-        onClick={() => refEl.current?.click()}
-        className={[
-          'border border-dashed rounded-lg p-3 text-center cursor-pointer transition-all select-none',
-          file
-            ? 'border-emerald-500/50 bg-emerald-500/5'
-            : error
-              ? 'border-red-500/50 bg-red-500/5'
-              : 'border-theme-border hover:border-theme-textMuted/60 bg-theme-card/50',
-        ].join(' ')}
+        key={v.id}
+        draggable={!isViewer}
+        onDragStart={() => setDragId(v.id)}
+        onClick={() => setDetailId(v.id)}
+        className={`bg-theme-card rounded-2xl p-3.5 border cursor-pointer shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all ${overdue ? 'border-red-400/50' : 'border-theme-divider'}`}
       >
-        {file
-          ? <p className="text-sm text-emerald-400 font-medium truncate">✓ {file.label}</p>
-          : <p className="text-sm text-theme-textMuted">📄 Clique para selecionar</p>}
-      </div>
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-    </div>
-  );
-
-  // ════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ════════════════════════════════════════════════════════════════════════
-  return (
-    <div className="flex flex-col h-full">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border shrink-0">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-theme-text leading-none">Viabilidades</h2>
-            <p className="text-xs text-theme-textMuted mt-0.5">{companyName} · {viabs.length} registro(s)</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-{onClose && (
-                <button
-                  onClick={onClose}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-theme-border hover:border-red-400/40 hover:text-red-400 text-theme-textMuted rounded-lg text-xs font-semibold transition-colors"
-                >
-                  <span className="material-symbols-outlined text-base leading-none">arrow_back</span>
-                  Voltar
-                </button>
-              )}
-                        {/* Busca */}
-          <div className="relative">
-            <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-theme-textMuted text-base">search</span>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar..."
-              className="pl-7 pr-3 py-1.5 text-xs bg-theme-card border border-theme-border rounded-lg text-theme-text outline-none focus:border-emerald-500 w-40"
-            />
-          </div>
-          {/* Botão nova */}
-          {!isViewer && (
-            <button
-              onClick={() => { setForm(EMPTY_FORM); setErrs({}); setShowNew(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Nova Viabilidade
-            </button>
+        <div className="flex items-center justify-between mb-2">
+          {t ? (
+            <span className="font-square font-black text-[7.5px] tracking-[0.12em] px-2 py-1 rounded-md uppercase" style={{ background: t.color + '1A', color: t.color }}>{t.label} ~{t.days}d</span>
+          ) : (
+            <span className="font-square font-black text-[7.5px] tracking-[0.12em] px-2 py-1 rounded-md uppercase bg-theme-bg text-theme-textMuted">ESTUDO</span>
+          )}
+          {done ? (
+            <span className="font-square font-black text-[7.5px] tracking-[0.1em] px-2 py-1 rounded-md uppercase bg-emerald-500/15 text-emerald-600">✓ FEITO</span>
+          ) : dl != null && (
+            <span className={`font-square font-black text-[7.5px] tracking-[0.1em] px-2 py-1 rounded-md uppercase ${dl < 0 ? 'bg-red-500/15 text-red-500' : dl <= 1 ? 'bg-amber-500/15 text-amber-600' : 'bg-theme-bg text-theme-textMuted'}`}>
+              {dl < 0 ? `${-dl}D ATRASO` : dl === 0 ? 'HOJE' : `${dl}D`}
+            </span>
           )}
         </div>
-      </div>
 
-      {/* ── Stats rápidas ────────────────────────────────────────────────── */}
-      <div className="flex gap-2 px-5 py-2 border-b border-theme-border shrink-0 overflow-x-auto">
-        {COLS.map(c => {
-          const n = byCol(c.id).length;
-          return (
-            <div key={c.id} className="flex items-center gap-1.5 shrink-0">
-              <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-              <span className="text-xs text-theme-textMuted">{c.label}</span>
-              <span className={`text-xs font-semibold ${c.tw}`}>{n}</span>
+        {warn && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/25 mb-2">
+            <span className="material-symbols-outlined text-[11px] text-emerald-500">public</span>
+            <span className="font-square font-black text-[7px] tracking-[0.1em] text-emerald-600 uppercase">Est. Mercado necessário</span>
+          </div>
+        )}
+
+        {v.titulo ? (
+          <>
+            <div className="text-[12.5px] font-bold text-theme-text leading-snug">{v.titulo}</div>
+            <div className="text-[10.5px] text-theme-textMuted leading-snug">{v.address}</div>
+          </>
+        ) : (
+          <div className="text-xs font-semibold text-theme-text leading-snug">{v.address}</div>
+        )}
+        <div className="text-[10.5px] text-theme-textMuted mt-0.5">{v.cidade}{v.areaM2 ? ` · ${v.areaM2} m²` : ''}</div>
+
+        {v.aceitaPermuta && (
+          <div className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+            <span className="material-symbols-outlined text-[11px] text-emerald-500">swap_horiz</span>
+            <span className="font-square font-black text-[7.5px] tracking-[0.1em] text-emerald-600 uppercase">
+              Permuta{v.pedidaPct ? ` ${v.pedidaPct}%` : ''}{v.vendaValor ? ` · ${moneyBR(v.vendaValor)}` : ''}
+            </span>
+          </div>
+        )}
+
+        {!done && pct != null ? (
+          <div className="mt-2.5">
+            <div className="h-[3px] bg-theme-divider rounded-full overflow-hidden mb-1">
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: overdue ? '#EF4444' : (t?.color || '#FF6B4A') }} />
             </div>
-          );
-        })}
+            <div className="flex justify-between items-center">
+              <span className="font-square font-bold text-[8px] text-theme-textMuted">{pct}%</span>
+              <span className={`font-square font-black text-[7.5px] uppercase ${overdue ? 'text-red-500' : 'text-theme-textMuted'}`}>{fdate(v.deadline)}</span>
+            </div>
+          </div>
+        ) : !done && t && (
+          <div className="mt-2.5 flex items-center gap-1.5 px-2 py-1.5 bg-theme-bg rounded-lg border border-dashed border-theme-divider">
+            <span className="material-symbols-outlined text-[11px] text-theme-textMuted">schedule</span>
+            <span className="font-square font-black text-[7.5px] tracking-[0.12em] text-theme-textMuted uppercase">~{t.days} dias estimados</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-theme-divider">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black text-white shrink-0" style={{ background: memberColor(v.responsavel) }}>{initials(v.responsavel)}</div>
+            <span className="text-[10px] text-theme-textMuted font-medium truncate">{(v.responsavel || '—').split(' ').slice(0, 2).join(' ')}</span>
+          </div>
+          {v.deadline && <span className="font-square font-bold text-[7.5px] text-theme-textMuted shrink-0">{fdate(v.deadline)}</span>}
+        </div>
       </div>
+    );
+  };
 
-      {/* ── Kanban Board ─────────────────────────────────────────────────── */}
-      <div className="flex gap-3 p-4 overflow-x-auto flex-1 items-start">
-        {COLS.map(c => {
-          const cards = byCol(c.id);
-          return (
-            <div
-              key={c.id}
-              className={`flex-none w-[220px] rounded-xl border border-theme-border bg-theme-card transition-colors ${dragOver === c.id ? 'ring-1 ring-emerald-500/30' : ''}`}
-              onDragOver={e => { if (isViewer) return; e.preventDefault(); setDragOver(c.id); }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={() => { if (!isViewer && dragId) { move(dragId, c.id); setDragId(null); setDragOver(null); } }}
-            >
-              {/* Cabeçalho da coluna */}
-              <div className={`flex items-center justify-between px-3 py-2.5 border-b-2 ${c.headerBorder}`}>
-                <span className={`text-[10px] font-bold uppercase tracking-wider leading-tight ${c.tw}`}>
-                  {c.label}
-                </span>
-                <span className="text-xs bg-theme-bg px-1.5 py-0.5 rounded text-theme-textMuted font-medium">
-                  {cards.length}
-                </span>
-              </div>
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/45 backdrop-blur-sm p-3 animate-fadeIn no-print" onClick={onClose}>
+      <div className="bg-theme-bg w-full max-w-[1500px] h-[94vh] rounded-3xl border border-theme-divider shadow-2xl animate-scaleIn flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
 
-              {/* Cards */}
-              <div className="flex flex-col gap-2 p-2">
-                {cards.length === 0 && (
-                  <p className="text-xs text-center text-theme-textMuted py-4 opacity-50">Vazio</p>
-                )}
-                {cards.map(v => (
-                  <div
-                    key={v.id}
-                    draggable={!isViewer}
-                    onDragStart={() => { if (isViewer) return; setDragId(v.id); }}
-                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
-                    onClick={() => setDetail(v)}
-                    className={`bg-theme-bg border border-l-[3px] border-theme-border rounded-lg p-2.5 cursor-pointer hover:border-theme-textMuted/40 transition-all group ${c.border}`}
-                  >
-                    <p className="text-xs font-semibold text-theme-text leading-snug mb-0.5">
-                      {v.titulo || v.address}
-                    </p>
-                    {v.titulo && (
-                      <p className="text-[11px] text-theme-textMuted mb-1.5 truncate">
-                        📍 {v.address}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      {v.pdfConsultaPrefeitura && (
-                        <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-400/20 rounded px-1 py-0.5 leading-none">
-                          Consulta
-                        </span>
-                      )}
-                      {v.pdfLocalizacao && (
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 rounded px-1 py-0.5 leading-none">
-                          Mapa
-                        </span>
-                      )}
-                      {v.pdfEstudoTerceiro && (
-                        <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-400/20 rounded px-1 py-0.5 leading-none">
-                          Estudo
-                        </span>
-                      )}
+        {/* ── TOP BAR ── */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-theme-divider bg-theme-card/90 backdrop-blur-md shrink-0 flex-wrap">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-md" style={{ background: 'linear-gradient(135deg,#FF9966,#FF5E62)' }}>
+            <span className="material-symbols-outlined text-white text-lg">domain</span>
+          </div>
+          <div className="leading-none shrink-0">
+            <div className="font-square font-black text-[13px] tracking-[0.18em] text-theme-text">ENIGAMI</div>
+            <div className="font-square font-black text-[6.5px] tracking-[0.35em] text-theme-orange uppercase mt-1">VIABILIDADES · {companyName.toUpperCase()}</div>
+          </div>
+          <div className="w-px h-6 bg-theme-divider mx-1 shrink-0" />
+          <div className="flex gap-1.5 items-center flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg font-square font-black text-[8.5px] tracking-[0.12em] bg-theme-orange/10 border border-theme-orange/20 text-theme-orange whitespace-nowrap">{stats.active} ATIVOS</span>
+            <span className="px-2.5 py-1 rounded-lg font-square font-black text-[8.5px] tracking-[0.12em] bg-red-500/10 border border-red-500/20 text-red-500 whitespace-nowrap">{stats.overdue} ATRASO</span>
+            <span className="px-2.5 py-1 rounded-lg font-square font-black text-[8.5px] tracking-[0.12em] bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 whitespace-nowrap">{stats.needsMercado} C. DIFERENTE</span>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 px-3 py-2 bg-theme-bg border border-theme-divider rounded-xl w-[190px] shrink-0">
+            <span className="material-symbols-outlined text-sm text-theme-textMuted">search</span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar estudo..." className="bg-transparent text-xs text-theme-text outline-none w-full" />
+          </div>
+          {!isViewer && (
+            <button onClick={() => { resetForm(); setShowAdd(true); }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white font-square font-black text-[8.5px] tracking-[0.15em] uppercase shadow-lg shrink-0 hover:scale-[1.03] transition-transform"
+              style={{ background: 'linear-gradient(135deg,#FF9966,#FF5E62)' }}>
+              <span className="material-symbols-outlined text-sm">add</span>Nova Viabilidade
+            </button>
+          )}
+          <button onClick={onClose} className="w-9 h-9 rounded-xl border border-theme-divider bg-theme-card flex items-center justify-center text-theme-textMuted hover:text-theme-text shrink-0">
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scroller p-5">
+          {/* ── STAT CARDS ── */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+            <div className="rounded-[22px] p-5 text-white relative overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg,#FF9966,#FF5E62)' }}>
+              <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full" />
+              <div className="font-square font-black text-[8px] tracking-[0.25em] opacity-85 uppercase mb-2">Total Ativos</div>
+              <div className="font-square font-black text-4xl leading-none mb-1">{stats.active}</div>
+              <div className="text-[11px] opacity-70">de {stats.total} registros</div>
+            </div>
+            <div className="rounded-[22px] p-5 relative overflow-hidden shadow-lg text-zinc-800" style={{ background: 'linear-gradient(135deg,#4AC29A,#BDFFF3)' }}>
+              <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/20 rounded-full" />
+              <div className="font-square font-black text-[8px] tracking-[0.25em] opacity-70 uppercase mb-2">Precisam Mercado</div>
+              <div className="font-square font-black text-4xl leading-none mb-1">{stats.needsMercado}</div>
+              <div className="text-[11px] opacity-60">cidades fora da base</div>
+            </div>
+            <div className="rounded-[22px] p-5 bg-theme-card border-[1.5px] border-red-500/20 relative overflow-hidden shadow-md">
+              <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/5 rounded-full" />
+              <div className="font-square font-black text-[8px] tracking-[0.25em] text-red-500 uppercase mb-2">Em Atraso</div>
+              <div className="font-square font-black text-4xl leading-none text-red-500 mb-1">{stats.overdue}</div>
+              <div className="text-[11px] text-theme-textMuted">requer atenção imediata</div>
+            </div>
+            <div className="rounded-[22px] p-5 bg-theme-card border border-theme-divider shadow-md">
+              <div className="font-square font-black text-[8px] tracking-[0.25em] text-theme-textMuted uppercase mb-3">Por Tipo</div>
+              <div className="flex flex-col gap-1.5">
+                {stats.byType.map(t => (
+                  <div key={t.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: t.color }} />
+                      <span className="font-square font-black text-[8px] tracking-[0.12em] text-theme-text">{t.label} ~{t.days}d</span>
                     </div>
-                    {v.responsavel && (
-                      <p className="text-[11px] text-theme-textMuted">👤 {v.responsavel}</p>
-                    )}
-                    {v.obs && (
-                      <p className="text-[11px] text-theme-textMuted/70 italic mt-0.5 truncate">
-                        "{v.obs}"
-                      </p>
-                    )}
-                    {/* Data */}
-                    <p className="text-[10px] text-theme-textMuted/50 mt-1">
-                      {new Date(v.createdAt).toLocaleDateString('pt-BR')}
-                    </p>
+                    <span className="font-square font-black text-base" style={{ color: t.color }}>{t.count}</span>
                   </div>
                 ))}
-
-                {/* Botão adicionar nesta coluna */}
-                {!isViewer && (
-                  <button
-                    onClick={() => { setForm({ ...EMPTY_FORM, kanbanStatus: c.id }); setErrs({}); setShowNew(true); }}
-                    className="w-full border border-dashed border-theme-border rounded-lg py-1.5 text-[11px] text-theme-textMuted hover:text-theme-text hover:border-theme-textMuted/40 transition-all"
-                  >
-                    + Adicionar
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          MODAL — Nova Viabilidade
-      ════════════════════════════════════════════════════════════════════ */}
-      {showNew && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4"
-          onClick={e => { if (e.target === e.currentTarget) setShowNew(false); }}
-        >
-          <div className="bg-theme-card border border-theme-border rounded-xl p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            {/* Header modal */}
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-theme-text">Nova Viabilidade</h3>
-              <button onClick={() => setShowNew(false)} className="text-theme-textMuted hover:text-theme-text text-xl leading-none">×</button>
-            </div>
-
-            <div className="flex flex-col gap-3.5">
-              {/* Nome do estudo */}
-              <div>
-                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">
-                  Nome do Estudo <span className="text-red-400">*</span>
-                </label>
-                <input
-                  className={`w-full bg-theme-bg border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 transition-colors ${errs.titulo ? 'border-red-500' : 'border-theme-border'}`}
-                  value={form.titulo}
-                  placeholder="Ex: Área São José — Rua das Flores"
-                  onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
-                />
-                {errs.titulo && <p className="text-[11px] text-red-400 mt-1">{errs.titulo}</p>}
-              </div>
-
-              {/* Localização */}
-              <div>
-                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">
-                  Localização / Endereço <span className="text-red-400">*</span>
-                </label>
-                <input
-                  className={`w-full bg-theme-bg border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 transition-colors ${errs.address ? 'border-red-500' : 'border-theme-border'}`}
-                  value={form.address}
-                  placeholder="Rua, Bairro, Cidade — UF"
-                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                />
-                {errs.address && <p className="text-[11px] text-red-400 mt-1">{errs.address}</p>}
-              </div>
-
-              {/* ── PDFs ── */}
-              <div className="border border-theme-border rounded-lg p-3 flex flex-col gap-3">
-                <p className="text-[11px] font-bold text-theme-textMuted uppercase tracking-wider">Documentos</p>
-
-                {/* Consulta da Prefeitura (OBRIGATÓRIO) */}
-                <UploadZone
-                  label="PDF — Consulta de Viabilidade da Prefeitura"
-                  field="pdfConsultaPrefeitura"
-                  refEl={refConsulta}
-                  required
-                  file={form.pdfConsultaPrefeitura}
-                  error={errs.consulta}
-                />
-
-                {/* Localização do Terreno (OBRIGATÓRIO) */}
-                <UploadZone
-                  label="Arquivo — Localização do Terreno"
-                  field="pdfLocalizacao"
-                  refEl={refLoc}
-                  required
-                  file={form.pdfLocalizacao}
-                  error={errs.localizacao}
-                />
-
-                {/* Estudo outra construtora (OPCIONAL) */}
-                <UploadZone
-                  label="PDF — Estudo de Outra Construtora"
-                  field="pdfEstudoTerceiro"
-                  refEl={refEstudo}
-                  file={form.pdfEstudoTerceiro}
-                />
-              </div>
-
-              {/* Responsável + Coluna inicial */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Responsável</label>
-                  <input
-                    className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500"
-                    value={form.responsavel}
-                    placeholder="Nome"
-                    onChange={e => setForm(f => ({ ...f, responsavel: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Coluna Inicial</label>
-                  <select
-                    className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500"
-                    value={form.kanbanStatus}
-                    onChange={e => setForm(f => ({ ...f, kanbanStatus: e.target.value as KanbanStatus }))}
-                  >
-                    {COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Observações */}
-              <div>
-                <label className="text-[11px] font-semibold text-theme-textMuted uppercase tracking-wide mb-1 block">Observações</label>
-                <textarea
-                  className="w-full bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text outline-none focus:border-emerald-500 resize-none"
-                  value={form.obs}
-                  placeholder="Notas, reuniões agendadas, status atual..."
-                  rows={2}
-                  onChange={e => setForm(f => ({ ...f, obs: e.target.value }))}
-                />
-              </div>
-
-              {uploading && (
-                <p className="text-xs text-amber-400 text-center animate-pulse">Carregando arquivo...</p>
-              )}
-
-              {/* Ações */}
-              <div className="flex gap-2 justify-end pt-2 border-t border-theme-border">
-                <button
-                  onClick={() => setShowNew(false)}
-                  className="px-4 py-2 text-sm text-theme-textMuted hover:text-theme-text border border-theme-border rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={uploading}
-                  className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
-                >
-                  Salvar Viabilidade
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          MODAL — Detalhe da Viabilidade
-      ════════════════════════════════════════════════════════════════════ */}
-      {detail && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4"
-          onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}
-        >
-          <div className="bg-theme-card border border-theme-border rounded-xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-2 h-2 rounded-full flex-none ${col(detail.kanbanStatus).dot}`} />
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${col(detail.kanbanStatus).tw}`}>
-                    {col(detail.kanbanStatus).label}
-                  </span>
-                </div>
-                <h3 className="text-sm font-semibold text-theme-text leading-snug">
-                  {detail.titulo || detail.address}
-                </h3>
-              </div>
-              <button onClick={() => setDetail(null)} className="text-theme-textMuted hover:text-theme-text text-xl leading-none ml-3 shrink-0">×</button>
-            </div>
+          {/* ── FILTROS ── */}
+          <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+            <span className="font-square font-black text-[8px] tracking-[0.22em] text-theme-textMuted uppercase mr-1">Filtro:</span>
+            {([{ id: 'all', label: 'TODOS', color: '#374151' }] as { id: typeof filter; label: string; color: string }[])
+              .concat(STUDY_TYPES.map(t => ({ id: t.id as typeof filter, label: t.label, color: t.color })))
+              .concat([{ id: 'atrasados' as typeof filter, label: 'ATRASADOS', color: '#EF4444' }])
+              .map(f => (
+                <button key={f.id} onClick={() => setFilter(f.id)}
+                  className="px-3 py-1.5 rounded-full font-square font-black text-[8px] tracking-[0.12em] uppercase border transition-all"
+                  style={filter === f.id
+                    ? { color: '#fff', background: f.color, borderColor: f.color }
+                    : { color: '#9CA3AF', background: 'transparent', borderColor: 'var(--theme-divider, #E5E7EB)' }}>
+                  {f.label}
+                </button>
+              ))}
+          </div>
 
-            <div className="flex flex-col gap-3 text-sm">
-              {/* Info */}
-              <div className="flex flex-col gap-2">
-                <div>
-                  <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Endereço</p>
-                  <p className="text-theme-text text-xs">📍 {detail.address}</p>
-                </div>
-                {detail.responsavel && (
-                  <div>
-                    <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Responsável</p>
-                    <p className="text-theme-text text-xs">👤 {detail.responsavel}</p>
-                  </div>
-                )}
-                {detail.obs && (
-                  <div>
-                    <p className="text-[10px] text-theme-textMuted uppercase tracking-wide mb-0.5">Observações</p>
-                    <p className="text-theme-text text-xs italic">{detail.obs}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Documentos */}
-              <div className="border-t border-theme-border pt-3">
-                <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Documentos Anexados</p>
-                <div className="flex flex-col gap-2">
-                  {[
-                    { label: 'Consulta Prefeitura', fl: detail.pdfConsultaPrefeitura, req: true, colorClass: 'blue' },
-                    { label: 'Localização Terreno', fl: detail.pdfLocalizacao, req: true, colorClass: 'emerald' },
-                    { label: 'Estudo Terceiro', fl: detail.pdfEstudoTerceiro, req: false, colorClass: 'amber' },
-                  ].map(({ label, fl, req, colorClass }) => (
+          {/* ── KANBAN ── */}
+          <div className="overflow-x-auto scroller pb-4 -mx-5 px-5">
+            <div className="flex gap-3 min-w-max items-start">
+              {PHASES.map(phase => phase.cols.map((col, ci) => {
+                const cards = visible.filter(v => (v.kanbanStatus || 'em_aberto') === col.id);
+                return (
+                  <div key={col.id} className="w-[256px] shrink-0 flex flex-col">
+                    <div className="h-6 flex items-center gap-1.5 px-1 font-square font-black text-[7.5px] tracking-[0.22em] uppercase" style={{ color: col.color }}>
+                      {ci === 0 && <><span className="w-[3px] h-[11px] rounded-sm" style={{ background: col.color }} />{phase.phase}</>}
+                    </div>
                     <div
-                      key={label}
-                      className={`flex items-center gap-2 p-2 rounded-lg border ${
-                        fl
-                          ? `bg-${colorClass}-500/5 border-${colorClass}-500/20`
-                          : 'bg-theme-bg border-theme-border opacity-40'
-                      }`}
+                      onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
+                      onDragLeave={() => setDragOver(d => d === col.id ? null : d)}
+                      onDrop={() => { if (dragId) moveCol(dragId, col.id); setDragId(null); setDragOver(null); }}
+                      className={`rounded-2xl border transition-all ${dragOver === col.id ? 'border-theme-orange bg-theme-orange/5' : 'border-theme-divider bg-theme-card/50'}`}
                     >
-                      <span className="text-base flex-none">📄</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[11px] font-medium ${fl ? `text-${colorClass}-400` : 'text-theme-textMuted'}`}>
-                          {label}
-                        </p>
-                        {fl ? (
-                          <a
-                            href={fl.path}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-theme-textMuted hover:text-theme-text truncate block"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {fl.label}
-                          </a>
-                        ) : (
-                          <p className="text-[10px] text-theme-textMuted">Não anexado</p>
+                      <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
+                          <span className="font-square font-black text-[8.5px] tracking-[0.2em] uppercase text-theme-text">{col.label}</span>
+                        </div>
+                        <span className="font-square font-black text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: col.color + '1A', color: col.color }}>{cards.length}</span>
+                      </div>
+                      <div className="h-px bg-theme-divider mx-3" />
+                      <div className="p-2.5 flex flex-col gap-2 min-h-[100px]">
+                        {cards.map(v => renderCard(v))}
+                        {cards.length === 0 && <div className="text-center py-4 text-theme-textMuted/50 text-[11px] font-medium">Vazio</div>}
+                        {!isViewer && (
+                          <button onClick={() => { resetForm(); setFCol(col.id); setShowAdd(true); }}
+                            className="w-full py-2 border-[1.5px] border-dashed border-theme-divider rounded-xl text-theme-textMuted font-square font-black text-[7.5px] tracking-[0.2em] uppercase hover:border-theme-orange hover:text-theme-orange transition-all">
+                            + Adicionar
+                          </button>
                         )}
                       </div>
-                      <span className={`text-[10px] shrink-0 px-1.5 py-0.5 rounded border ${
-                        req
-                          ? 'bg-red-500/10 text-red-400 border-red-400/20'
-                          : 'bg-theme-bg text-theme-textMuted border-theme-border'
-                      }`}>
-                        {req ? 'Obrig.' : 'Opcional'}
-                      </span>
                     </div>
-                  ))}
+                  </div>
+                );
+              }))}
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ MODAL: NOVA VIABILIDADE ═══ */}
+        {showAdd && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4" onClick={() => setShowAdd(false)}>
+            <div className="bg-theme-card rounded-3xl w-[540px] max-w-full max-h-[92vh] overflow-y-auto scroller shadow-2xl animate-scaleIn" onClick={e => e.stopPropagation()}>
+              <div className="flex items-start justify-between p-6 pb-0">
+                <div>
+                  <div className="font-square font-black text-[15px] tracking-[0.1em] text-theme-text uppercase">Nova Viabilidade</div>
+                  <div className="text-xs text-theme-textMuted mt-1">Cadastrar terreno para análise</div>
                 </div>
+                <button onClick={() => setShowAdd(false)} className="w-8 h-8 rounded-lg border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-text">
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
               </div>
 
-              {/* Mover para */}
-              {!isViewer && (
-                <div className="border-t border-theme-border pt-3">
-                  <p className="text-[10px] font-bold text-theme-textMuted uppercase tracking-wider mb-2">Mover para</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {COLS.filter(c => c.id !== detail.kanbanStatus).map(c => (
-                      <button
-                        key={c.id}
-                        onClick={() => move(detail.id, c.id)}
-                        className={`text-[11px] px-2.5 py-1 rounded-full border ${c.border.replace('border-l-', 'border-')} ${c.tw} hover:opacity-70 transition-opacity`}
-                      >
-                        {c.label}
+              <div className="p-6 pt-4 flex flex-col gap-4">
+                {/* TIPO */}
+                <div>
+                  <div className={microLabel}>Tipo de Estudo</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {STUDY_TYPES.map(t => (
+                      <button key={t.id} onClick={() => setFType(t.id)}
+                        className="py-2.5 rounded-xl border-[1.5px] font-square font-black text-[8.5px] tracking-[0.1em] uppercase transition-all"
+                        style={fType === t.id
+                          ? { background: t.color + '14', borderColor: t.color, color: t.color }
+                          : { background: 'transparent', borderColor: 'var(--theme-divider, #E5E7EB)', color: '#9CA3AF' }}>
+                        <div>{t.label}</div>
+                        <div className="text-[7px] opacity-70 mt-0.5">~{t.days} dias</div>
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Excluir */}
-              {!isViewer && (
-                <div className="border-t border-theme-border pt-3 flex justify-end">
-                  <button
-                    onClick={() => del(detail.id)}
-                    className="text-xs text-red-400 border border-red-400/30 rounded-lg px-3 py-1.5 hover:bg-red-400/10 transition-colors"
-                  >
-                    Excluir viabilidade
+                {/* IDENTIFICAÇÃO */}
+                <div>
+                  <div className={microLabel}>Nome do Estudo <span className="text-red-500">*</span></div>
+                  <input className={inputCls} value={fNome} onChange={e => setFNome(e.target.value)} placeholder="Ex: Área São José — Rua das Flores" />
+                </div>
+                <div>
+                  <div className={microLabel}>Localização / Endereço <span className="text-red-500">*</span></div>
+                  <input className={inputCls} value={fAddr} onChange={e => setFAddr(e.target.value)} placeholder="Rua, Bairro, Cidade — UF" />
+                </div>
+
+                {/* DOCUMENTOS */}
+                <div className="flex flex-col gap-2.5">
+                  <div className={microLabel + ' mb-0'}>Documentos</div>
+                  <DocZone label="PDF — Consulta de viabilidade da prefeitura" required file={fDocPref} accept=".pdf" inputRef={refPref}
+                    onPick={() => refPref.current?.click()} onChange={e => uploadDoc(e, setFDocPref)} />
+                  <DocZone label="Arquivo — Localização do terreno" required file={fDocLoc} accept=".pdf,.jpg,.jpeg,.png,.kml" inputRef={refLoc}
+                    onPick={() => refLoc.current?.click()} onChange={e => uploadDoc(e, setFDocLoc)} />
+                  <DocZone label="PDF — Estudo de outra construtora" file={fDocOutra} accept=".pdf" inputRef={refOutra}
+                    onPick={() => refOutra.current?.click()} onChange={e => uploadDoc(e, setFDocOutra)} />
+                </div>
+
+                {/* DADOS DO TERRENO */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className={microLabel}>Área (m²)</div>
+                    <input className={inputCls} value={fArea} onChange={e => setFArea(e.target.value)} placeholder="2.651,95" />
+                  </div>
+                  <div>
+                    <div className={microLabel}>Cidade / Município</div>
+                    <input className={inputCls} value={fCidade} onChange={e => setFCidade(e.target.value)} placeholder="Balneário Camboriú" />
+                  </div>
+                </div>
+
+                {/* PERMUTA */}
+                <div onClick={() => setFPermuta(p => !p)}
+                  className="flex items-center justify-between px-3.5 py-3 bg-theme-bg rounded-xl border-[1.5px] border-theme-divider cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-lg text-emerald-500">swap_horiz</span>
+                    <span className="font-square font-black text-[9px] tracking-[0.15em] text-theme-text uppercase">Aceita Permuta</span>
+                  </div>
+                  <div className={`w-10 h-[22px] rounded-full p-0.5 transition-colors ${fPermuta ? 'bg-emerald-500' : 'bg-theme-divider'}`}>
+                    <div className={`w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${fPermuta ? 'translate-x-[18px]' : ''}`} />
+                  </div>
+                </div>
+                {fPermuta && (
+                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 -mt-1">
+                    <div>
+                      <div className="font-square font-black text-[7.5px] tracking-[0.15em] text-emerald-600 uppercase mb-1.5">Pedida (%)</div>
+                      <input type="number" className={inputCls} value={fPedida} onChange={e => setFPedida(e.target.value)} placeholder="20" />
+                    </div>
+                    <div>
+                      <div className="font-square font-black text-[7.5px] tracking-[0.15em] text-emerald-600 uppercase mb-1.5">Venda (R$)</div>
+                      <input type="number" className={inputCls} value={fVenda} onChange={e => setFVenda(e.target.value)} placeholder="8500000" />
+                    </div>
+                  </div>
+                )}
+
+                {suggestMercado && (
+                  <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border-[1.5px] border-emerald-500/30 -mt-1">
+                    <span className="material-symbols-outlined text-base text-emerald-500">info</span>
+                    <span className="text-xs text-theme-text">Cidade fora da base — considere usar <strong>MERCADO</strong> (~25d).</span>
+                  </div>
+                )}
+
+                {/* RESPONSÁVEL + COLUNA */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <div className={microLabel}>Responsável</div>
+                    <div onClick={() => setShowTeamPicker(p => !p)} className={inputCls + ' flex items-center gap-2 cursor-pointer'}>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: memberColor(fResp) }} />
+                      <span className="flex-1 truncate">{fResp || 'Selecionar...'}</span>
+                      <span className="material-symbols-outlined text-base text-theme-textMuted">expand_more</span>
+                    </div>
+                    {showTeamPicker && (
+                      <div className="absolute top-full mt-1 left-0 right-0 bg-theme-card border-[1.5px] border-theme-divider rounded-xl shadow-2xl z-[200] overflow-hidden max-h-52 overflow-y-auto scroller">
+                        {members.length === 0 && <div className="px-3 py-2.5 text-xs text-theme-textMuted">Nenhum membro — cadastre a equipe.</div>}
+                        {members.map(m => (
+                          <div key={m.name} onClick={() => { setFResp(m.name); setShowTeamPicker(false); }}
+                            className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-theme-highlight transition-colors">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.color || '#94A3B8' }} />
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-semibold text-theme-text truncate">{m.name}</div>
+                              <div className="text-[10px] text-theme-textMuted">{m.role || 'Colaborador'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className={microLabel}>Coluna Inicial</div>
+                    <select className={inputCls + ' cursor-pointer'} value={fCol} onChange={e => setFCol(e.target.value as KanbanCol)}>
+                      {ALL_COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* OBS */}
+                <div>
+                  <div className={microLabel}>Observações</div>
+                  <textarea rows={3} className={inputCls + ' resize-none'} value={fObs} onChange={e => setFObs(e.target.value)} placeholder="Notas, reuniões agendadas, status atual..." />
+                </div>
+
+                {formErr && <p className="text-[11px] font-bold text-red-500">{formErr}</p>}
+
+                <div className="flex gap-2.5">
+                  <button onClick={() => setShowAdd(false)} className="px-5 py-3 bg-theme-bg border-[1.5px] border-theme-divider rounded-2xl text-theme-textMuted font-square font-black text-[9px] tracking-[0.18em] uppercase">Cancelar</button>
+                  <button onClick={saveStudy} disabled={uploading}
+                    className="flex-1 py-3 rounded-2xl text-white font-square font-black text-[10px] tracking-[0.2em] uppercase shadow-lg disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg,#FF9966,#FF5E62)' }}>
+                    {uploading ? 'Carregando arquivo…' : 'Salvar Viabilidade'}
                   </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ═══ MODAL: DETALHE ═══ */}
+        {detail && (() => {
+          const t = typeOf(detail);
+          const dl = daysLeft(detail);
+          const pct = progressPct(detail);
+          const done = isComplete(detail);
+          return (
+            <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setDetailId(null)}>
+              <div className="bg-theme-card rounded-3xl p-7 w-[500px] max-w-full max-h-[90vh] overflow-y-auto scroller shadow-2xl animate-scaleIn" onClick={e => e.stopPropagation()}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1 min-w-0">
+                    {t && <span className="font-square font-black text-[8px] tracking-[0.12em] px-2.5 py-1 rounded-md uppercase" style={{ background: t.color + '1A', color: t.color }}>{t.label} · {t.nome} ~{t.days}d</span>}
+                    <div className="font-bold text-lg text-theme-text mt-2.5 leading-snug">{detail.titulo || detail.address}</div>
+                    {detail.titulo && <div className="text-xs text-theme-textMuted mt-0.5">{detail.address}</div>}
+                    <div className="text-xs text-theme-textMuted mt-0.5">{detail.cidade}{detail.areaM2 ? ` · ${detail.areaM2} m²` : ''}</div>
+                  </div>
+                  <button onClick={() => setDetailId(null)} className="w-8 h-8 rounded-lg border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-text shrink-0 ml-3">
+                    <span className="material-symbols-outlined text-base">close</span>
+                  </button>
+                </div>
+
+                {detail.aceitaPermuta && (
+                  <div className="flex items-center gap-3 px-3.5 py-3 rounded-2xl bg-emerald-500/10 border-[1.5px] border-emerald-500/25 mb-3.5">
+                    <span className="material-symbols-outlined text-xl text-emerald-500 shrink-0">swap_horiz</span>
+                    <div className="flex gap-4 flex-wrap">
+                      <div><div className="font-square font-black text-[7px] tracking-[0.15em] text-emerald-600 uppercase">Aceita Permuta</div><div className="text-xs font-semibold text-theme-text mt-0.5">Sim</div></div>
+                      {detail.pedidaPct != null && <div><div className="font-square font-black text-[7px] tracking-[0.15em] text-emerald-600 uppercase">Pedida</div><div className="text-xs font-semibold text-theme-text mt-0.5">{detail.pedidaPct}%</div></div>}
+                      {detail.vendaValor != null && <div><div className="font-square font-black text-[7px] tracking-[0.15em] text-emerald-600 uppercase">Venda</div><div className="text-xs font-semibold text-theme-text mt-0.5">{moneyBR(detail.vendaValor)}</div></div>}
+                    </div>
+                  </div>
+                )}
+
+                {needsMercado(detail) && !done && (
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 mb-3.5">
+                    <span className="material-symbols-outlined text-base text-emerald-500">public</span>
+                    <span className="text-xs text-theme-text">Cidade fora da base de atuação — <strong>estudo de mercado recomendado</strong>.</span>
+                  </div>
+                )}
+
+                {detail.deadline && (
+                  <div className="p-3.5 rounded-2xl bg-theme-bg border border-theme-divider mb-3.5">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="font-square font-black text-[8px] tracking-[0.18em] text-theme-textMuted uppercase">Prazo de Entrega</span>
+                      <span className={`font-square font-black text-[9px] uppercase ${done ? 'text-emerald-500' : (dl != null && dl < 0 ? 'text-red-500' : 'text-theme-text')}`}>
+                        {done ? '✓ Concluído' : dl != null ? (dl < 0 ? `${-dl} dias de atraso` : dl === 0 ? 'Entrega hoje' : `${dl} dias restantes`) : ''} · {fdate(detail.deadline)}
+                      </span>
+                    </div>
+                    {pct != null && !done && (
+                      <div className="h-1 bg-theme-divider rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: dl != null && dl < 0 ? '#EF4444' : (t?.color || '#FF6B4A') }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="mb-3.5">
+                  <div className="font-square font-black text-[8px] tracking-[0.18em] text-theme-textMuted uppercase mb-2">Documentos</div>
+                  <div className="flex flex-col gap-1.5">
+                    {[{ f: detail.pdfConsultaPrefeitura, l: 'Consulta prefeitura' }, { f: detail.pdfLocalizacao, l: 'Localização do terreno' }, { f: detail.pdfEstudoTerceiro, l: 'Estudo de outra construtora' }].map((d, i) => d.f ? (
+                      <button key={i} onClick={() => openFile(d.f)} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-theme-bg border border-theme-divider hover:border-theme-orange transition-all text-left group">
+                        <span className="material-symbols-outlined text-base text-theme-cyan">picture_as_pdf</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold text-theme-text truncate group-hover:text-theme-orange transition-colors">{d.f.label}</div>
+                          <div className="text-[9px] text-theme-textMuted uppercase font-black tracking-wider">{d.l}</div>
+                        </div>
+                        <span className="material-symbols-outlined text-sm text-theme-textMuted">open_in_new</span>
+                      </button>
+                    ) : null)}
+                  </div>
+                </div>
+
+                {detail.obs && (
+                  <div className="mb-3.5">
+                    <div className="font-square font-black text-[8px] tracking-[0.18em] text-theme-textMuted uppercase mb-1.5">Observações</div>
+                    <p className="text-xs text-theme-text leading-relaxed bg-theme-bg rounded-xl px-3.5 py-3 border border-theme-divider">{detail.obs}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0" style={{ background: memberColor(detail.responsavel) }}>{initials(detail.responsavel)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-theme-text truncate">{detail.responsavel || 'Sem responsável'}</div>
+                    <div className="text-[9px] text-theme-textMuted uppercase font-black tracking-wider">criado em {fdate(detail.createdAt)}</div>
+                  </div>
+                  {!isViewer && (
+                    <select className="bg-theme-bg border border-theme-divider rounded-xl px-2.5 py-2 text-[11px] text-theme-text outline-none cursor-pointer max-w-[150px]"
+                      value={detail.responsavel || ''} onChange={e => updateViab(detail.id, { responsavel: e.target.value || undefined })}>
+                      <option value="">— Responsável —</option>
+                      {members.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                    </select>
+                  )}
+                </div>
+
+                {!isViewer && (
+                  <div className="flex gap-2.5">
+                    <select className={inputCls + ' cursor-pointer flex-1'} value={detail.kanbanStatus || 'em_aberto'} onChange={e => moveCol(detail.id, e.target.value as KanbanCol)}>
+                      {ALL_COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                    <button onClick={() => delViab(detail.id)} className="px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 font-square font-black text-[9px] tracking-[0.15em] uppercase hover:bg-red-500 hover:text-white transition-all">
+                      Excluir
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 };
+
+export default ViabilidadesPanel;

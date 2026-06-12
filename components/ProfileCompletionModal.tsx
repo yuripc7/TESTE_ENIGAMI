@@ -397,13 +397,25 @@ export const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
 
         (async () => {
           try {
+            // Tenta gravar também cargo e tempo de empresa (colunas opcionais —
+            // criadas pelo supabase_setup.sql). Se não existirem, regrava o básico.
             const { error: dbErr } = await supabase.from('profiles').upsert({
               id: userId,
               name: formattedName,
               avatar_url: finalAvatarEncoded,
+              role: selectedRole.label,
+              company_time: companyTime,
               updated_at: new Date().toISOString(),
             });
-            if (dbErr) console.warn('Erro em background ao atualizar tabela de profiles:', dbErr);
+            if (dbErr) {
+              const { error: basicErr } = await supabase.from('profiles').upsert({
+                id: userId,
+                name: formattedName,
+                avatar_url: finalAvatarEncoded,
+                updated_at: new Date().toISOString(),
+              });
+              if (basicErr) console.warn('Erro em background ao atualizar tabela de profiles:', basicErr);
+            }
           } catch (err) {
             console.warn('Erro em background ao salvar profile na DB:', err);
           }

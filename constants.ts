@@ -45,5 +45,6 @@ export const INITIAL_DB: DB = {
     disciplines: DEFAULT_DISCIPLINES,
     projects: [],
     team: [],
+    members: [],
     viabilities: [],
 };

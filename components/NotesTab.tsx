@@ -39,8 +39,9 @@ export const NotesTab: React.FC<NotesTabProps> = ({ project, db, onUpdateProject
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!validateFileSize(file)) {
-            setNotification('Arquivo muito grande (máx. 5MB).');
+        const sizeError = validateFileSize(file);
+        if (sizeError) {
+            setNotification(sizeError);
             return;
         }
         try {

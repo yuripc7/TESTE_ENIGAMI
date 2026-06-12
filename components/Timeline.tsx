@@ -218,7 +218,7 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
     return (
         <div id={isExecuted ? 'executed-timeline' : 'planned-timeline'} className="overflow-x-auto scroller relative bg-transparent min-h-[700px]" onWheel={handleWheel} ref={containerRef}>
             <div className="relative" style={{ width: `${totalWidth}px` }}>
-                <svg style={{ position: 'absolute', width: 0, height: 0 }}><defs><marker id="arrowhead-cyan" markerWidth="6" markerHeight="4" refX="6" refY="2" orientation="auto"><polygon points="0 0, 6 2, 0 4" fill="#00D4FF" /></marker><marker id="arrowhead-orange" markerWidth="6" markerHeight="4" refX="6" refY="2" orientation="auto"><polygon points="0 0, 6 2, 0 4" fill="#E86C3F" /></marker><marker id="arrowhead-green" markerWidth="6" markerHeight="4" refX="6" refY="2" orientation="auto"><polygon points="0 0, 6 2, 0 4" fill="#10B981" /></marker><marker id="arrowhead-red" markerWidth="6" markerHeight="4" refX="6" refY="2" orientation="auto"><polygon points="0 0, 6 2, 0 4" fill="#EF4444" /></marker><filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur" /><feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs></svg>
+                <svg style={{ position: 'absolute', width: 0, height: 0 }}><defs><marker id="arrowhead-cyan" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#00D4FF" /></marker><marker id="arrowhead-orange" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#E86C3F" /></marker><marker id="arrowhead-green" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#10B981" /></marker><marker id="arrowhead-red" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="#EF4444" /></marker><filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur" /><feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs></svg>
 
                 {/* --- TECH TAGS - SIMPLE VISIBLE START ICON (UPDATED) --- */}
                 <div className="flex bg-transparent h-16 relative border-b border-theme-divider no-print pointer-events-none">
@@ -366,7 +366,10 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
                     </div>
 
                     {todayPos >= 0 && (
-                        <div className="absolute top-0 bottom-0 z-40 no-print" style={{ left: `calc(16rem + ${todayPos}%)` }}>
+                        // A área dos meses começa após a coluna de rótulos (16rem), então o
+                        // percentual precisa ser aplicado sobre (100% - 16rem) para a linha
+                        // do dia atual cair exatamente no dia certo em qualquer zoom.
+                        <div className="absolute top-0 bottom-0 z-40 no-print" style={{ left: `calc(16rem + (100% - 16rem) * ${todayPos / 100})` }}>
                             <div className={`w-[2px] h-full ${isExecuted ? 'bg-theme-cyan shadow-[0_0_10px_#00A3FF]' : 'bg-zinc-500 shadow-[0_0_6px_rgba(255,255,255,0.3)]'}`} />
                         </div>
                     )}
@@ -376,8 +379,8 @@ const Timeline: React.FC<TimelineProps> = ({ project, isExecuted, zoomLevel, set
                         <div
                             className="absolute top-0 bottom-0 z-[5] no-print pointer-events-none flex items-center justify-center overflow-hidden"
                             style={{
-                                left: `calc(16rem + ${projectStartPos}%)`,
-                                width: `${todayPos - projectStartPos}%`,
+                                left: `calc(16rem + (100% - 16rem) * ${projectStartPos / 100})`,
+                                width: `calc((100% - 16rem) * ${(todayPos - projectStartPos) / 100})`,
                                 background: isExecuted
                                     ? 'linear-gradient(90deg, rgba(0,212,255,0.04) 0%, rgba(0,212,255,0.09) 100%)'
                                     : 'linear-gradient(90deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.055) 100%)'

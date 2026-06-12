@@ -7,6 +7,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { getIndexedDBItem, setIndexedDBItem } from '../utils/indexedDbHelper';
 import { useCollaboration, CollaborationUser } from '../hooks/useCollaboration';
 import { decodeAvatarUrl } from '../utils/avatarHelper';
+import { upsertMember, deriveTeam, normalizeMembers } from '../utils/membersHelper';
 
 const USER_KEY = 'enigami_user_v1';
 
@@ -34,6 +35,7 @@ interface AppContextType {
   // Computed values
   activeProject: Project | null;
   activeCompany: Company | null;
+  isViewer: boolean;
 
   // Actions
   setDb: React.Dispatch<React.SetStateAction<DB>>;
@@ -159,7 +161,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session?.user) { await loadProfile(session.user.id); }
-        else { setCurrentUser(null); }
+        else {
+          // Sem sessão Supabase: preserva perfis demo (criados localmente),
+          // limpando apenas usuários autenticados que de fato saíram.
+          setCurrentUserState(prev => {
+            if (prev && prev.id === 'demo_user') return prev;
+            localStorage.removeItem(USER_KEY);
+            return null;
+          });
+        }
       }
     );
     return () => subscription.unsubscribe();
@@ -250,51 +260,50 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
-  // Sincroniza em tempo real todos os perfis registrados no Supabase com a lista da equipe (db.team)
+  // ── ESTRUTURA CENTRAL DE MEMBROS ────────────────────────────────────────
+  // Todo perfil registrado no Supabase (login) vira um TeamMember em db.members.
+  // db.team (nomes) é derivado de members para compatibilidade com o restante do app.
   useEffect(() => {
-    async function syncProfilesToTeam() {
+    async function syncProfilesToMembers() {
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('name');
-        
+        // select('*') para aproveitar colunas extras (role, company_time) se existirem
+        const { data, error } = await supabase.from('profiles').select('*');
+
         if (error) {
           console.warn('Erro ao carregar perfis do Supabase:', error);
           return;
         }
+        if (!data || data.length === 0) return;
 
-        if (data && data.length > 0) {
-          const profileNames = data.map((p: any) => p.name).filter(Boolean);
-          
-          setDb(prev => {
-            // Remove duplicados e une a equipe local com todos os perfis cadastrados no Supabase
-            const combined = Array.from(new Set([...(prev.team || []), ...profileNames]));
-            
-            // Verifica se a lista realmente mudou para evitar loops
-            const isDifferent = prev.team.length !== combined.length || 
-                                prev.team.some((val, i) => val !== combined[i]);
-            
-            if (isDifferent) {
-              return {
-                ...prev,
-                team: combined
-              };
-            }
-            return prev;
-          });
-        }
+        setDb(prev => {
+          let members = prev.members || [];
+          for (const p of data as any[]) {
+            if (!p.name) continue;
+            const decoded = decodeAvatarUrl(p.avatar_url);
+            members = upsertMember(members, {
+              id: p.id,
+              name: p.name,
+              avatarUrl: decoded.avatarUrl || undefined,
+              role: p.role || undefined,
+              email: p.email || undefined,
+              source: 'login',
+            });
+          }
+          if (members === prev.members) return prev;
+          return { ...prev, members, team: deriveTeam(members) };
+        });
       } catch (err) {
         console.error('Erro na sincronização de perfis:', err);
       }
     }
 
-    syncProfilesToTeam();
+    syncProfilesToMembers();
 
-    // Cria canal de escuta em tempo real para novos cadastros ou alterações na tabela profiles
+    // Escuta em tempo real novos cadastros/alterações na tabela profiles
     const channel = supabase
       .channel('profiles-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        syncProfilesToTeam();
+        syncProfilesToMembers();
       })
       .subscribe();
 
@@ -303,8 +312,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     };
   }, []);
 
-  // Garante que o próprio usuário ativo esteja sempre adicionado à equipe local imediatamente,
-  // substituindo o nome anterior se houver alteração para evitar duplicados.
+  // Normalização: migra nomes legados de team para members e mantém team derivado
+  useEffect(() => {
+    setDb(prev => {
+      const normalized = normalizeMembers(prev);
+      if (!normalized) return prev;
+      return { ...prev, ...normalized };
+    });
+  }, [db.team, db.members]);
+
+  // Garante que o próprio usuário ativo esteja sempre registrado como membro,
+  // atualizando o nome anterior se houver alteração (evita duplicados).
   const prevNameRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentUser?.name && currentUser.profileCompleted) {
@@ -312,27 +330,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
       const oldName = prevNameRef.current;
 
       setDb(prev => {
-        let updatedTeam = prev.team ? [...prev.team] : [];
-        
+        let members = prev.members || [];
+
         if (oldName && oldName !== newName) {
-          updatedTeam = updatedTeam.filter(m => m !== oldName);
-        }
-        
-        if (!updatedTeam.includes(newName)) {
-          updatedTeam.push(newName);
+          members = members.filter(m => m.name !== oldName || (m.id && m.id === currentUser.id));
+          const renamed = members.find(m => m.id && m.id === currentUser.id);
+          if (renamed) {
+            members = members.map(m => m === renamed ? { ...m, name: newName } : m);
+          }
         }
 
-        const isDifferent = !prev.team || 
-                            prev.team.length !== updatedTeam.length || 
-                            prev.team.some((val, i) => val !== updatedTeam[i]);
+        members = upsertMember(members, {
+          id: currentUser.id !== 'demo_user' ? currentUser.id : undefined,
+          name: newName,
+          role: currentUser.role,
+          avatarUrl: currentUser.avatar,
+          source: currentUser.id && currentUser.id !== 'demo_user' ? 'login' : 'manual',
+        });
 
-        if (isDifferent) {
-          return {
-            ...prev,
-            team: updatedTeam
-          };
-        }
-        return prev;
+        if (members === prev.members) return prev;
+        return { ...prev, members, team: deriveTeam(members) };
       });
 
       prevNameRef.current = newName;
@@ -355,6 +372,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   const activeCompany = useMemo(() => {
     return db.companies.find(c => String(c.id) === String(db.activeCompanyId)) || null;
   }, [db.companies, db.activeCompanyId]);
+
+  const isViewer = useMemo(() => {
+    if (!currentUser) return true;
+    if (currentUser.id === 'demo_user') return false;
+    const r = (currentUser.role || '').toLowerCase();
+    const isEditor = r.includes('arquiteto') || 
+                     r.includes('engenheiro') || 
+                     r.includes('arq') || 
+                     r.includes('eng') || 
+                     r.includes('coord') || 
+                     r.includes('ger') || 
+                     r.includes('dir') || 
+                     r.includes('design') ||
+                     r.includes('collab');
+    return !isEditor;
+  }, [currentUser]);
 
   // Helper function to get current timestamp
   const getNowString = () => {
@@ -452,7 +485,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     try {
       const text = await readFileAsText(file);
       const rawData = JSON.parse(text);
-      if (!rawData || typeof rawData !== 'object') throw new Error("Formato invÃÂ¡lido.");
+      if (!rawData || typeof rawData !== 'object') throw new Error("Formato inválido.");
 
       // Deep Patching Function
       const patchProject = (p: any): Project => ({
@@ -504,7 +537,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
       const projectExists = importedData.projects.some(p => p.id === importedData.activeProjectId);
       if (!projectExists) importedData.activeProjectId = importedData.projects[0]?.id || null;
 
-      if (await requestConfirm({ message: "Isso substituirÃÂ¡ todos os dados atuais. Deseja continuar?", variant: 'warning', title: 'Importar Backup' })) {
+      if (await requestConfirm({ message: "Isso substituirá todos os dados atuais. Deseja continuar?", variant: 'warning', title: 'Importar Backup' })) {
         // Inject log directly into the new state
         const activeP = importedData.projects.find(p => p.id === importedData.activeProjectId);
         if (activeP) {
@@ -519,7 +552,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
       }
     } catch (err) {
       console.error("Erro ao importar JSON:", err);
-      showAlert("Erro crÃÂ­tico ao ler o backup. Verifique a estrutura do arquivo.");
+      showAlert("Erro crítico ao ler o backup. Verifique a estrutura do arquivo.");
     }
     e.target.value = '';
   };
@@ -536,6 +569,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     lastSavedAt,
     activeProject,
     activeCompany,
+    isViewer,
     setDb,
     setTheme,
     setCurrentUser,

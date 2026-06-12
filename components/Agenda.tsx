@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Project, Event } from '../types';
+import { Project, Event, WeeklyTask, ComprasMeet } from '../types';
 import { parseLocalDate } from '../utils/dateUtils';
+import { useApp } from '../contexts/AppContext';
 
 interface AgendaProps {
     project: Project | null;
@@ -13,8 +14,12 @@ interface AgendaProps {
 const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const MONTHS = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
 
+const isoOf = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent, isViewer = false }) => {
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
+    const { activeCompany } = useApp();
+    const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedView, setSelectedView] = useState<'month' | 'week' | 'day'>('month');
 
     // --- Helpers ---
@@ -52,6 +57,33 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
             return pd === check;
         });
     };
+
+    // ── AGENDA UNIFICADA ─────────────────────────────────────────────
+    // Tarefas da Agenda semanal (empresa + legado no projeto) pela data de entrega
+    const getWeeklyTasksForDate = (date: Date): WeeklyTask[] => {
+        const iso = isoOf(date);
+        const pool: WeeklyTask[] = [...(activeCompany?.agendaTasks || []), ...((project?.agendaTasks) || [])];
+        const seen = new Set<string>();
+        return pool.filter(t => {
+            if (!t.dueDate || t.standby) return false;
+            if (t.dueDate !== iso) return false;
+            const k = String(t.id);
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+    };
+
+    // Reuniões da aba Compras (cotações com fornecedores)
+    const getComprasMeetsForDate = (date: Date): ComprasMeet[] => {
+        const iso = isoOf(date);
+        return (project?.comprasData?.meets || [])
+            .filter(m => m.data === iso)
+            .sort((a, b) => a.hora.localeCompare(b.hora));
+    };
+
+    const comprasFornName = (id: string) =>
+        project?.comprasData?.forns.find(f => f.id === id)?.nome || '';
 
     const getEventsForTimeSlot = (date: Date, hour: number) => {
         if (!project) return [];
@@ -174,6 +206,30 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                         {n.text}
                                     </div>
                                 ))}
+                                {/* Agenda unificada: tarefas da Agenda semanal (entrega no dia) */}
+                                {getWeeklyTasksForDate(cell.date).map((t, i) => (
+                                    <div
+                                        key={`wt-${i}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-2 py-1 rounded-md text-[8px] font-black font-square tracking-wider uppercase truncate border-l-2 border-teal-500 bg-teal-500/10 text-teal-700 dark:text-teal-300 shadow-sm pointer-events-none"
+                                        title={`Agenda da Semana — ${t.assignee}: ${t.text}`}
+                                    >
+                                        <span className="material-symbols-outlined text-[8px] mr-1 align-middle">task_alt</span>
+                                        {t.assignee?.split(' ')[0]}: {t.text}
+                                    </div>
+                                ))}
+                                {/* Agenda unificada: reuniões de Compras */}
+                                {getComprasMeetsForDate(cell.date).map((m, i) => (
+                                    <div
+                                        key={`cm-${i}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-2 py-1 rounded-md text-[8px] font-black font-square tracking-wider uppercase truncate border-l-2 border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 shadow-sm pointer-events-none"
+                                        title={`Compras — ${m.pauta} (${comprasFornName(m.forn)})`}
+                                    >
+                                        <span className="material-symbols-outlined text-[8px] mr-1 align-middle">storefront</span>
+                                        {m.hora} {m.pauta}
+                                    </div>
+                                ))}
                                 {cellEvents.slice(0, 3).map((ev, i) => (
                                     <div
                                         key={i}
@@ -237,6 +293,16 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                                         <span className="material-symbols-outlined text-[8px] mr-0.5 align-middle">sticky_note_2</span>{n.text}
                                     </div>
                                 ))}
+                                {getWeeklyTasksForDate(d).map((t, i) => (
+                                    <div key={`wwt-${i}`} className="mx-1 mt-1 px-2 py-1 rounded-md text-[8px] font-black font-square tracking-wider uppercase border-l-2 border-teal-500 bg-teal-500/10 text-teal-700 dark:text-teal-300 truncate" title={`Agenda da Semana — ${t.assignee}: ${t.text}`}>
+                                        <span className="material-symbols-outlined text-[8px] mr-0.5 align-middle">task_alt</span>{t.text}
+                                    </div>
+                                ))}
+                                {getComprasMeetsForDate(d).map((m, i) => (
+                                    <div key={`wcm-${i}`} className="mx-1 mt-1 px-2 py-1 rounded-md text-[8px] font-black font-square tracking-wider uppercase border-l-2 border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 truncate" title={`Compras — ${m.pauta}`}>
+                                        <span className="material-symbols-outlined text-[8px] mr-0.5 align-middle">storefront</span>{m.hora} {m.pauta}
+                                    </div>
+                                ))}
                                 {/* Background Grid Lines matched to hours */}
                                 {Array.from({ length: 24 }).map((_, h) => (
                                     <div
@@ -289,6 +355,18 @@ export const Agenda: React.FC<AgendaProps> = ({ project, onAddEvent, onEditEvent
                         <div key={`dn-${i}`} className="flex items-center gap-1.5 px-3 py-1 rounded-full border text-zinc-800 text-[9px] font-bold shadow-sm" style={{ backgroundColor: n.color, borderColor: '#FF6B00' }}>
                             <span className="material-symbols-outlined text-[10px]">sticky_note_2</span>
                             Nota para {n.recipient}: {n.text.substring(0, 30)}...
+                        </div>
+                    ))}
+                    {getWeeklyTasksForDate(currentDate).map((t, i) => (
+                        <div key={`dt-${i}`} className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[9px] font-black font-square tracking-wider uppercase">
+                            <span className="material-symbols-outlined text-[10px]">task_alt</span>
+                            {t.assignee}: {t.text.substring(0, 40)}
+                        </div>
+                    ))}
+                    {getComprasMeetsForDate(currentDate).map((m, i) => (
+                        <div key={`dm-${i}`} className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[9px] font-black font-square tracking-wider uppercase">
+                            <span className="material-symbols-outlined text-[10px]">storefront</span>
+                            {m.hora} — {m.pauta.substring(0, 35)} ({comprasFornName(m.forn)})
                         </div>
                     ))}
                 </div>

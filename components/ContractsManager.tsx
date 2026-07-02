@@ -43,8 +43,9 @@ type DetailTab = 'contrato'|'financeiro'|'disciplinas'|'edicoes';
 export const ContractsManager: React.FC<ContractsManagerProps> = ({
   project, onUpdateProject, currentUser,
 }) => {
-  const { addLog, setNotification, isViewer } = useApp();
+  const { addLog, setNotification, isViewer, db } = useApp();
   const contracts: Contract[] = project.contracts || [];
+  const teamNames = db.team || [];
 
   /* ── List state ── */
   const [selected, setSelected] = useState<Contract|null>(null);
@@ -330,7 +331,10 @@ export const ContractsManager: React.FC<ContractsManagerProps> = ({
                 </div>
                 <div>
                   <label className="lbl">Responsável</label>
-                  <input value={form.responsible} onChange={e=>setForm(f=>({...f,responsible:e.target.value}))} placeholder="Nome" className="inp" />
+                  <input value={form.responsible} onChange={e=>setForm(f=>({...f,responsible:e.target.value}))} placeholder="Nome" className="inp" list="contract-team-list" />
+                  <datalist id="contract-team-list">
+                    {teamNames.map(t => <option key={t} value={t} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="lbl">Início</label>

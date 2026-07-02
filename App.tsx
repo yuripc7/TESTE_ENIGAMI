@@ -4,7 +4,7 @@ import { INITIAL_DB, MAX_CHAT_HISTORY } from './constants';
 
 import { DB, ChatMessage, Project, Event, Company, ProjectDataRow, Scope, Dependency, ChecklistItem, Activity, FileLink, GalleryImage, GalleryFolder, ProtocolData, ProtocolRevision, ProtocolFolder, ProjectDetails, PavementType } from './types';
 
-import { generateChatResponse } from './services/geminiService';
+import { generateChatResponse, isAiConnected } from './services/geminiService';
 
 import {
 
@@ -180,6 +180,7 @@ export const App = () => {
     // Report modal
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportText, setReportText] = useState('');
+    const [reportTitle, setReportTitle] = useState('Relatório Executivo');
     const [isPolishingReport, setIsPolishingReport] = useState(false);
 
     // Banco de Horas modal
@@ -983,10 +984,117 @@ export const App = () => {
 
         const report = lines.join('\n');
 
+        setReportTitle('Relatório Executivo');
         setReportText(report);
         setShowReportModal(true);
         setNotification("Relatório gerado com sucesso!");
 
+    };
+
+
+
+    // ── Contexto compartilhado enviado à IA ─────────────────────────────
+    // Reúne o macro (cronograma), disciplinas, equipe e agenda semanal para
+    // que relatórios e planejamentos usem os dados reais do workspace.
+    const buildProjectAIContext = useCallback(() => {
+        const today = new Date();
+        if (!activeProject) return null;
+        const agendaSource = activeCompany?.agendaTasks?.length ? activeCompany.agendaTasks : (activeProject.agendaTasks || []);
+        return {
+            projectName: activeProject.name,
+            lod: activeProject.lod,
+            currentDate: today.toLocaleDateString('pt-BR'),
+            timelineStart: activeProject.timelineStart,
+            timelineEnd: activeProject.timelineEnd,
+            disciplines: db.disciplines.map(d => ({ code: d.code, name: d.name })),
+            team: (db.members || []).map(m => ({
+                name: m.name,
+                role: m.role || 'Colaborador',
+                capacity: m.capacity ?? 10,
+                coordinator: !!m.coordinator
+            })),
+            scopes: activeProject.scopes.map(s => ({
+                name: s.name,
+                disciplineName: db.disciplines.find(d => d.code === s.name)?.name || s.name,
+                resp: s.resp,
+                status: s.status,
+                events: s.events.map(e => ({
+                    title: e.title,
+                    resp: e.resp,
+                    startDate: e.startDate,
+                    endDate: e.endDate,
+                    completed: e.completed,
+                    late: !e.completed && new Date(e.endDate) < today,
+                    checklistPending: (e.checklist || []).filter(c => !c.done).map(c => c.text).slice(0, 6)
+                }))
+            })),
+            weeklyAgenda: agendaSource.slice(-80).map(t => ({
+                text: t.text,
+                day: t.day,
+                assignee: t.assignee,
+                disc: t.disc,
+                status: t.status,
+                weekKey: t.weekKey,
+                standby: !!t.standby
+            })),
+            notes: (activeProject.notes || []).filter(n => n.status !== 'completed').map(n => ({ text: n.text.slice(0, 100), recipient: n.recipient, deadline: n.deadline })),
+            contracts: (activeProject.contracts || []).map(c => ({ name: c.name, supplier: c.supplier, totalValue: c.totalValue, status: c.status, responsible: c.responsible })),
+            timeLogs: {
+                totalHours: ((activeProject.timeLogs || []).reduce((a, l) => a + l.duration, 0) / 3600).toFixed(1),
+                sessions: (activeProject.timeLogs || []).length
+            },
+            protocol: activeProject.protocolData ? {
+                number: activeProject.protocolData.protocolNumber,
+                prefecture: activeProject.protocolData.prefecture,
+                status: activeProject.protocolData.status
+            } : null
+        };
+    }, [activeProject, activeCompany, db.disciplines, db.members]);
+
+
+
+    // ── Planejamento Semanal gerado pela IA a partir do macro ───────────
+    const generateWeeklyPlanAI = async () => {
+        if (!activeProject || isTyping) return;
+        const context = buildProjectAIContext();
+        if (!context) return;
+
+        setIsTyping(true);
+        setNotification("IA montando o planejamento semanal a partir do macro...");
+
+        try {
+            const monday = new Date();
+            monday.setHours(0, 0, 0, 0);
+            const dow = monday.getDay() === 0 ? 7 : monday.getDay();
+            monday.setDate(monday.getDate() - (dow - 1) + 7); // segunda-feira da próxima semana
+            const friday = new Date(monday);
+            friday.setDate(monday.getDate() + 4);
+            const fmtBr = (d: Date) => d.toLocaleDateString('pt-BR');
+
+            const systemInstruction = `Você é ENIGAMI AI, planejador sênior de projetos de arquitetura e engenharia.
+Sua tarefa: transformar o planejamento MACRO (cronograma de disciplinas e ações) em um planejamento semanal MICRO, realista e acionável.
+Regras:
+- Responda em Português brasileiro, em markdown (## títulos, tabelas ou listas com -).
+- Estruture por dia (Segunda a Sexta) e por colaborador, respeitando a capacidade semanal (pontos) de cada um.
+- Priorize: 1) ações atrasadas, 2) ações que vencem na semana, 3) ações que iniciam na semana, 4) checklists pendentes.
+- Cite disciplina, responsável e prazo reais dos dados. Não invente atividades nem pessoas.
+- Aponte sobrecargas de capacidade e sugira redistribuição.
+- Termine com um bloco "### ⚠️ Riscos & Pontos de Coordenação" com no máximo 5 itens.`;
+
+            const query = `[DADOS DO PROJETO (MACRO + EQUIPE + AGENDA ATUAL)]:\n${JSON.stringify(context, null, 1)}\n\n[TAREFA]: Gere o planejamento semanal de ${fmtBr(monday)} a ${fmtBr(friday)} para a equipe, derivado do planejamento macro acima. Considere as tarefas já existentes na agenda semanal para não duplicar.`;
+
+            const plan = await generateChatResponse(query, systemInstruction);
+
+            setReportTitle('Planejamento Semanal · IA');
+            setReportText(plan);
+            setShowReportModal(true);
+            setNotification("Planejamento semanal gerado!");
+        } catch (error) {
+            console.error('Erro ao gerar planejamento semanal:', error);
+            setNotification("Erro ao gerar planejamento com IA.");
+        } finally {
+            setIsTyping(false);
+        }
     };
 
 
@@ -1020,45 +1128,13 @@ export const App = () => {
 
         try {
 
-            const today = new Date();
-            const contextData = activeProject ? {
-                projectName: activeProject.name,
-                lod: activeProject.lod,
-                currentDate: today.toLocaleDateString('pt-BR'),
-                timelineStart: activeProject.timelineStart,
-                timelineEnd: activeProject.timelineEnd,
-                team: db.team,
-                scopes: activeProject.scopes.map(s => ({
-                    name: s.name,
-                    resp: s.resp,
-                    status: s.status,
-                    events: s.events.map(e => ({
-                        title: e.title,
-                        resp: e.resp,
-                        startDate: e.startDate,
-                        endDate: e.endDate,
-                        completed: e.completed,
-                        late: !e.completed && new Date(e.endDate) < today
-                    }))
-                })),
-                notes: (activeProject.notes || []).filter(n => n.status !== 'completed').map(n => ({ text: n.text.slice(0, 100), recipient: n.recipient, deadline: n.deadline })),
-                contracts: (activeProject.contracts || []).map(c => ({ name: c.name, supplier: c.supplier, totalValue: c.totalValue, status: c.status })),
-                timeLogs: {
-                    totalHours: ((activeProject.timeLogs || []).reduce((a, l) => a + l.duration, 0) / 3600).toFixed(1),
-                    sessions: (activeProject.timeLogs || []).length
-                },
-                protocol: activeProject.protocolData ? {
-                    number: activeProject.protocolData.protocolNumber,
-                    prefecture: activeProject.protocolData.prefecture,
-                    status: activeProject.protocolData.status
-                } : null
-            } : null;
+            const contextData = buildProjectAIContext();
 
             const systemInstruction = `Você é ENIGAMI AI, a inteligência artificial especializada em coordenação de projetos de arquitetura e engenharia.
-Suas responsabilidades: analisar prazos, alertar atrasos, calcular progresso, sugerir prioridades, resumir contratos e notas, e auxiliar no gerenciamento do projeto.
+Suas responsabilidades: analisar prazos, alertar atrasos, calcular progresso, sugerir prioridades, resumir contratos e notas, planejar semanas a partir do macro e auxiliar no gerenciamento do projeto.
 Sempre responda em Português brasileiro. Seja direto, conciso e profissional.
 Use listas e formatação markdown quando útil (negrito **texto**, listas com -, headers com ##).
-Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles — cite nomes de disciplinas, responsáveis e datas reais.`;
+Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles — cite nomes de disciplinas, responsáveis, capacidades e datas reais. Nunca invente dados que não estejam no contexto.`;
 
             const enrichedQuery = contextData
                 ? `[DADOS DO PROJETO]:\n${JSON.stringify(contextData, null, 2)}\n\n[PERGUNTA]: ${userMsg}`
@@ -1965,34 +2041,35 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 {/* Tabs centradas — Agenda (planejamento micro do escritório) libera só com a empresa;
                     as demais abas dependem de um projeto selecionado */}
                 {(hasProject || hasCompany) && (
-                    <div className="flex-1 flex justify-center">
-                        <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider">
+                    <div className="flex-1 flex justify-center min-w-0">
+                        <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider overflow-x-auto scroller max-w-full">
                             {[
-                                { id: 'timeline', label: 'Cronograma' },
-                                { id: 'agenda_semana', label: 'Agenda' },
-                                { id: 'gallery', label: 'Galeria' },
-                                { id: 'files', label: 'Arquivos' },
-                                { id: 'data', label: 'Dados' },
-                                { id: 'viabilidade', label: 'Contratos' },
-                                { id: 'financeiro', label: 'Financeiro' },
-                                { id: 'compras', label: 'Compras' },
-                                { id: 'notas', label: 'Notas' },
-                                { id: 'colaborador', label: 'Colaborador' },
+                                { id: 'timeline', label: 'Cronograma', icon: 'view_timeline' },
+                                { id: 'agenda_semana', label: 'Agenda', icon: 'calendar_view_week' },
+                                { id: 'gallery', label: 'Galeria', icon: 'photo_library' },
+                                { id: 'files', label: 'Arquivos', icon: 'folder_open' },
+                                { id: 'data', label: 'Dados', icon: 'database' },
+                                { id: 'viabilidade', label: 'Contratos', icon: 'contract' },
+                                { id: 'financeiro', label: 'Financeiro', icon: 'payments' },
+                                { id: 'compras', label: 'Compras', icon: 'shopping_cart' },
+                                { id: 'notas', label: 'Notas', icon: 'sticky_note_2' },
+                                { id: 'colaborador', label: 'Colaborador', icon: 'group' },
                             ].map(tab => {
                                 const enabled = hasProject || tab.id === 'agenda_semana';
                                 return (
                                     <button
                                         key={tab.id}
                                         onClick={() => enabled && setActiveTab(tab.id as Tab)}
-                                        title={enabled ? undefined : 'Selecione um projeto para acessar'}
-                                        className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
+                                        title={enabled ? tab.label : 'Selecione um projeto para acessar'}
+                                        className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.12em] transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                                             activeTab === tab.id
-                                                ? 'text-theme-orange border border-theme-orange bg-theme-orange/10'
+                                                ? 'text-theme-orange border border-theme-orange bg-theme-orange/10 shadow-sm'
                                                 : enabled
-                                                    ? 'text-theme-textMuted hover:text-theme-text'
+                                                    ? 'text-theme-textMuted hover:text-theme-text hover:bg-theme-highlight/60'
                                                     : 'text-theme-textMuted/40 cursor-not-allowed'
                                         }`}
                                     >
+                                        <span className="material-symbols-outlined text-[13px] leading-none hidden xl:inline">{tab.icon}</span>
                                         {tab.label}
                                     </button>
                                 );
@@ -2952,21 +3029,43 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                                 </h2>
 
-                                <button
+                                <div className="flex items-center gap-2">
 
-                                    onClick={generateProjectReport}
+                                    <button
 
-                                    disabled={isTyping}
+                                        onClick={generateWeeklyPlanAI}
 
-                                    className="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                                        disabled={isTyping}
 
-                                >
+                                        title="A IA transforma o planejamento macro do cronograma em um plano semanal por colaborador"
 
-                                    <span className="material-symbols-outlined text-sm">{isTyping ? 'hourglass_empty' : 'auto_awesome'}</span>
+                                        className="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
 
-                                    {isTyping ? 'Gerando...' : 'Gerar Relatório'}
+                                    >
 
-                                </button>
+                                        <span className="material-symbols-outlined text-sm">{isTyping ? 'hourglass_empty' : 'calendar_view_week'}</span>
+
+                                        {isTyping ? 'Gerando...' : 'Plano Semanal IA'}
+
+                                    </button>
+
+                                    <button
+
+                                        onClick={generateProjectReport}
+
+                                        disabled={isTyping}
+
+                                        className="bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+
+                                    >
+
+                                        <span className="material-symbols-outlined text-sm">{isTyping ? 'hourglass_empty' : 'auto_awesome'}</span>
+
+                                        {isTyping ? 'Gerando...' : 'Gerar Relatório'}
+
+                                    </button>
+
+                                </div>
 
                             </div>
 
@@ -5049,7 +5148,11 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                     <span className="material-symbols-outlined text-xl">smart_toy</span>
                                     <div>
                                         <h3 className="font-black text-sm uppercase tracking-widest leading-none">Enigami AI</h3>
-                                        <p className="text-[9px] text-white/70 mt-0.5">{activeProject ? activeProject.name : 'Nenhum projeto ativo'}</p>
+                                        <p className="text-[9px] text-white/70 mt-0.5 flex items-center gap-1.5">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${isAiConnected() ? 'bg-emerald-300' : 'bg-red-300'} animate-pulse`} />
+                                            {isAiConnected() ? 'Conectada' : 'Modo Demo — configure a chave na Matriz'}
+                                            {activeProject ? ` · ${activeProject.name}` : ''}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -5084,6 +5187,8 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                                 { icon: 'trending_up', label: 'Qual o progresso geral do projeto?' },
                                                 { icon: 'schedule', label: 'O que vence nos próximos 14 dias?' },
                                                 { icon: 'person', label: 'Quem é o responsável por cada disciplina?' },
+                                                { icon: 'calendar_view_week', label: 'Monte o planejamento da próxima semana a partir do macro' },
+                                                { icon: 'balance', label: 'Como está a carga de trabalho de cada colaborador?' },
                                             ].map(q => (
                                                 <button key={q.label} onClick={() => { setChatQuery(q.label); }}
                                                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-theme-card border border-theme-divider hover:border-theme-orange text-left transition-all group">
@@ -5176,7 +5281,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                                 <span className="material-symbols-outlined text-white text-lg">analytics</span>
                             </div>
                             <div>
-                                <h2 className="text-sm font-black uppercase tracking-widest text-theme-text">Relatório Executivo</h2>
+                                <h2 className="text-sm font-black uppercase tracking-widest text-theme-text">{reportTitle}</h2>
                                 <p className="text-[9px] text-theme-textMuted">{activeProject?.name} · {new Date().toLocaleDateString('pt-BR')}</p>
                             </div>
                         </div>
@@ -5189,9 +5294,13 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                     <div className="flex-1 overflow-y-auto p-6">
                         <div className="bg-theme-bg rounded-2xl border border-theme-divider p-5 font-mono text-[11px] leading-relaxed text-theme-text whitespace-pre-wrap">
                             {reportText.split('\n').map((line, i) => {
+                                if (line.startsWith('# ') && !line.startsWith('## ')) return <p key={i} className="text-theme-orange font-black text-sm uppercase tracking-wide mt-4 mb-1">{line.slice(2)}</p>;
                                 if (line.startsWith('## ')) return <p key={i} className="text-theme-orange font-black text-sm uppercase tracking-wide mt-4 mb-1">{line.slice(3)}</p>;
                                 if (line.startsWith('### ')) return <p key={i} className="text-theme-text font-black text-xs uppercase tracking-wide mt-3 mb-1 border-b border-theme-divider pb-1">{line.slice(4)}</p>;
-                                if (line.startsWith('• ') || line.startsWith('- ')) return <p key={i} className="pl-3 text-theme-textMuted">{line}</p>;
+                                if (line.startsWith('#### ')) return <p key={i} className="text-theme-text font-bold text-[11px] uppercase tracking-wide mt-2">{line.slice(5)}</p>;
+                                if (/^\s*[•\-\*]\s/.test(line)) return <p key={i} className="pl-3 text-theme-textMuted">{line.replace(/\*\*(.*?)\*\*/g, (_, t) => t)}</p>;
+                                if (/^\s*\d+[\.\)]\s/.test(line)) return <p key={i} className="pl-3 text-theme-textMuted">{line.replace(/\*\*(.*?)\*\*/g, (_, t) => t)}</p>;
+                                if (line.trim().startsWith('|')) return <p key={i} className="whitespace-pre text-[10px] text-theme-textMuted overflow-x-auto">{line}</p>;
                                 if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-bold text-theme-text">{line.replace(/\*\*/g, '')}</p>;
                                 if (line === '') return <div key={i} className="h-2" />;
                                 return <p key={i}>{line.replace(/\*\*(.*?)\*\*/g, (_, t) => t)}</p>;
@@ -5205,9 +5314,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                             onClick={async () => {
                                 setIsPolishingReport(true);
                                 try {
+                                    const ctx = buildProjectAIContext();
                                     const polished = await generateChatResponse(
-                                        `Você receberá um relatório executivo de projeto de arquitetura gerado automaticamente. Reescreva-o de forma mais profissional, clara e executiva. Mantenha todas as informações, mas melhore o tom, a estrutura e a clareza. Use markdown. Relatório:\n\n${reportText}`,
-                                        'Você é um consultor sênior de gestão de projetos. Escreva em Português brasileiro formal.'
+                                        `${ctx ? `[DADOS COMPLETOS DO PROJETO PARA REFERÊNCIA]:\n${JSON.stringify(ctx, null, 1)}\n\n` : ''}Você receberá um documento de projeto de arquitetura gerado automaticamente. Reescreva-o de forma mais profissional, clara e executiva. Mantenha todas as informações, corrija inconsistências usando os dados do projeto acima e acrescente análises relevantes (riscos, prioridades) quando os dados permitirem. Use markdown. Documento:\n\n${reportText}`,
+                                        'Você é um consultor sênior de gestão de projetos de arquitetura e engenharia. Escreva em Português brasileiro formal. Baseie-se apenas nos dados fornecidos.'
                                     );
                                     setReportText(polished);
                                 } catch { setNotification('Erro ao polir com IA.'); }

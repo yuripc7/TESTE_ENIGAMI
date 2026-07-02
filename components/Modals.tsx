@@ -9,6 +9,7 @@ import { compressImage } from '../utils/imageCompression';
 import { supabase } from '../lib/supabase';
 import { decodeAvatarUrl } from '../utils/avatarHelper';
 import { useApp } from '../contexts/AppContext';
+import { getStoredApiKey, setStoredApiKey, getApiKeySource, testApiKey } from '../services/geminiService';
 
 interface ModalBaseProps {
     isOpen: boolean;
@@ -120,12 +121,55 @@ export const AdminSettingsModal: React.FC<{
 }> = ({ isOpen, theme, onClose, onToggleTheme, onPrint, onExportJSON, onImportJSON, isViewer = false }) => {
     const importInputRef = useRef<HTMLInputElement>(null);
 
+    // ── Chave de IA (Gemini) configurada na Matriz ──
+    const [aiKey, setAiKey] = useState('');
+    const [aiKeyVisible, setAiKeyVisible] = useState(false);
+    const [aiStatus, setAiStatus] = useState<{ type: 'ok' | 'error' | 'info'; text: string } | null>(null);
+    const [aiTesting, setAiTesting] = useState(false);
+    const [keySource, setKeySource] = useState(getApiKeySource());
+
+    useEffect(() => {
+        if (isOpen) {
+            setAiKey(getStoredApiKey());
+            setKeySource(getApiKeySource());
+            setAiStatus(null);
+            setAiKeyVisible(false);
+        }
+    }, [isOpen]);
+
+    const handleSaveAiKey = async () => {
+        const key = aiKey.trim();
+        if (!key) {
+            setStoredApiKey('');
+            setKeySource(getApiKeySource());
+            setAiStatus({ type: 'info', text: 'Chave removida deste navegador.' });
+            return;
+        }
+        setAiTesting(true);
+        setAiStatus({ type: 'info', text: 'Validando chave com o Gemini...' });
+        const result = await testApiKey(key);
+        setAiTesting(false);
+        if (result.ok) {
+            setStoredApiKey(key);
+            setKeySource(getApiKeySource());
+            setAiStatus({ type: 'ok', text: result.message });
+        } else {
+            setAiStatus({ type: 'error', text: result.message });
+        }
+    };
+
+    const sourceLabel = keySource === 'matriz'
+        ? { text: 'IA CONECTADA · CHAVE DA MATRIZ', color: '#10B981' }
+        : keySource === 'env'
+            ? { text: 'IA CONECTADA · CHAVE DO AMBIENTE (.env)', color: '#0EA5E9' }
+            : { text: 'IA DESCONECTADA · MODO DEMO', color: '#EF4444' };
+
     return (
         <ModalBase isOpen={isOpen} onClose={onClose}>
             <div className="p-8">
                 <div className="flex justify-between items-center mb-8 border-b border-theme-divider pb-4">
                     <h3 className="text-xl font-square font-black text-theme-text uppercase tracking-widest flex items-center gap-3">
-                        <span className="material-symbols-outlined text-theme-orange">tune</span> Admin Board
+                        <span className="material-symbols-outlined text-theme-orange">tune</span> Matriz · Admin
                     </h3>
                     <button className="text-theme-textMuted hover:text-theme-text" onClick={onClose}>
                         <span className="material-symbols-outlined">close</span>
@@ -140,6 +184,58 @@ export const AdminSettingsModal: React.FC<{
                         <button onClick={onToggleTheme} className="bg-theme-orange text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 shadow-lg">
                             {theme === 'dark' ? 'Mudar para Light' : 'Mudar para Dark'}
                         </button>
+                    </div>
+
+                    {/* ── Inteligência Artificial ── */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between px-2">
+                            <span className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest">Inteligência Artificial</span>
+                            <span className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest" style={{ color: sourceLabel.color }}>
+                                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: sourceLabel.color }} />
+                                {sourceLabel.text}
+                            </span>
+                        </div>
+                        <div className="p-4 bg-theme-bg rounded-xl border border-theme-divider flex flex-col gap-3">
+                            <p className="text-[9px] text-theme-textMuted font-bold leading-relaxed">
+                                Cole sua chave do <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-theme-cyan underline">Google AI Studio (Gemini)</a> para ativar relatórios precisos, planejamento semanal a partir do macro e o assistente de projeto. A chave fica salva apenas neste navegador.
+                            </p>
+                            <div className="flex gap-2">
+                                <div className="flex-1 relative">
+                                    <input
+                                        type={aiKeyVisible ? 'text' : 'password'}
+                                        value={aiKey}
+                                        onChange={(e) => setAiKey(e.target.value)}
+                                        placeholder="AIzaSy... (chave da API Gemini)"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        className="w-full bg-theme-card border border-theme-divider rounded-xl px-4 py-3 pr-11 text-xs text-theme-text outline-none focus:border-theme-orange font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setAiKeyVisible(v => !v)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-textMuted hover:text-theme-text"
+                                        title={aiKeyVisible ? 'Ocultar chave' : 'Mostrar chave'}
+                                    >
+                                        <span className="material-symbols-outlined text-base">{aiKeyVisible ? 'visibility_off' : 'visibility'}</span>
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={handleSaveAiKey}
+                                    disabled={aiTesting}
+                                    className="bg-theme-orange text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                                >
+                                    {aiTesting
+                                        ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Validando</>
+                                        : <><span className="material-symbols-outlined text-sm">key</span> {aiKey.trim() ? 'Salvar' : 'Remover'}</>
+                                    }
+                                </button>
+                            </div>
+                            {aiStatus && (
+                                <p className={`text-[9px] font-black uppercase tracking-wider ${aiStatus.type === 'ok' ? 'text-emerald-500' : aiStatus.type === 'error' ? 'text-red-500' : 'text-theme-textMuted'}`}>
+                                    {aiStatus.text}
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-3">
@@ -175,7 +271,7 @@ export const AdminSettingsModal: React.FC<{
                     </div>
                 </div>
                 <div className="mt-8 text-center border-t border-theme-divider pt-6">
-                    <p className="text-[9px] text-theme-textMuted font-bold uppercase tracking-widest">Board Engine v2.9.2 • Tonolher</p>
+                    <p className="text-[9px] text-theme-textMuted font-bold uppercase tracking-widest">Board Engine v3.0.0 • Tonolher</p>
                 </div>
             </div>
         </ModalBase>

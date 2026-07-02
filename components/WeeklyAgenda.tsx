@@ -425,22 +425,53 @@ export default function WeeklyAgenda() {
     return list;
   }, [db.members]);
 
+  // FONTE ÚNICA: as disciplinas vêm de db.disciplines (mesma lista do
+  // Cronograma/Contratos, gerida em "Gerenciar Disciplinas"). A lista BASE
+  // entra só como fallback de exibição para códigos legados (MEP, LEG...)
+  // usados em tarefas antigas da agenda.
   const integratedDisciplines = useMemo(() => {
-    const list = [...BASE_DISCIPLINES];
+    const list: { code: string; name: string; color: string }[] = db.disciplines.map(d => ({
+      code: d.code.toUpperCase(),
+      name: d.name,
+      color: d.color || '#64748B',
+    }));
+    BASE_DISCIPLINES.forEach(d => {
+      if (!list.some(x => x.code === d.code.toUpperCase())) list.push(d);
+    });
     custom.disciplines.forEach((d: any) => {
       if (!list.some(x => x.code.toUpperCase() === d.code.toUpperCase())) list.push(d);
     });
-    db.disciplines.forEach(d => {
-      if (!list.some(x => x.code.toUpperCase() === d.code.toUpperCase())) {
-        list.push({
-          code: d.code.toUpperCase(),
-          name: d.name,
-          color: d.color || '#64748B'
-        });
-      }
-    });
     return list;
   }, [db.disciplines, custom.disciplines]);
+
+  // Migração única: disciplinas criadas antigamente só na agenda (localStorage)
+  // sobem para a estrutura central db.disciplines e saem do armazenamento local.
+  useEffect(() => {
+    const c = loadCustom();
+    if (!c.disciplines.length) return;
+    const pending = c.disciplines.filter((d: any) =>
+      !db.disciplines.some(x => x.code.toUpperCase() === String(d.code).toUpperCase())
+    );
+    if (pending.length) {
+      setDb((prev: DB) => {
+        const missing = pending.filter((d: any) =>
+          !prev.disciplines.some(x => x.code.toUpperCase() === String(d.code).toUpperCase())
+        );
+        if (!missing.length) return prev;
+        return {
+          ...prev,
+          disciplines: [...prev.disciplines, ...missing.map((d: any) => ({
+            code: String(d.code).toUpperCase(),
+            name: d.name || d.code,
+            color: d.color || '#64748B',
+          }))],
+        };
+      });
+    }
+    saveCustom({ ...c, disciplines: [] });
+    setBumpCount(n => n + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isCoord = (name: string) => {
     const p = integratedPeople.find(x => x.name === name);
@@ -580,15 +611,18 @@ export default function WeeklyAgenda() {
     return p;
   };
 
+  // Disciplina criada na agenda nasce direto na estrutura central
+  // (db.disciplines) — aparece também no Cronograma, Contratos e Colaborador.
   const handleAddDiscipline = (name: string) => {
     const clean = name.trim();
     if (!clean) return null;
-    const code = slugCode(clean, integratedDisciplines.map(d => d.code));
     const existing = integratedDisciplines.find(d => d.name.toLowerCase() === clean.toLowerCase());
     if (existing) return existing;
+    const code = slugCode(clean, integratedDisciplines.map(d => d.code));
     const d = { code, name: clean, color: COLOR_POOL[(integratedDisciplines.length + 1) % COLOR_POOL.length] };
-    const c = loadCustom(); c.disciplines.push(d); saveCustom(c);
-    setBumpCount(n => n + 1);
+    setDb((prev: DB) => prev.disciplines.some(x => x.code.toUpperCase() === code)
+      ? prev
+      : { ...prev, disciplines: [...prev.disciplines, d] });
     return d;
   };
 

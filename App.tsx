@@ -42,6 +42,21 @@ import { CollaborativeHub } from './components/CollaborativeHub';
 
 type Tab = 'timeline' | 'gallery' | 'files' | 'data' | 'viabilidade' | 'financeiro' | 'compras' | 'notas' | 'colaborador' | 'agenda_semana';
 
+// Definição única das abas — usada na barra horizontal (desktop)
+// e no trilho vertical da lateral direita (mobile)
+const TAB_DEFS: { id: Tab; label: string; icon: string }[] = [
+    { id: 'timeline', label: 'Cronograma', icon: 'view_timeline' },
+    { id: 'agenda_semana', label: 'Agenda', icon: 'calendar_view_week' },
+    { id: 'gallery', label: 'Galeria', icon: 'photo_library' },
+    { id: 'files', label: 'Arquivos', icon: 'folder_open' },
+    { id: 'data', label: 'Dados', icon: 'database' },
+    { id: 'viabilidade', label: 'Contratos', icon: 'contract' },
+    { id: 'financeiro', label: 'Financeiro', icon: 'payments' },
+    { id: 'compras', label: 'Compras', icon: 'shopping_cart' },
+    { id: 'notas', label: 'Notas', icon: 'sticky_note_2' },
+    { id: 'colaborador', label: 'Colaborador', icon: 'group' },
+];
+
 
 
 import { useApp } from './contexts/AppContext';
@@ -2041,25 +2056,14 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 {/* Tabs centradas — Agenda (planejamento micro do escritório) libera só com a empresa;
                     as demais abas dependem de um projeto selecionado */}
                 {(hasProject || hasCompany) && (
-                    <div className="order-3 w-full lg:order-none lg:w-auto lg:flex-1 flex justify-start lg:justify-center min-w-0">
+                    <div className="hidden md:flex order-3 w-full lg:order-none lg:w-auto lg:flex-1 justify-start lg:justify-center min-w-0">
                         <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider overflow-x-auto scroller max-w-full">
-                            {[
-                                { id: 'timeline', label: 'Cronograma', icon: 'view_timeline' },
-                                { id: 'agenda_semana', label: 'Agenda', icon: 'calendar_view_week' },
-                                { id: 'gallery', label: 'Galeria', icon: 'photo_library' },
-                                { id: 'files', label: 'Arquivos', icon: 'folder_open' },
-                                { id: 'data', label: 'Dados', icon: 'database' },
-                                { id: 'viabilidade', label: 'Contratos', icon: 'contract' },
-                                { id: 'financeiro', label: 'Financeiro', icon: 'payments' },
-                                { id: 'compras', label: 'Compras', icon: 'shopping_cart' },
-                                { id: 'notas', label: 'Notas', icon: 'sticky_note_2' },
-                                { id: 'colaborador', label: 'Colaborador', icon: 'group' },
-                            ].map(tab => {
+                            {TAB_DEFS.map(tab => {
                                 const enabled = hasProject || tab.id === 'agenda_semana';
                                 return (
                                     <button
                                         key={tab.id}
-                                        onClick={() => enabled && setActiveTab(tab.id as Tab)}
+                                        onClick={() => enabled && setActiveTab(tab.id)}
                                         title={enabled ? tab.label : 'Selecione um projeto para acessar'}
                                         className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.12em] transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                                             activeTab === tab.id
@@ -2152,6 +2156,35 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
             </div>
 
 
+
+            {/* ── Trilho vertical de abas (somente mobile, lateral direita) ── */}
+            {(hasProject || hasCompany) && (
+                <div className="md:hidden fixed right-1.5 top-[45%] -translate-y-1/2 z-[140] no-print">
+                    <div className="flex flex-col items-center gap-1 bg-theme-card/95 backdrop-blur-xl border border-theme-divider rounded-full px-1 py-2 shadow-xl max-h-[62dvh] overflow-y-auto scroller">
+                        {TAB_DEFS.map(tab => {
+                            const enabled = hasProject || tab.id === 'agenda_semana';
+                            const active = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => enabled && setActiveTab(tab.id)}
+                                    title={enabled ? tab.label : 'Selecione um projeto para acessar'}
+                                    aria-label={tab.label}
+                                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                                        active
+                                            ? 'bg-theme-orange text-white shadow-md'
+                                            : enabled
+                                                ? 'text-theme-textMuted hover:text-theme-text hover:bg-theme-highlight/70 active:scale-95'
+                                                : 'text-theme-textMuted/30'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-lg leading-none">{tab.icon}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Notifications & Overlays */}
 
@@ -2654,7 +2687,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
 
-            <div id="main-scroller" className="flex flex-col gap-6 sm:gap-10 w-full max-w-[1920px] mx-auto flex-1 min-h-0 relative overflow-y-auto scroller px-3 sm:px-4 2xl:px-10 pt-4 sm:pt-6">
+            <div id="main-scroller" className="flex flex-col gap-6 sm:gap-10 w-full max-w-[1920px] mx-auto flex-1 min-h-0 relative overflow-y-auto scroller pl-3 pr-14 sm:pl-4 sm:pr-14 md:px-4 2xl:px-10 pt-4 sm:pt-6">
 
                 {/* Header Cards */}
                 {activeTab !== 'financeiro' && activeTab !== 'viabilidade' && activeTab !== 'gallery' && (
@@ -2662,7 +2695,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                     <div className={`${hasProject ? 'lg:col-span-4 h-full overflow-y-auto scroller pr-2' : 'w-full max-w-3xl'} flex flex-col gap-8`}>
 
-                        <div className="grid grid-cols-2 gap-4 lg:gap-6 2xl:gap-8">
+                        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4 lg:gap-6 2xl:gap-8 [&>*]:min-w-0">
 
                             {/* 1. Cliente - Vibrant Orange */}
 
@@ -2686,7 +2719,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                             <div className={`grid grid-rows-2 gap-4 h-48 lg:h-56 2xl:h-64 transition-all`}>
 
-                                <div className={`ds-card p-3 flex justify-center items-center gap-4 ${!hasProject ? 'opacity-50 blur-[1px]' : ''}`}>
+                                <div className={`ds-card p-3 flex flex-wrap justify-center items-center gap-2 sm:gap-4 min-w-0 ${!hasProject ? 'opacity-50 blur-[1px]' : ''}`}>
                                     <div className="flex flex-col items-center">
                                         <span className="text-theme-orange font-bold text-[8px] mb-1 uppercase tracking-widest opacity-80">Atualização</span>
                                         <span className="text-xs font-mono font-medium text-theme-text bg-theme-highlight px-2 py-0.5 rounded-lg border border-theme-divider">{activeProject ? new Date(activeProject.updatedAt).toLocaleDateString() : '--/--'}</span>

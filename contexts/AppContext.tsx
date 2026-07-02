@@ -8,6 +8,7 @@ import { getIndexedDBItem, setIndexedDBItem } from '../utils/indexedDbHelper';
 import { useCollaboration, CollaborationUser } from '../hooks/useCollaboration';
 import { decodeAvatarUrl } from '../utils/avatarHelper';
 import { upsertMember, deriveTeam, normalizeMembers } from '../utils/membersHelper';
+import { listCompanyEmails } from '../services/teamService';
 
 const USER_KEY = 'enigami_user_v1';
 
@@ -297,13 +298,39 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
       }
     }
 
+    // E-mails cadastrados na empresa (Matriz) também viram membros da
+    // equipe central em todos os dispositivos — ao logar com o e-mail,
+    // o perfil conecta e o histórico fica vinculado ao grupo.
+    async function syncCompanyEmailsToMembers() {
+      const emails = await listCompanyEmails();
+      if (!emails || emails.length === 0) return;
+      setDb(prev => {
+        let members = prev.members || [];
+        for (const e of emails) {
+          members = upsertMember(members, {
+            name: e.name || e.email.split('@')[0],
+            email: e.email,
+            role: e.role || undefined,
+            source: 'manual',
+          });
+        }
+        if (members === prev.members) return prev;
+        return { ...prev, members, team: deriveTeam(members) };
+      });
+    }
+
     syncProfilesToMembers();
+    syncCompanyEmailsToMembers();
 
     // Escuta em tempo real novos cadastros/alterações na tabela profiles
+    // e no cadastro de e-mails da empresa
     const channel = supabase
       .channel('profiles-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         syncProfilesToMembers();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_emails' }, () => {
+        syncCompanyEmailsToMembers();
       })
       .subscribe();
 

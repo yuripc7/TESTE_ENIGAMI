@@ -24,8 +24,14 @@ export function pickMemberColor(existing: TeamMember[]): string {
  * (cor, capacidade, coordenador, cargo) quando o incoming não os traz.
  */
 export function upsertMember(list: TeamMember[], incoming: TeamMember): TeamMember[] {
+  const sameEmail = (a?: string, b?: string) =>
+    !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
   const idx = list.findIndex(m =>
     (incoming.id && m.id === incoming.id) ||
+    // vínculo por e-mail: convite cadastrado na empresa conecta ao login
+    // quando a pessoa entra com aquele e-mail (histórico preservado)
+    (!m.id && sameEmail(m.email, incoming.email)) ||
     (!incoming.id && !m.id && m.name === incoming.name) ||
     (incoming.id && !m.id && m.name === incoming.name) // membro manual "promovido" a login
   );

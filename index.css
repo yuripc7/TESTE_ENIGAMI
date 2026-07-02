@@ -426,6 +426,12 @@ a,
 }
 
 @media (max-width: 640px) {
+  /* Nada empurra a página para além da largura da tela */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   /* Evita o zoom automático do iOS ao focar campos de texto */
   input,
   select,

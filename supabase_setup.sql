@@ -41,18 +41,28 @@ create policy "profiles_update_own" on public.profiles
 
 -- Cria o perfil automaticamente quando um usuário se cadastra,
 -- para que ele apareça na equipe (db.members) sem passo manual.
+-- Se o e-mail estiver no cadastro da empresa (company_emails), o cargo
+-- registrado lá já entra no perfil — o histórico fica vinculado ao grupo.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  invited_role text;
 begin
-  insert into public.profiles (id, name, email, avatar_url)
+  select ce.role into invited_role
+  from public.company_emails ce
+  where lower(ce.email) = lower(new.email)
+  limit 1;
+
+  insert into public.profiles (id, name, email, avatar_url, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
     new.email,
-    new.raw_user_meta_data ->> 'avatar_url'
+    new.raw_user_meta_data ->> 'avatar_url',
+    invited_role
   )
   on conflict (id) do nothing;
   return new;
@@ -63,6 +73,44 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ────────────────────────────────────────────────────────────
+-- 1b. COMPANY_EMAILS — cadastro dos e-mails da empresa.
+--     Registre aqui (ou pela Matriz do app) todos os e-mails do
+--     escritório: cada um vira membro da equipe, e quando a pessoa
+--     criar o login com aquele e-mail o perfil conecta sozinho e
+--     todo o histórico do workspace fica salvo para o grupo.
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.company_emails (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  name text,                       -- nome de exibição sugerido
+  role text,                       -- cargo (Arquiteto(a), Coordenador(a)...)
+  company text,                    -- nome da empresa/escritório
+  invited_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists company_emails_email_idx
+  on public.company_emails (lower(email));
+
+alter table public.company_emails enable row level security;
+
+drop policy if exists "company_emails_select" on public.company_emails;
+create policy "company_emails_select" on public.company_emails
+  for select to authenticated using (true);
+
+drop policy if exists "company_emails_insert" on public.company_emails;
+create policy "company_emails_insert" on public.company_emails
+  for insert to authenticated with check (true);
+
+drop policy if exists "company_emails_update" on public.company_emails;
+create policy "company_emails_update" on public.company_emails
+  for update to authenticated using (true);
+
+drop policy if exists "company_emails_delete" on public.company_emails;
+create policy "company_emails_delete" on public.company_emails
+  for delete to authenticated using (true);
 
 -- ────────────────────────────────────────────────────────────
 -- 2. WORKSPACE_ITEMS — persistência do workspace compartilhado
@@ -131,6 +179,14 @@ $$;
 do $$
 begin
   alter publication supabase_realtime add table public.workspace_items;
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.company_emails;
 exception
   when duplicate_object then null;
 end;

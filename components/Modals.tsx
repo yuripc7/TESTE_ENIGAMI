@@ -10,6 +10,8 @@ import { supabase } from '../lib/supabase';
 import { decodeAvatarUrl } from '../utils/avatarHelper';
 import { useApp } from '../contexts/AppContext';
 import { getStoredApiKey, setStoredApiKey, getApiKeySource, testApiKey } from '../services/geminiService';
+import { listCompanyEmails, addCompanyEmail, removeCompanyEmail, CompanyEmail } from '../services/teamService';
+import { upsertMember, deriveTeam } from '../utils/membersHelper';
 
 interface ModalBaseProps {
     isOpen: boolean;
@@ -21,7 +23,7 @@ const ModalBase: React.FC<ModalBaseProps> = ({ isOpen, onClose, children }) => {
     if (!isOpen) return null;
     return (
         <div data-modal-overlay="true" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn p-4 no-print">
-            <div className="bg-theme-card w-full max-w-[600px] rounded-[30px] border border-theme-divider shadow-neuro animate-scaleIn relative overflow-hidden">
+            <div className="bg-theme-card w-full max-w-[600px] max-h-[92dvh] rounded-[30px] border border-theme-divider shadow-neuro animate-scaleIn relative overflow-y-auto overflow-x-hidden scroller">
                 {children}
             </div>
         </div>
@@ -164,6 +166,66 @@ export const AdminSettingsModal: React.FC<{
             ? { text: 'IA CONECTADA · CHAVE DO AMBIENTE (.env)', color: '#0EA5E9' }
             : { text: 'IA DESCONECTADA · MODO DEMO', color: '#EF4444' };
 
+    // ── Cadastro de e-mails da empresa (equipe) ──
+    const { db, setDb } = useApp();
+    const [teamEmails, setTeamEmails] = useState<CompanyEmail[] | null>(null);
+    const [emailsLoaded, setEmailsLoaded] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
+    const [newEmailName, setNewEmailName] = useState('');
+    const [newEmailRole, setNewEmailRole] = useState('');
+    const [emailBusy, setEmailBusy] = useState(false);
+    const [emailStatus, setEmailStatus] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+    const refreshEmails = async () => {
+        const list = await listCompanyEmails();
+        setTeamEmails(list);
+        setEmailsLoaded(true);
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            setEmailStatus(null);
+            refreshEmails();
+        }
+    }, [isOpen]);
+
+    const handleAddEmail = async () => {
+        if (!newEmail.trim() || emailBusy) return;
+        setEmailBusy(true);
+        setEmailStatus(null);
+        const result = await addCompanyEmail(newEmail, newEmailName, newEmailRole);
+        setEmailBusy(false);
+        setEmailStatus({ type: result.ok ? 'ok' : 'error', text: result.message });
+        if (result.ok) {
+            // Entra imediatamente na equipe central (todas as abas enxergam)
+            const name = newEmailName.trim() || newEmail.trim().split('@')[0];
+            setDb(prev => {
+                const members = upsertMember(prev.members || [], {
+                    name,
+                    email: newEmail.trim().toLowerCase(),
+                    role: newEmailRole.trim() || undefined,
+                    source: 'manual',
+                });
+                if (members === prev.members) return prev;
+                return { ...prev, members, team: deriveTeam(members) };
+            });
+            setNewEmail('');
+            setNewEmailName('');
+            setNewEmailRole('');
+            refreshEmails();
+        }
+    };
+
+    const handleRemoveEmail = async (email: string) => {
+        setEmailBusy(true);
+        const result = await removeCompanyEmail(email);
+        setEmailBusy(false);
+        setEmailStatus({ type: result.ok ? 'ok' : 'error', text: result.message });
+        if (result.ok) refreshEmails();
+    };
+
+    const linkedIds = new Set((db.members || []).filter(m => m.id).map(m => (m.email || '').toLowerCase()));
+
     return (
         <ModalBase isOpen={isOpen} onClose={onClose}>
             <div className="p-8">
@@ -233,6 +295,101 @@ export const AdminSettingsModal: React.FC<{
                             {aiStatus && (
                                 <p className={`text-[9px] font-black uppercase tracking-wider ${aiStatus.type === 'ok' ? 'text-emerald-500' : aiStatus.type === 'error' ? 'text-red-500' : 'text-theme-textMuted'}`}>
                                     {aiStatus.text}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Equipe da Empresa (E-mails) ── */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between px-2">
+                            <span className="text-[10px] font-black text-theme-textMuted uppercase tracking-widest">Equipe da Empresa · E-mails</span>
+                            {teamEmails && (
+                                <span className="text-[8px] font-black uppercase tracking-widest text-theme-textMuted">{teamEmails.length} cadastrado(s)</span>
+                            )}
+                        </div>
+                        <div className="p-4 bg-theme-bg rounded-xl border border-theme-divider flex flex-col gap-3">
+                            <p className="text-[9px] text-theme-textMuted font-bold leading-relaxed">
+                                Cadastre os e-mails do escritório: cada um entra na equipe em todas as abas e, quando a pessoa criar o login com aquele e-mail, o perfil conecta sozinho e <strong>todo o histórico do workspace fica salvo para o grupo</strong>.
+                            </p>
+
+                            {emailsLoaded && teamEmails === null && (
+                                <p className="text-[9px] font-black uppercase tracking-wider text-amber-500">
+                                    Cadastro em nuvem inativo — rode o <code className="font-mono">supabase_setup.sql</code> no SQL Editor do Supabase (e faça login) para ativar.
+                                </p>
+                            )}
+
+                            {!isViewer && (
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="email"
+                                        value={newEmail}
+                                        onChange={(e) => setNewEmail(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddEmail(); }}
+                                        placeholder="email@empresa.com.br"
+                                        className="flex-1 min-w-0 bg-theme-card border border-theme-divider rounded-xl px-3 py-2.5 text-xs text-theme-text outline-none focus:border-theme-orange"
+                                    />
+                                    <input
+                                        value={newEmailName}
+                                        onChange={(e) => setNewEmailName(e.target.value)}
+                                        placeholder="Nome (opcional)"
+                                        className="sm:w-32 bg-theme-card border border-theme-divider rounded-xl px-3 py-2.5 text-xs text-theme-text outline-none focus:border-theme-orange"
+                                    />
+                                    <input
+                                        value={newEmailRole}
+                                        onChange={(e) => setNewEmailRole(e.target.value)}
+                                        placeholder="Cargo (opcional)"
+                                        className="sm:w-32 bg-theme-card border border-theme-divider rounded-xl px-3 py-2.5 text-xs text-theme-text outline-none focus:border-theme-orange"
+                                    />
+                                    <button
+                                        onClick={handleAddEmail}
+                                        disabled={emailBusy || !newEmail.trim()}
+                                        className="bg-theme-orange text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-1.5 shrink-0"
+                                    >
+                                        {emailBusy
+                                            ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            : <span className="material-symbols-outlined text-sm">person_add</span>}
+                                        Adicionar
+                                    </button>
+                                </div>
+                            )}
+
+                            {teamEmails && teamEmails.length > 0 && (
+                                <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto scroller pr-1">
+                                    {teamEmails.map(e => {
+                                        const connected = linkedIds.has(e.email.toLowerCase());
+                                        return (
+                                            <div key={e.id} className="flex items-center gap-2.5 bg-theme-card border border-theme-divider rounded-xl px-3 py-2">
+                                                <span
+                                                    title={connected ? 'Login conectado — histórico vinculado' : 'Aguardando primeiro login'}
+                                                    className="w-2 h-2 rounded-full shrink-0"
+                                                    style={{ background: connected ? '#10B981' : '#EAB308' }}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[11px] font-bold text-theme-text truncate">{e.email}</p>
+                                                    <p className="text-[8px] font-black uppercase tracking-wider text-theme-textMuted truncate">
+                                                        {e.name || e.email.split('@')[0]}{e.role ? ` · ${e.role}` : ''} · {connected ? 'Conectado' : 'Convite pendente'}
+                                                    </p>
+                                                </div>
+                                                {!isViewer && (
+                                                    <button
+                                                        onClick={() => handleRemoveEmail(e.email)}
+                                                        disabled={emailBusy}
+                                                        title="Remover do cadastro"
+                                                        className="w-7 h-7 rounded-full flex items-center justify-center text-theme-textMuted hover:text-red-500 hover:bg-red-500/10 transition-all shrink-0"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {emailStatus && (
+                                <p className={`text-[9px] font-black uppercase tracking-wider ${emailStatus.type === 'ok' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    {emailStatus.text}
                                 </p>
                             )}
                         </div>

@@ -2019,10 +2019,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
         <div className={`h-screen flex flex-col items-center font-sans relative overflow-hidden bg-transparent text-theme-text`}>
 
             {/* ── TOP BAR ── */}
-            <div className="w-full flex items-center gap-4 px-6 py-3 bg-theme-card/90 backdrop-blur-xl border-b border-theme-divider no-print sticky top-0 z-[90] shadow-sm">
+            <div className="w-full flex flex-wrap items-center gap-x-4 gap-y-2 px-3 sm:px-6 py-2.5 sm:py-3 bg-theme-card/90 backdrop-blur-xl border-b border-theme-divider no-print sticky top-0 z-[90] shadow-sm">
 
                 {/* Logo */}
-                <div className="flex items-center gap-2.5 flex-shrink-0 mr-4">
+                <div className="flex items-center gap-2.5 flex-shrink-0 sm:mr-4">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: '#E85028' }}>
                         <svg viewBox="0 0 48 38" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-8 h-8">
                             <path d="M24 2 L44 13 L44 25 L36 30 L36 18 L24 25 L12 18 L12 30 L4 25 L4 13 Z" stroke="white" strokeWidth="2.2" fill="none" strokeLinejoin="round"/>
@@ -2041,7 +2041,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
                 {/* Tabs centradas — Agenda (planejamento micro do escritório) libera só com a empresa;
                     as demais abas dependem de um projeto selecionado */}
                 {(hasProject || hasCompany) && (
-                    <div className="flex-1 flex justify-center min-w-0">
+                    <div className="order-3 w-full lg:order-none lg:w-auto lg:flex-1 flex justify-start lg:justify-center min-w-0">
                         <div className="flex items-center gap-1 bg-theme-bg/60 rounded-full px-2 py-1.5 border border-theme-divider overflow-x-auto scroller max-w-full">
                             {[
                                 { id: 'timeline', label: 'Cronograma', icon: 'view_timeline' },
@@ -2080,10 +2080,10 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 {/* Ações direita */}
                 <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-                    <button onClick={() => window.print()} title="Imprimir" className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
+                    <button onClick={() => window.print()} title="Imprimir" className="w-8 h-8 rounded-full border border-theme-divider hidden sm:flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
                         <span className="material-symbols-outlined text-base">print</span>
                     </button>
-                    <button onClick={handleExportJSON} title="Exportar" className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
+                    <button onClick={handleExportJSON} title="Exportar" className="w-8 h-8 rounded-full border border-theme-divider hidden sm:flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
                         <span className="material-symbols-outlined text-base">download</span>
                     </button>
                     <button onClick={handleManualSave} title="Salvar" className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
@@ -2092,7 +2092,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                     {/* Online Users - Presence Avatars */}
                     {onlineUsers.length > 0 && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-theme-divider bg-theme-bg/50">
+                        <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full border border-theme-divider bg-theme-bg/50">
                             <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeConnected || simulationActive ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
                             <div className="flex -space-x-2">
                                 {onlineUsers.slice(0, 5).map(user => (
@@ -2155,13 +2155,13 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
             {/* Notifications & Overlays */}
 
-            {notification && (<div className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] bg-theme-green text-white px-6 py-3 rounded-full font-bold uppercase tracking-widest shadow-xl animate-scaleIn flex items-center gap-3 backdrop-blur-md"><span className="material-symbols-outlined">check_circle</span>{notification}</div>)}
+            {notification && (<div className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-[300] max-w-[92vw] bg-theme-green text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-bold uppercase tracking-widest shadow-xl animate-scaleIn flex items-center gap-2 sm:gap-3 backdrop-blur-md text-center"><span className="material-symbols-outlined shrink-0">check_circle</span><span className="truncate">{notification}</span></div>)}
 
-            {viewingImage && (<div data-modal-overlay="true" className="fixed inset-0 z-[200] bg-theme-card/80 backdrop-blur-md flex items-center justify-center p-10 animate-fadeIn" onClick={() => setViewingImage(null)}><button className="absolute top-5 right-5 text-theme-text/50 hover:text-theme-orange transition-colors z-[210]"><span className="material-symbols-outlined text-4xl">close</span></button><img src={viewingImage} className="max-w-full max-h-full rounded-3xl shadow-2xl border border-white" onClick={(e) => e.stopPropagation()} /></div>)}
+            {viewingImage && (<div data-modal-overlay="true" className="fixed inset-0 z-[200] bg-theme-card/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-10 animate-fadeIn" onClick={() => setViewingImage(null)}><button className="absolute top-5 right-5 text-theme-text/50 hover:text-theme-orange transition-colors z-[210]"><span className="material-symbols-outlined text-4xl">close</span></button><img src={viewingImage} className="max-w-full max-h-full rounded-3xl shadow-2xl border border-white" onClick={(e) => e.stopPropagation()} /></div>)}
 
             {viewingFile && (
 
-                <div className="fixed inset-0 z-[200] bg-theme-card/80 backdrop-blur-md flex items-center justify-center p-10 animate-fadeIn" onClick={() => setViewingFile(null)}>
+                <div className="fixed inset-0 z-[200] bg-theme-card/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-10 animate-fadeIn" onClick={() => setViewingFile(null)}>
 
                     <button aria-label="Fechar visualizador" className="absolute top-5 right-5 text-theme-text/50 hover:text-theme-orange transition-colors z-[210]"><span className="material-symbols-outlined text-4xl">close</span></button>
 
@@ -2192,7 +2192,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-sm flex items-center justify-center animate-fadeIn">
 
-                    <div className="bg-theme-card p-8 rounded-3xl shadow-2xl border border-theme-divider w-96 relative">
+                    <div className="bg-theme-card p-6 sm:p-8 rounded-3xl shadow-2xl border border-theme-divider w-full max-w-96 mx-4 relative">
 
                         <button onClick={() => { setShowFileModal(false); setPendingUploadFile(null); }} className="absolute top-4 right-4 text-theme-textMuted hover:text-theme-text"><span className="material-symbols-outlined">close</span></button>
 
@@ -2654,7 +2654,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
 
 
-            <div id="main-scroller" className="flex flex-col gap-10 w-full max-w-[1920px] mx-auto flex-1 min-h-0 relative overflow-y-auto scroller px-4 2xl:px-10 pt-6">
+            <div id="main-scroller" className="flex flex-col gap-6 sm:gap-10 w-full max-w-[1920px] mx-auto flex-1 min-h-0 relative overflow-y-auto scroller px-3 sm:px-4 2xl:px-10 pt-4 sm:pt-6">
 
                 {/* Header Cards */}
                 {activeTab !== 'financeiro' && activeTab !== 'viabilidade' && activeTab !== 'gallery' && (
@@ -5108,7 +5108,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
             {/* Floating Buttons: Settings & Chat */}
 
-            <div className="fixed bottom-8 right-8 z-[150] flex flex-col items-end gap-6 pointer-events-none">
+            <div className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-[150] flex flex-col items-end gap-4 sm:gap-6 pointer-events-none">
 
                 {/* Settings Button */}
 
@@ -5126,7 +5126,7 @@ Quando os dados do projeto estiverem disponíveis, baseie suas respostas neles �
 
                 {/* Chat Button */}
 
-                <div className={`${chatOpen ? 'w-[460px] h-[620px]' : 'w-14 h-14'} pointer-events-auto transition-all duration-300`}>
+                <div className={`${chatOpen ? 'w-[min(460px,calc(100vw-2rem))] h-[min(620px,calc(100dvh-6rem))]' : 'w-14 h-14'} pointer-events-auto transition-all duration-300`}>
 
                     {!chatOpen && (
 

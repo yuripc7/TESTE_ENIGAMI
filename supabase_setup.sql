@@ -1,20 +1,101 @@
 -- ============================================================
--- ENIGAMI Dashboard — Persistência do workspace no Supabase
+-- ENIGAMI Dashboard — Setup completo do Supabase (idempotente)
 -- Execute este script no SQL Editor do seu projeto Supabase
 -- (Dashboard → SQL Editor → New query → colar → Run).
+-- Pode ser executado quantas vezes quiser sem quebrar nada.
 -- ============================================================
 
--- Colunas extras no profiles: cargo e tempo de empresa de cada membro
--- (a estrutura central de membros do app lê esses campos para todos os logins).
+-- ────────────────────────────────────────────────────────────
+-- 1. PROFILES — perfil de cada login (usado pela estrutura
+--    central de membros do app: nome, avatar, cargo, tempo)
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  name text,
+  avatar_url text,
+  email text,
+  created_at timestamptz not null default now()
+);
+
+-- Colunas extras (seguro rodar mesmo se já existirem)
 alter table public.profiles add column if not exists role text;
 alter table public.profiles add column if not exists company_time text;
+alter table public.profiles add column if not exists email text;
+alter table public.profiles add column if not exists created_at timestamptz default now();
 
+alter table public.profiles enable row level security;
+
+-- Toda a equipe autenticada enxerga os perfis (necessário para a
+-- sincronização de membros); cada um edita apenas o próprio.
+drop policy if exists "profiles_select" on public.profiles;
+create policy "profiles_select" on public.profiles
+  for select to authenticated using (true);
+
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own" on public.profiles
+  for insert to authenticated with check (auth.uid() = id);
+
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own" on public.profiles
+  for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Cria o perfil automaticamente quando um usuário se cadastra,
+-- para que ele apareça na equipe (db.members) sem passo manual.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, name, email, avatar_url)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
+    new.email,
+    new.raw_user_meta_data ->> 'avatar_url'
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ────────────────────────────────────────────────────────────
+-- 2. WORKSPACE_ITEMS — persistência do workspace compartilhado
+--    (projetos, empresas, viabilidades, equipe, disciplinas...)
+-- ────────────────────────────────────────────────────────────
 create table if not exists public.workspace_items (
   id text primary key,            -- "<kind>:<key>", ex.: "project:1718000000000"
-  kind text not null,             -- project | company | viability | team | disciplines | lods
+  kind text not null,             -- project | company | viability | team | members | disciplines | lods
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Índices para carregamento por tipo e auditoria por data
+create index if not exists workspace_items_kind_idx
+  on public.workspace_items (kind);
+create index if not exists workspace_items_updated_at_idx
+  on public.workspace_items (updated_at desc);
+
+-- updated_at automático em qualquer UPDATE (não depende do cliente)
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists workspace_items_touch on public.workspace_items;
+create trigger workspace_items_touch
+  before update on public.workspace_items
+  for each row execute function public.touch_updated_at();
 
 alter table public.workspace_items enable row level security;
 
@@ -34,3 +115,23 @@ create policy "workspace_items_update" on public.workspace_items
 drop policy if exists "workspace_items_delete" on public.workspace_items;
 create policy "workspace_items_delete" on public.workspace_items
   for delete to authenticated using (true);
+
+-- ────────────────────────────────────────────────────────────
+-- 3. REALTIME — o app escuta INSERT/UPDATE em profiles para
+--    sincronizar novos membros em tempo real.
+-- ────────────────────────────────────────────────────────────
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
+exception
+  when duplicate_object then null; -- já estava na publicação
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.workspace_items;
+exception
+  when duplicate_object then null;
+end;
+$$;

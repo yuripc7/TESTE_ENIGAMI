@@ -409,3 +409,39 @@ body::after {
 .checklist-container .cust-badge { font-family: var(--m); font-size: 7px; letter-spacing: .08em; color: var(--g3); border: 1px solid var(--g5); padding: 1px 4px; border-radius: 2px; text-transform: uppercase; }
 
 
+
+/* ── Otimizações Mobile ─────────────────────────────────────────────── */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scroller {
+  -webkit-overflow-scrolling: touch;
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  /* Evita o zoom automático do iOS ao focar campos de texto */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Cartões e modais respiram melhor em telas estreitas */
+  .ds-card,
+  .ds-card-accent {
+    border-radius: 18px;
+  }
+
+  /* Barras de rolagem finas no toque */
+  .scroller::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+}

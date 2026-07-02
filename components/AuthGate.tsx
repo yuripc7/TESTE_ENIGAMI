@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, Globe, Grid, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, setAuthPersistence } from '../lib/supabase';
 
 type Mode = 'login' | 'register' | 'forgot' | 'email-sent';
 
@@ -28,6 +28,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onBypass }) => {
     setLoading(true);
     try {
       if (mode === 'login') {
+        setAuthPersistence(remember); // "Lembrar de mim" → sessão sobrevive a fechar o navegador
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else if (mode === 'register') {
@@ -61,6 +62,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onBypass }) => {
   };
 
   const handleGoogle = async () => {
+    setAuthPersistence(remember);
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: REDIRECT } });
   };
 

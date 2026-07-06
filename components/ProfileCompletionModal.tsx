@@ -266,6 +266,20 @@ const ROLE_SYMBOLS = [
   }
 ];
 
+// supabase-js às vezes trava indefinidamente numa chamada de auth (lock interno
+// via navigator.locks que nunca libera em certas abas/navegadores) — sem
+// timeout, o botão "Salvando..." fica travado pra sempre. Nunca deixa a
+// promise pendurada mais que alguns segundos.
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Tempo esgotado ao ${label} — verifique sua conexão e tente de novo.`)), ms);
+    Promise.resolve(promise).then(
+      v => { clearTimeout(timer); resolve(v); },
+      e => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
 const getSymbolForRole = (roleId: string) => {
   let sym = ROLE_SYMBOLS[5]; // Geral/Membro
   if (roleId === 'ARQ') sym = ROLE_SYMBOLS[0];
@@ -380,34 +394,46 @@ export const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
       // ausente, sessão expirada), o usuário precisa ver o erro real em vez
       // de um "salvo com sucesso" mentiroso (era fire-and-forget antes).
       if (userId && userId !== 'demo_user') {
-        const { error: authErr } = await supabase.auth.updateUser({
-          data: {
-            name: formattedName,
-            role: selectedRole.label,
-            avatar_url: finalAvatarEncoded,
-            profile_completed: true,
-            company_time: companyTime,
-          },
-        });
+        const { error: authErr } = await withTimeout(
+          supabase.auth.updateUser({
+            data: {
+              name: formattedName,
+              role: selectedRole.label,
+              avatar_url: finalAvatarEncoded,
+              profile_completed: true,
+              company_time: companyTime,
+            },
+          }),
+          8000,
+          'atualizar o login',
+        );
         if (authErr) throw new Error(`Falha ao atualizar login (Auth): ${authErr.message}`);
 
-        let { error: dbErr } = await supabase.from('profiles').upsert({
-          id: userId,
-          name: formattedName,
-          avatar_url: finalAvatarEncoded,
-          role: selectedRole.label,
-          company_time: companyTime,
-          updated_at: new Date().toISOString(),
-        });
-        if (dbErr) {
-          // Colunas role/company_time podem não existir ainda (supabase_setup.sql
-          // não rodado) — tenta de novo só com as colunas básicas antes de desistir.
-          const retry = await supabase.from('profiles').upsert({
+        let { error: dbErr } = await withTimeout(
+          supabase.from('profiles').upsert({
             id: userId,
             name: formattedName,
             avatar_url: finalAvatarEncoded,
+            role: selectedRole.label,
+            company_time: companyTime,
             updated_at: new Date().toISOString(),
-          });
+          }),
+          8000,
+          'salvar o perfil',
+        );
+        if (dbErr) {
+          // Colunas role/company_time podem não existir ainda (supabase_setup.sql
+          // não rodado) — tenta de novo só com as colunas básicas antes de desistir.
+          const retry = await withTimeout(
+            supabase.from('profiles').upsert({
+              id: userId,
+              name: formattedName,
+              avatar_url: finalAvatarEncoded,
+              updated_at: new Date().toISOString(),
+            }),
+            8000,
+            'salvar o perfil',
+          );
           if (retry.error) throw new Error(`Falha ao salvar perfil (banco): ${retry.error.message}`);
         }
       }

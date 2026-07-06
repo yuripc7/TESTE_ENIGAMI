@@ -18,6 +18,10 @@ interface User {
   role?: string;
   profileCompleted?: boolean;
   companyTime?: string;
+  // Aprovação manual de acesso (ver supabase_setup.sql / set_profile_approval).
+  // undefined = ainda não sabemos (coluna approved pode não existir se o SQL
+  // não rodou) — só bloqueia o app quando for explicitamente false.
+  approved?: boolean;
 }
 
 // Helpers
@@ -177,11 +181,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   }, []);
 
   async function loadProfile(userId: string) {
-    // role/company_time são colunas opcionais (supabase_setup.sql) — se ainda
-    // não existirem no projeto do usuário, cai pro select básico.
-    let data: { id: string; name: string; avatar_url: string; role?: string; company_time?: string } | null = null;
-    const full = await supabase.from('profiles').select('id, name, avatar_url, role, company_time').eq('id', userId).single();
+    // role/company_time/approved são colunas opcionais (supabase_setup.sql) —
+    // se ainda não existirem no projeto do usuário, cai pro select básico.
+    let data: { id: string; name: string; avatar_url: string; role?: string; company_time?: string; approved?: boolean } | null = null;
+    let hasApprovalColumn = true;
+    const full = await supabase.from('profiles').select('id, name, avatar_url, role, company_time, approved').eq('id', userId).single();
     if (full.error) {
+      hasApprovalColumn = false;
       const basic = await supabase.from('profiles').select('id, name, avatar_url').eq('id', userId).single();
       data = basic.data;
     } else {
@@ -191,6 +197,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
     const { data: ud } = await supabase.auth.getUser();
     const metadata = ud?.user?.user_metadata;
     const isCompleted = metadata?.profile_completed === true;
+    // Sem a coluna approved (migração não rodada), ninguém fica bloqueado.
+    const approved = hasApprovalColumn ? data?.approved === true : true;
 
     if (data) {
       const decoded = decodeAvatarUrl(data.avatar_url);
@@ -201,6 +209,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
         role: data.role || metadata?.role || 'Colaborador',
         profileCompleted: isCompleted,
         companyTime: data.company_time || decoded.companyTime || metadata?.company_time || '',
+        approved,
       });
     } else {
       if (ud?.user) {
@@ -212,6 +221,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
           role: metadata?.role,
           profileCompleted: isCompleted,
           companyTime: decoded.companyTime || metadata?.company_time || '',
+          // Perfil novo (sem linha em profiles ainda) — trata como pendente
+          // se a coluna já existir no projeto, senão libera (fail-open).
+          approved: hasApprovalColumn ? false : true,
         });
       }
     }

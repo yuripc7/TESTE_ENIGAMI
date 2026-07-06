@@ -34,3 +34,63 @@ create policy "workspace_items_update" on public.workspace_items
 drop policy if exists "workspace_items_delete" on public.workspace_items;
 create policy "workspace_items_delete" on public.workspace_items
   for delete to authenticated using (true);
+
+-- ============================================================
+-- Controle de acesso: aprovação manual de novos usuários
+-- ============================================================
+
+-- Nova coluna — todo mundo que já está na equipe hoje entra aprovado
+-- automaticamente (grandfather); só quem logar DEPOIS deste script fica
+-- pendente até um coordenador aprovar.
+alter table public.profiles add column if not exists approved boolean not null default false;
+update public.profiles set approved = true;
+
+-- Função que aprova/recusa um usuário. Roda com privilégio elevado
+-- (security definer) mas só executa se quem chamou já for um coordenador
+-- aprovado — a checagem de permissão fica dentro da função, não depende
+-- de RLS de update em profiles (que continua restrito a "seu próprio
+-- registro" pra edição normal de perfil).
+create or replace function public.set_profile_approval(target_id uuid, is_approved boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.profiles
+    where id = auth.uid() and approved = true
+      and role in ('Coordenador(a)', 'Diretor(a)', 'Gerente')
+  ) then
+    raise exception 'Não autorizado: apenas coordenadores/diretores/gerentes aprovados podem aprovar usuários.';
+  end if;
+  update public.profiles set approved = is_approved where id = target_id;
+end;
+$$;
+
+grant execute on function public.set_profile_approval(uuid, boolean) to authenticated;
+
+-- Workspace só é acessível pra quem já foi aprovado.
+drop policy if exists "workspace_items_select" on public.workspace_items;
+create policy "workspace_items_select" on public.workspace_items
+  for select to authenticated using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.approved = true)
+  );
+
+drop policy if exists "workspace_items_insert" on public.workspace_items;
+create policy "workspace_items_insert" on public.workspace_items
+  for insert to authenticated with check (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.approved = true)
+  );
+
+drop policy if exists "workspace_items_update" on public.workspace_items;
+create policy "workspace_items_update" on public.workspace_items
+  for update to authenticated using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.approved = true)
+  );
+
+drop policy if exists "workspace_items_delete" on public.workspace_items;
+create policy "workspace_items_delete" on public.workspace_items
+  for delete to authenticated using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.approved = true)
+  );

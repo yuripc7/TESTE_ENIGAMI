@@ -1841,8 +1841,7 @@ const parseMemberInfo = (rawName: string, registeredList: any[]) => {
   };
 };
 
-export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () => void; onAdd: (name: string) => void; onRemove: (idx: number) => void; isViewer?: boolean; }> = ({ isOpen, team, onClose, onAdd, onRemove, isViewer = false }) => {
-    const [newName, setNewName] = useState('');
+export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () => void; onRemove: (idx: number) => void; isViewer?: boolean; }> = ({ isOpen, team, onClose, onRemove, isViewer = false }) => {
     const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
 
     useEffect(() => {
@@ -1858,14 +1857,6 @@ export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () 
             fetchProfiles();
         }
     }, [isOpen]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newName) {
-            onAdd(newName);
-            setNewName('');
-        }
-    };
 
     return (
         <ModalBase isOpen={isOpen} onClose={onClose}>
@@ -1918,12 +1909,12 @@ export const TeamModal: React.FC<{ isOpen: boolean; team: string[]; onClose: () 
                     )}
                 </div>
 
-                {!isViewer && (
-                    <form onSubmit={handleSubmit} className="flex gap-2 border-t border-theme-divider pt-4">
-                        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="NOVO MEMBRO (EX: ENG. LUCAS)..." className="flex-1 bg-theme-bg border border-theme-divider rounded-xl px-4 py-3 text-xs text-theme-text outline-none focus:border-theme-orange" />
-                        <button type="submit" className="bg-theme-orange text-white px-4 rounded-xl flex items-center justify-center"><span className="material-symbols-outlined">add</span></button>
-                    </form>
-                )}
+                {/* Sem formulário de "adicionar membro" — a equipe vem só de quem
+                    faz login (profiles). Novos membros aparecem aqui sozinhos
+                    assim que logam (e forem aprovados). */}
+                <p className="text-center text-[9px] font-bold uppercase tracking-wider text-theme-textMuted border-t border-theme-divider pt-4">
+                    Novos membros entram automaticamente ao fazer login.
+                </p>
             </div>
         </ModalBase>
     );

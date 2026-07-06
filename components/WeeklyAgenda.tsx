@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { DB, Project, Discipline, WeeklyTask, TeamMember } from '../types';
-import { upsertMember, deriveTeam, pickMemberColor } from '../utils/membersHelper';
+import { upsertMember, deriveTeam } from '../utils/membersHelper';
 
 // ==========================================
 // TYPES & CONTEXT INTEG
@@ -570,16 +570,6 @@ export default function WeeklyAgenda() {
     return proj;
   };
 
-  const handleAddPerson = (name: string) => {
-    const clean = name.trim();
-    if (!clean) return null;
-    const existing = integratedPeople.find(p => p.name.toLowerCase() === clean.toLowerCase());
-    if (existing) return existing;
-    const p = { name: clean, role: 'Equipe', color: pickMemberColor(db.members || []), capacity: 10, coordinator: false };
-    updateMembers(ms => upsertMember(ms, { name: clean, role: 'Equipe', color: p.color, capacity: 10, source: 'manual' }));
-    return p;
-  };
-
   const handleAddDiscipline = (name: string) => {
     const clean = name.trim();
     if (!clean) return null;
@@ -1115,7 +1105,7 @@ export default function WeeklyAgenda() {
       )}
 
       {/* Modals & Overlays */}
-      <TaskModal open={modal.open} initial={modal.task} weekOffset={offset} onClose={() => setModal({ open: false, task: null })} onSave={saveTask} integratedProjects={integratedProjects} integratedPeople={integratedPeople} integratedDisciplines={integratedDisciplines} handleAddProject={handleAddProject} handleAddPerson={handleAddPerson} handleAddDiscipline={handleAddDiscipline} />
+      <TaskModal open={modal.open} initial={modal.task} weekOffset={offset} onClose={() => setModal({ open: false, task: null })} onSave={saveTask} integratedProjects={integratedProjects} integratedPeople={integratedPeople} integratedDisciplines={integratedDisciplines} handleAddProject={handleAddProject} handleAddDiscipline={handleAddDiscipline} />
       <CoordManager open={coordMgr} activeCoord={coord} onClose={() => setCoordMgr(false)} onAdd={handleAddCoord} onUpdateRole={handleUpdateCoordRole} onRemove={handleRemoveCoord} integratedPeople={integratedPeople} />
       <InsightsPanel open={panel === 'insights'} onClose={() => setPanel(null)} tasks={tasks} weekOffset={offset} prevProgress={prevProgress} integratedPeople={integratedPeople} integratedDisciplines={integratedDisciplines} getProjColor={getProjColor} getProjCode={getProjCode} />
       <ValidationPanel open={panel === 'validation'} onClose={() => setPanel(null)} tasks={tasks} onValidate={validate} onOpenTask={(tk: any) => { setPanel(null); setModal({ open: true, task: tk }); }} getProjColor={getProjColor} getProjCode={getProjCode} getDiscMeta={getDiscMeta} />
@@ -1420,7 +1410,7 @@ function SelectOrAdd({ value, onChange, options, onAdd, placeholder, addLabel }:
 }
 
 // Modal Task edit / create
-function TaskModal({ open, initial, weekOffset, onClose, onSave, integratedProjects, integratedPeople, integratedDisciplines, handleAddProject, handleAddPerson, handleAddDiscipline }: any) {
+function TaskModal({ open, initial, weekOffset, onClose, onSave, integratedProjects, integratedPeople, integratedDisciplines, handleAddProject, handleAddDiscipline }: any) {
   const blank: WeeklyTask = { text: '', day: 'Segunda', assignee: 'Yuri', project: 'Geral', disc: 'ARQ', status: 'todo', weight: 2, durationDays: 1, time: '', dueDate: '', isCoordPoint: false, valid: 'pending', subtasks: [] };
   const [form, setForm] = useState<WeeklyTask>(blank);
   const [newSub, setNewSub] = useState('');
@@ -1474,9 +1464,10 @@ function TaskModal({ open, initial, weekOffset, onClose, onSave, integratedProje
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label className="field-label">Responsável</label>
-              <SelectOrAdd value={form.assignee} onChange={(v: any) => set('assignee', v)} addLabel="Novo resp." placeholder="Nome..."
-                options={integratedPeople.map((p: any) => ({ value: p.name, label: p.name }))}
-                onAdd={(txt: string) => { const p = handleAddPerson(txt); return p ? p.name : null; }} /></div>
+              {/* Sem opção de "adicionar pessoa" — a equipe vem só de quem já logou (profiles). */}
+              <select className="select" value={form.assignee} onChange={e => set('assignee', e.target.value)}>
+                {integratedPeople.map((p: any) => <option key={p.name} value={p.name}>{p.name}</option>)}
+              </select></div>
             <div><label className="field-label">Status</label>
               <select className="select" value={form.status} onChange={e => set('status', e.target.value)}>{STATUSES.map(s => <option key={s.key} value={s.key}>{s.label} ({s.pct}%)</option>)}</select></div>
           </div>
@@ -1542,7 +1533,11 @@ function CoordManager({ open, activeCoord, onClose, onAdd, onUpdateRole, onRemov
   const [role, setRole] = useState('');
   if (!open) return null;
   const list = integratedPeople.filter((p: any) => p.coordinator);
-  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!name.trim()) return; onAdd(name.trim(), role.trim()); setName(''); setRole(''); };
+  // Só promove gente que já está na equipe (veio do login) — sem criar
+  // membro novo por aqui.
+  const candidates = integratedPeople.filter((p: any) => !p.coordinator);
+  const effectiveName = name || candidates[0]?.name || '';
+  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!effectiveName) return; onAdd(effectiveName, role.trim()); setName(''); setRole(''); };
   return (
     <div className="overlay no-print" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
@@ -1578,11 +1573,17 @@ function CoordManager({ open, activeCoord, onClose, onAdd, onUpdateRole, onRemov
 
           <form onSubmit={submit} style={{ borderTop: '1px solid var(--theme-divider)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <span className="field-label">Promover Coordenador</span>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Nome" />
-              <input className="input" value={role} onChange={e => setRole(e.target.value)} placeholder="Cargo" />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}><Icon name="person_add" size={14} />Adicionar</button>
+            {candidates.length === 0 ? (
+              <span style={{ fontSize: 12, color: 'var(--theme-textMuted)' }}>Todos os membros da equipe já são coordenadores.</span>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <select className="select" value={effectiveName} onChange={e => setName(e.target.value)}>
+                  {candidates.map((p: any) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                </select>
+                <input className="input" value={role} onChange={e => setRole(e.target.value)} placeholder="Cargo" />
+              </div>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={candidates.length === 0} style={{ alignSelf: 'flex-start', opacity: candidates.length === 0 ? .5 : 1 }}><Icon name="person_add" size={14} />Promover</button>
           </form>
         </div>
       </div>

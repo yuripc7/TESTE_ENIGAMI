@@ -16,6 +16,10 @@ import {
 
 import { ProfileCompletionModal } from './components/ProfileCompletionModal';
 
+import { PendingApprovalScreen } from './components/PendingApprovalScreen';
+
+import { PendingApprovalsPanel } from './components/PendingApprovalsPanel';
+
 import { TextReveal } from './components/ui/TextReveal';
 
 import { parseLocalDate, formatLocalDate } from './utils/dateUtils';
@@ -151,6 +155,10 @@ export const App = () => {
     const [showLoginModal, setShowLoginModal] = useState(false);
 
     const [showUploadInstructionsModal, setShowUploadInstructionsModal] = useState(false);
+
+    const [showPendingApprovals, setShowPendingApprovals] = useState(false);
+
+    const isApprover = currentUser?.role === 'Coordenador(a)' || currentUser?.role === 'Diretor(a)' || currentUser?.role === 'Gerente';
 
     useEffect(() => {
         if (currentUser && !currentUser.profileCompleted) {
@@ -1937,6 +1945,11 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
         }
     }, [activeTab, hasProject]);
 
+    // Acesso ainda n√£o aprovado por um coordenador ‚Äî bloqueia o app inteiro
+    // (demo_user nunca √© bloqueado; ver supabase_setup.sql/set_profile_approval).
+    if (currentUser && currentUser.id && currentUser.id !== 'demo_user' && currentUser.approved === false) {
+        return <PendingApprovalScreen userName={currentUser.name} />;
+    }
 
     return (
         <>
@@ -2043,6 +2056,16 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     )}
 
                     <div className="w-px h-5 bg-theme-divider mx-1"></div>
+
+                    {isApprover && (
+                        <button
+                            onClick={() => setShowPendingApprovals(true)}
+                            title="Aprovar acessos pendentes"
+                            className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all"
+                        >
+                            <span className="material-symbols-outlined text-base">verified_user</span>
+                        </button>
+                    )}
 
                     {currentUser ? (
                         <div className="flex items-center gap-2">
@@ -2305,6 +2328,10 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                 onClose={() => setShowProfileModal(false)}
             />
 
+            {showPendingApprovals && (
+                <PendingApprovalsPanel onClose={() => setShowPendingApprovals(false)} />
+            )}
+
 
 
             <UploadInstructionsModal
@@ -2505,8 +2532,6 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                 team={db.team}
 
                 onClose={() => setShowTeamModal(false)}
-
-                onAdd={(name) => { if (isViewer) return; setDb(prev => { const members = upsertMember(prev.members || [], { name, source: 'manual' }); return { ...prev, members, team: deriveTeam(members) }; }); }}
 
                 onRemove={(idx) => { if (isViewer) return; setDb(prev => { const name = prev.team[idx]; const members = removeMember(prev.members || [], name); return { ...prev, members, team: deriveTeam(members) }; }); }}
 

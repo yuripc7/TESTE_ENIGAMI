@@ -5,7 +5,6 @@ import { INITIAL_DB, STORAGE_KEY, THEME_KEY, DEBOUNCE_SAVE_MS, NOTIFICATION_TIME
 import { readFileAsText } from '../utils/fileReaderUtils';
 import { useConfirm } from '../components/ConfirmDialog';
 import { getIndexedDBItem, setIndexedDBItem } from '../utils/indexedDbHelper';
-import { loadWorkspace, seedWorkspaceFromLocal, syncWorkspace } from '../lib/workspaceStore';
 import { useCollaboration, CollaborationUser } from '../hooks/useCollaboration';
 import { decodeAvatarUrl } from '../utils/avatarHelper';
 import { upsertMember, deriveTeam, normalizeMembers } from '../utils/membersHelper';
@@ -84,34 +83,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   const { requestConfirm, showAlert } = useConfirm();
   const [db, setDb] = useState<DB>(INITIAL_DB);
   const [dbLoaded, setDbLoaded] = useState(false);
-  // Última versão do DB confirmada no Supabase — usada pra saber quais
-  // linhas de workspace_items apagar quando um projeto/empresa/viabilidade
-  // é removido (ver efeito de save logo abaixo e handleImportJSON).
-  const lastSyncedDbRef = useRef<DB | null>(null);
 
-  // Carrega o workspace COMPARTILHADO do Supabase (workspace_items). Na
-  // primeira vez que alguém abre o app depois desta atualização, a tabela
-  // ainda está vazia — nesse caso migra o que já existia no IndexedDB
-  // deste navegador (dado antigo, por-usuário) pra virar o workspace
-  // inicial compartilhado da equipe.
+  // Load database from IndexedDB on startup (with backwards compatible localStorage migration!)
   useEffect(() => {
     async function loadData() {
       try {
-        const fromCloud = await loadWorkspace();
-
-        if (fromCloud) {
-          setDb(fromCloud);
-          lastSavedRef.current = JSON.stringify(fromCloud);
-          lastSyncedDbRef.current = fromCloud;
-          setDbLoaded(true);
-          return;
-        }
-
-        // Nada na nuvem ainda — recupera o estado local (IndexedDB, com
-        // migração de localStorage legado) e publica como seed inicial.
         const key = STORAGE_KEY + "_" + userId;
         let data = await getIndexedDBItem<DB>(key);
-
+        
         if (!data) {
           const oldSaved = localStorage.getItem(key);
           if (oldSaved) {
@@ -131,16 +110,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
 
         setDb(finalData);
         lastSavedRef.current = JSON.stringify(finalData);
-
-        try {
-          await seedWorkspaceFromLocal(finalData);
-          lastSyncedDbRef.current = finalData;
-          console.log("Workspace inicial publicado no Supabase (seed a partir do IndexedDB local).");
-        } catch (seedErr) {
-          console.error("Erro ao publicar o workspace inicial no Supabase:", seedErr);
-        }
       } catch (err) {
-        console.error("Erro ao carregar o workspace:", err);
+        console.error("Erro ao carregar dados do IndexedDB:", err);
       } finally {
         setDbLoaded(true);
       }
@@ -256,31 +227,27 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   // Track last saved JSON to skip redundant writes
   const lastSavedRef = useRef<string>('');
 
-  // Persist db no workspace compartilhado do Supabase (DEBOUNCED).
-  // Mantém também uma cópia no IndexedDB local como cache offline (não é
-  // mais a fonte de verdade — só acelera o primeiro load / dá uma rede de
-  // segurança se a rede cair no meio de uma edição).
+  // Persist db to IndexedDB (DEBOUNCED & UNLIMITED SIZE SAFE)
   useEffect(() => {
     if (!dbLoaded) return;
 
     const handler = setTimeout(async () => {
       try {
         const json = JSON.stringify(db);
+
         if (json === lastSavedRef.current) return;
 
         const key = STORAGE_KEY + "_" + userId;
         await setIndexedDBItem(key, db);
-        await syncWorkspace(db, lastSyncedDbRef.current);
-        lastSyncedDbRef.current = db;
-
+        
         lastSavedRef.current = json;
         setLastSavedAt(new Date());
-
+        
         const sizeMb = (json.length / (1024 * 1024)).toFixed(2);
-        console.log(`Persistence: Workspace sincronizado com o Supabase (${sizeMb}MB).`);
+        console.log(`Persistence: Projeto Salvo no IndexedDB (${sizeMb}MB).`);
       } catch (error) {
-        console.error("Erro ao sincronizar o workspace com o Supabase:", error);
-        setNotification("Erro ao sincronizar com a nuvem — suas alterações continuam salvas neste navegador.");
+        console.error("Erro ao salvar dados no IndexedDB:", error);
+        setNotification("Erro crítico ao salvar no banco de dados!");
       }
     }, DEBOUNCE_SAVE_MS);
 
@@ -487,13 +454,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
       const json = JSON.stringify(db);
       const key = STORAGE_KEY + "_" + userId;
       await setIndexedDBItem(key, db);
-      await syncWorkspace(db, lastSyncedDbRef.current);
-      lastSyncedDbRef.current = db;
       lastSavedRef.current = json;
       setLastSavedAt(new Date());
       setNotification('Projeto salvo com sucesso!');
     } catch (error) {
-      setNotification('Erro ao salvar! Verifique sua conexão.');
+      setNotification('Erro ao salvar!');
     }
   }, [db, userId]);
 

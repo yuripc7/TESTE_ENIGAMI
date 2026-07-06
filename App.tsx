@@ -2026,9 +2026,9 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                         <span className="material-symbols-outlined text-base">cloud_upload</span>
                     </button>
                     <a
-                        href="https://raw.githubusercontent.com/yuripc7/Enigami_viab/main/dist/ViabilidadeInstaller-v1.0.0.exe"
+                        href="https://github.com/yuripc7/Enigami_viab/releases/download/v1.2.0/ViabilidadeInstaller-v1.2.0.exe"
                         download
-                        title="Baixar instalador do add-in Viabilidade (Revit)"
+                        title="Baixar instalador do add-in Viabilidade (Revit 2024-2027)"
                         className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all"
                     >
                         <span className="material-symbols-outlined text-base">apartment</span>

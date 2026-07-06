@@ -9,7 +9,7 @@ import { supabase } from './lib/supabase';
 import './index.css';
 
 const Root = () => {
-  console.log("Enigami Root mounted - v2.9.3");
+  console.log("Enigami Root mounted - v2.9.4");
   const [session, setSession] = useState<any>(null); // Login aparece imediatamente
   const [isCleanedUp, setIsCleanedUp] = useState(false);
 

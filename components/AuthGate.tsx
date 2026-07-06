@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, Globe, Grid, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Globe, Grid, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'register' | 'forgot' | 'email-sent';
 
-interface AuthGateProps {
-  onBypass?: () => void;
-}
-
-export const AuthGate: React.FC<AuthGateProps> = ({ onBypass }) => {
+export const AuthGate: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -233,18 +229,6 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onBypass }) => {
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : mode === 'login' ? 'ENTRAR NO PROJETO' : mode === 'register' ? 'CRIAR ACESSO' : 'ENVIAR LINK'}
           </button>
-
-          {/* Bypass Button */}
-          {onBypass && mode === 'login' && (
-            <button
-              type="button"
-              onClick={onBypass}
-              className="w-full bg-[#F9FAFB] hover:bg-[#F3F4F6] border border-dashed border-orange-300 hover:border-orange-400 text-orange-500 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2"
-            >
-              <Sparkles size={13} />
-              ENTRAR SEM AUTENTICAÇÃO (DEMO)
-            </button>
-          )}
         </form>
 
         {mode === 'login' && (

@@ -11,7 +11,6 @@ import './index.css';
 const Root = () => {
   console.log("Enigami Root mounted - v2.9.3");
   const [session, setSession] = useState<any>(null); // Login aparece imediatamente
-  const [useDemo, setUseDemo] = useState(false);
   const [isCleanedUp, setIsCleanedUp] = useState(false);
 
   useEffect(() => {
@@ -70,7 +69,6 @@ const Root = () => {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session ?? null);
-      setUseDemo(false);
     });
     return () => subscription.unsubscribe();
   }, [isCleanedUp]);
@@ -84,9 +82,9 @@ const Root = () => {
     );
   }
 
-  if (!session && !useDemo) return <AuthGate onBypass={() => setUseDemo(true)} />;
+  if (!session) return <AuthGate />;
 
-  const userId = session?.user?.id || 'demo_user';
+  const userId = session.user.id;
 
   return (
     <React.StrictMode>

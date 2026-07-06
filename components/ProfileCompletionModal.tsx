@@ -376,53 +376,43 @@ export const ProfileCompletionModal: React.FC<ProfileCompletionModalProps> = ({
     const finalAvatarEncoded = encodeAvatarUrl(baseAvatar, companyTime);
 
     try {
-      // 1. Update Supabase asynchronously
+      // 1. Grava no Supabase e ESPERA terminar — se falhar (RLS, coluna
+      // ausente, sessão expirada), o usuário precisa ver o erro real em vez
+      // de um "salvo com sucesso" mentiroso (era fire-and-forget antes).
       if (userId && userId !== 'demo_user') {
-        (async () => {
-          try {
-            const { error: authErr } = await supabase.auth.updateUser({
-              data: {
-                name: formattedName,
-                role: selectedRole.label,
-                avatar_url: finalAvatarEncoded,
-                profile_completed: true,
-                company_time: companyTime,
-              },
-            });
-            if (authErr) console.warn('Erro em background ao atualizar metadados do Supabase Auth:', authErr);
-          } catch (err) {
-            console.warn('Erro em background ao atualizar Auth:', err);
-          }
-        })();
+        const { error: authErr } = await supabase.auth.updateUser({
+          data: {
+            name: formattedName,
+            role: selectedRole.label,
+            avatar_url: finalAvatarEncoded,
+            profile_completed: true,
+            company_time: companyTime,
+          },
+        });
+        if (authErr) throw new Error(`Falha ao atualizar login (Auth): ${authErr.message}`);
 
-        (async () => {
-          try {
-            // Tenta gravar também cargo e tempo de empresa (colunas opcionais —
-            // criadas pelo supabase_setup.sql). Se não existirem, regrava o básico.
-            const { error: dbErr } = await supabase.from('profiles').upsert({
-              id: userId,
-              name: formattedName,
-              avatar_url: finalAvatarEncoded,
-              role: selectedRole.label,
-              company_time: companyTime,
-              updated_at: new Date().toISOString(),
-            });
-            if (dbErr) {
-              const { error: basicErr } = await supabase.from('profiles').upsert({
-                id: userId,
-                name: formattedName,
-                avatar_url: finalAvatarEncoded,
-                updated_at: new Date().toISOString(),
-              });
-              if (basicErr) console.warn('Erro em background ao atualizar tabela de profiles:', basicErr);
-            }
-          } catch (err) {
-            console.warn('Erro em background ao salvar profile na DB:', err);
-          }
-        })();
+        let { error: dbErr } = await supabase.from('profiles').upsert({
+          id: userId,
+          name: formattedName,
+          avatar_url: finalAvatarEncoded,
+          role: selectedRole.label,
+          company_time: companyTime,
+          updated_at: new Date().toISOString(),
+        });
+        if (dbErr) {
+          // Colunas role/company_time podem não existir ainda (supabase_setup.sql
+          // não rodado) — tenta de novo só com as colunas básicas antes de desistir.
+          const retry = await supabase.from('profiles').upsert({
+            id: userId,
+            name: formattedName,
+            avatar_url: finalAvatarEncoded,
+            updated_at: new Date().toISOString(),
+          });
+          if (retry.error) throw new Error(`Falha ao salvar perfil (banco): ${retry.error.message}`);
+        }
       }
 
-      // 2. Trigger the callback immediately to update local state and UI
+      // 2. Só atualiza o estado local/UI depois que a nuvem confirmou.
       onSubmit({
         name: formattedName,
         role: selectedRole.label,

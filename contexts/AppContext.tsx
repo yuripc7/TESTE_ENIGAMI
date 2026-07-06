@@ -177,7 +177,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
   }, []);
 
   async function loadProfile(userId: string) {
-    const { data } = await supabase.from('profiles').select('id, name, avatar_url').eq('id', userId).single();
+    // role/company_time são colunas opcionais (supabase_setup.sql) — se ainda
+    // não existirem no projeto do usuário, cai pro select básico.
+    let data: { id: string; name: string; avatar_url: string; role?: string; company_time?: string } | null = null;
+    const full = await supabase.from('profiles').select('id, name, avatar_url, role, company_time').eq('id', userId).single();
+    if (full.error) {
+      const basic = await supabase.from('profiles').select('id, name, avatar_url').eq('id', userId).single();
+      data = basic.data;
+    } else {
+      data = full.data;
+    }
+
     const { data: ud } = await supabase.auth.getUser();
     const metadata = ud?.user?.user_metadata;
     const isCompleted = metadata?.profile_completed === true;
@@ -188,9 +198,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children, userId }) =>
         id: data.id,
         name: data.name,
         avatar: decoded.avatarUrl || buildAvatar(data.name),
-        role: metadata?.role || 'Colaborador',
+        role: data.role || metadata?.role || 'Colaborador',
         profileCompleted: isCompleted,
-        companyTime: decoded.companyTime || metadata?.company_time || '',
+        companyTime: data.company_time || decoded.companyTime || metadata?.company_time || '',
       });
     } else {
       if (ud?.user) {

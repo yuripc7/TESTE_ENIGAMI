@@ -2013,7 +2013,7 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                         <span className="material-symbols-outlined text-base">cloud_upload</span>
                     </button>
                     <a
-                        href="https://raw.githubusercontent.com/yuripc7/Enigami_viab/v1.1.0/dist/ViabilidadeInstaller-v1.0.0.exe"
+                        href="https://raw.githubusercontent.com/yuripc7/Enigami_viab/main/dist/ViabilidadeInstaller-v1.0.0.exe"
                         download
                         title="Baixar instalador do add-in Viabilidade (Revit)"
                         className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all"

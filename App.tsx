@@ -2012,6 +2012,14 @@ Quando os dados do projeto estiverem dispon√≠veis, baseie suas respostas neles ‚
                     <button onClick={handleManualSave} title="Salvar" className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all">
                         <span className="material-symbols-outlined text-base">cloud_upload</span>
                     </button>
+                    <a
+                        href="https://raw.githubusercontent.com/yuripc7/Enigami_viab/v1.0.0/dist/ViabilidadeAddin-v1.0.0.zip"
+                        download
+                        title="Baixar add-in Viabilidade (Revit)"
+                        className="w-8 h-8 rounded-full border border-theme-divider flex items-center justify-center text-theme-textMuted hover:text-theme-orange hover:border-theme-orange transition-all"
+                    >
+                        <span className="material-symbols-outlined text-base">apartment</span>
+                    </a>
 
                     {/* Online Users - Presence Avatars */}
                     {onlineUsers.length > 0 && (
